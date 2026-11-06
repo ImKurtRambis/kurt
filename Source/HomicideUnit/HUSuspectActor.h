@@ -1,6 +1,7 @@
 // A person of interest at the scene (a stand-in figure for now).
 //   E talks: their intro, then each statement in turn.   Q runs their record.
-//   Holding the HANDCUFFS (slot 7), E arrests them: cuffed, hands behind their back, and they follow you.
+//   The CUFFS on your belt (look down, pick them, click) arrest them: cuffed, hands behind their back, and they follow you.
+//   Pepper spray or the taser (also on the belt) doubles them over for a few seconds.
 //   Walk them to the police van outside and put them in the back; the van takes them to the precinct.
 //   While cuffed: E lets go of / takes their arm again, Q takes the cuffs off.
 #pragma once
@@ -45,6 +46,10 @@ public:
 	// a move in the interview (0 confront/press, 1 raise their record): runs on every machine, the same way
 	void ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId);
 
+	// pepper spray / taser from someone's belt: doubled over for a few seconds (runs on every machine)
+	void Subdue(APawn* User, bool bTaser);
+	UFUNCTION(BlueprintPure, Category = "Suspect") bool IsSubdued() const { return StunLeft > 0.f; }
+
 	// into the back of the van: gone from the scene, on the way to the precinct
 	UFUNCTION(BlueprintCallable, Category = "Suspect") void LoadIntoVan();
 
@@ -61,6 +66,7 @@ private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	TWeakObjectPtr<APawn> Escort;
 	int32 Line = -1;
+	float StunLeft = 0.f;
 	void Pose();
 	TWeakObjectPtr<APawn> Interviewer;
 	void OpenInterview(APawn* User);

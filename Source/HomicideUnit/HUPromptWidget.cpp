@@ -299,6 +299,25 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		const bool bOn = (i == (int32)EHUTool::Flashlight + 1 && Owner->bFlashlightOn) || (i == (int32)EHUTool::UVLight + 1 && Owner->bUVOn);
 		if (bOn) Box(Out, Ly + 2, G, P + FVector2D(SlotW - 14, 7), FVector2D(7, 7), Green, 4.f);
 	}
+	// ---- the utility belt, while you're looking down at it ----
+	if (Owner->bBeltOpen)
+	{
+		const float BW = 112.f, BH = 66.f, BG = 10.f;
+		const float BTotal = (int32)HUBelt::Count * BW + (HUBelt::Count - 1) * BG, BX = (L.X - BTotal) * 0.5f, BY = Y0 - BH - 64.f;
+		for (int32 i = 0; i < HUBelt::Count; i++)
+		{
+			const FVector2D P(BX + i * (BW + BG), BY);
+			const bool bSel = Owner->BeltSel == i;
+			const float Wait = Owner->BeltWait(i);
+			if (bSel) Box(Out, Ly, G, P - FVector2D(2, 2), FVector2D(BW + 4, BH + 4), Gold, 11.f);
+			Box(Out, Ly + 1, G, P, FVector2D(BW, BH), bSel ? FLinearColor(0.12f, 0.09f, 0.03f, 0.95f) : PanelFill(0.82f), 9.f);
+			const FLinearColor Col = Wait > 0.f ? FLinearColor(0.45f, 0.47f, 0.5f, 0.9f) : bSel ? Gold : Ink;
+			TextCentered(Out, Ly + 2, G, HUBelt::Name(i), Font(bSel ? "Bold" : "Regular", 11), P + FVector2D(BW * 0.5f, BH * 0.36f), Col);
+			TextCentered(Out, Ly + 2, G, Wait > 0.f ? FString::Printf(TEXT("%d s"), FMath::CeilToInt(Wait)) : FString(TEXT("ready")), Font("Regular", 9), P + FVector2D(BW * 0.5f, BH * 0.72f), Col * FLinearColor(1, 1, 1, 0.75f));
+		}
+		const FString Hint = FString::Printf(TEXT("UTILITY BELT  ·  %s: %s  ·  [LEFT CLICK] use  ·  move the mouse or scroll to pick"), HUBelt::Name(Owner->BeltSel), HUBelt::Hint(Owner->BeltSel));
+		TextCentered(Out, Ly + 2, G, Hint, Font("Regular", 10), FVector2D(L.X * 0.5f, BY - 16.f), Ink);
+	}
 	// ---- coffee: how long it lasts, beside the hotbar ----
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Owner->GetOwner()); Ch && Ch->IsCaffeinated())
 	{

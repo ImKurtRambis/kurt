@@ -288,6 +288,14 @@ void AHUSuspectActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (bInterviewing) { const APawn* V = Interviewer.Get(); if (!V || FVector::Dist2D(V->GetActorLocation(), GetActorLocation()) > 450.f) CloseInterview(); }
+	// sprayed / tased: bent forward, then slowly straightening up
+	if (StunLeft > 0.f)
+	{
+		StunLeft -= DeltaSeconds;
+		const float Bend = StunLeft > 1.f ? -26.f : 0.f;
+		const FRotator Now = GetActorRotation();
+		SetActorRotation(StunLeft > 0.f ? FMath::RInterpTo(Now, FRotator(Bend, Now.Yaw, 0), DeltaSeconds, StunLeft > 1.f ? 12.f : 4.f) : FRotator(0, Now.Yaw, 0));
+	}
 	const APawn* E = Escort.Get();
 	if (!bCuffed || !E) return;
 	// a step behind and to the side of whoever's walking them, facing the way they're going
@@ -297,6 +305,19 @@ void AHUSuspectActor::Tick(float DeltaSeconds)
 	const FVector Next = FMath::VInterpTo(Now, Target, DeltaSeconds, 5.f);
 	SetActorLocation(Next);
 	if (FVector::Dist2D(Now, Next) > 0.5f) SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0, (Next - Now).Rotation().Yaw, 0), DeltaSeconds, 8.f));
+}
+
+void AHUSuspectActor::Subdue(APawn* User, bool bTaser)
+{
+	if (bCuffed || IsHidden()) return;
+	if (bInterviewing) CloseInterview();
+	StunLeft = bTaser ? 5.f : 7.f;
+	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!I) return;
+	const TCHAR* Pepper[] = { TEXT("\"Agh — my eyes! My EYES!\""), TEXT("*coughing* \"What the hell, man?!\""), TEXT("\"I can't see! I can't — \"") };
+	const TCHAR* Taser[] = { TEXT("\"AAGH—\""), TEXT("*drops to a knee, shaking*"), TEXT("\"Okay! Okay! I'm down!\"") };
+	I->Say(FString::Printf(TEXT("%s:  %s   (Subdued a few seconds — cuff them now.)"), *DisplayName().ToUpper(),
+		bTaser ? Taser[FMath::RandRange(0, 2)] : Pepper[FMath::RandRange(0, 2)]));
 }
 
 void AHUSuspectActor::LoadIntoVan()

@@ -8,6 +8,7 @@
 #include "HUSuspectActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Components/InputComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -51,7 +52,6 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Keys->BindKey(EKeys::Four, IE_Pressed, this, &UHUInteractComponent::Slot4);
 	Keys->BindKey(EKeys::Five, IE_Pressed, this, &UHUInteractComponent::Slot5);
 	Keys->BindKey(EKeys::Six, IE_Pressed, this, &UHUInteractComponent::Slot6);
-	Keys->BindKey(EKeys::Seven, IE_Pressed, this, &UHUInteractComponent::Slot7);
 	Keys->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &UHUInteractComponent::WheelUp);
 	Keys->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &UHUInteractComponent::WheelDown);
 	Keys->RegisterComponent();
@@ -78,6 +78,12 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Hand->RegisterComponent();
 	BuildHand();
 	UpdateBeam();
+	// the belt rides on the body (turns with you, doesn't tilt with your view)
+	Belt = NewObject<USceneComponent>(GetOwner(), TEXT("HUBelt"));
+	Belt->SetupAttachment(GetOwner()->GetRootComponent());
+	Belt->SetRelativeLocation(FVector(0, 0, 2));
+	Belt->RegisterComponent();
+	BuildBelt();
 	// the light that drifts over whatever you're looking at, like the desk menu's
 	Glint = NewObject<USpotLightComponent>(GetOwner(), TEXT("HUGlint"));
 	Glint->SetupAttachment(GetOwner()->GetRootComponent());
@@ -110,26 +116,14 @@ void UHUInteractComponent::SelectSlot(int32 Slot)
 	bLightOn = false;
 	BuildHand();
 	UpdateBeam();
-	// the light that drifts over whatever you're looking at, like the desk menu's
-	Glint = NewObject<USpotLightComponent>(GetOwner(), TEXT("HUGlint"));
-	Glint->SetupAttachment(GetOwner()->GetRootComponent());
-	Glint->SetUsingAbsoluteLocation(true);
-	Glint->SetUsingAbsoluteRotation(true);
-	Glint->SetWorldRotation(FRotator(-90, 0, 0));
-	Glint->SetIntensity(0.f);
-	Glint->SetAttenuationRadius(260.f);
-	Glint->SetInnerConeAngle(14.f);
-	Glint->SetOuterConeAngle(26.f);
-	Glint->SetLightColor(FLinearColor(0.8f, 0.92f, 1.f));
-	Glint->SetCastShadows(false);
-	Glint->RegisterComponent();
 }
 
-void UHUInteractComponent::WheelUp() { for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + SlotCount - i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
-void UHUInteractComponent::WheelDown() { for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
+void UHUInteractComponent::WheelUp() { if (bBeltOpen) { SetBeltSel(BeltSel - 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + SlotCount - i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
+void UHUInteractComponent::WheelDown() { if (bBeltOpen) { SetBeltSel(BeltSel + 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
 
 void UHUInteractComponent::UseHeld()
 {
+	if (bBeltOpen) { UseBelt(); return; }
 	if (IsHolding(EHUTool::Flashlight) || IsHolding(EHUTool::UVLight)) { bLightOn = !bLightOn; UpdateBeam(); return; }
 	if (IsHolding(EHUTool::Scanner)) { Scan(); return; }
 	// hands, the print kit and the crowbar work on whatever you're looking at
@@ -222,10 +216,6 @@ void UHUInteractComponent::BuildHand()
 	case 5: // scanner, screen up
 		P(EShape::Cube, FVector(10, 0, 2), FVector(13, 7, 3), FLinearColor(0.15f, 0.16f, 0.17f), FRotator(-20, 0, 0));
 		P(EShape::Cube, FVector(10.5f, 0, 3.8f), FVector(7, 5, 0.3f), FLinearColor(0.2f, 2.f, 0.6f), FRotator(-20, 0, 0));
-		break;
-	case 6: // handcuffs: two steel rings and the chain
-		for (float Sd : { -1.f, 1.f }) P(EShape::Cylinder, FVector(10, Sd * 4.5f, 2), FVector(7, 7, 1.2f), FLinearColor(0.7f, 0.72f, 0.75f), FRotator(0, 0, 90));
-		P(EShape::Cube, FVector(10, 0, 2), FVector(1.5f, 4, 1.5f), FLinearColor(0.6f, 0.62f, 0.65f));
 		break;
 	default: break; // empty hand
 	}
@@ -342,6 +332,244 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		else if ((HoldProgress += DeltaTime / FMath::Max(0.05f, HoldTotal)) >= 1.f) { CancelHold(); Use(bHoldSecondary); }
 	}
 	PromptAge += DeltaTime;
+
+	// the belt: look well down with nothing to pick up there. Opens past 55 degrees, closes back above 45.
+	const float Pitch = FRotator::NormalizeAxis(Look.Pitch);
+	const bool bFree = !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Grabbed.IsValid() && !bHolding;
+	const bool bWant = bFree && Pitch < (bBeltOpen ? -45.f : -55.f);
+	if (bWant != bBeltOpen)
+	{
+		bBeltOpen = bWant;
+		if (bBeltOpen) SetBeltSel(BeltSel, Look.Yaw); // start on the pouch you used last
+		BuildBelt();
+	}
+	if (bBeltOpen)
+	{
+		// each pouch is 14 degrees of turn; turning past the ends just stays on the end pouch
+		float Off = FRotator::NormalizeAxis(Look.Yaw - BeltYaw);
+		if (Off < -28.f) { BeltYaw = Look.Yaw + 28.f; Off = -28.f; }
+		if (Off > 28.f) { BeltYaw = Look.Yaw - 28.f; Off = 28.f; }
+		const int32 Sel = FMath::Clamp(FMath::FloorToInt((Off + 28.f) / 14.f), 0, HUBelt::Count - 1);
+		if (Sel != BeltSel) { BeltSel = Sel; BuildBelt(); }
+	}
+}
+
+// ---------- the utility belt ----------
+// which way something is, in words, from where this pawn is facing
+static FString DirWords(const APawn* From, const FVector& Where)
+{
+	const FVector To = Where - From->GetActorLocation();
+	const FRotator Facing(0.f, From->GetControlRotation().Yaw, 0.f);
+	const float Ahead = FVector::DotProduct(To, Facing.Vector()), Right = FVector::DotProduct(To, FRotationMatrix(Facing).GetUnitAxis(EAxis::Y));
+	FString Dir = FMath::Abs(Ahead) > FMath::Abs(Right) ? (Ahead > 0 ? TEXT("ahead") : TEXT("behind you")) : (Right > 0 ? TEXT("to your right") : TEXT("to your left"));
+	if (To.Z > 150.f) Dir += TEXT(", up high");
+	else if (To.Z < -150.f) Dir += TEXT(", down below");
+	return Dir;
+}
+
+void UHUInteractComponent::SetBeltSel(int32 Sel, float LookYaw)
+{
+	BeltSel = FMath::Clamp(Sel, 0, HUBelt::Count - 1);
+	// line the mouse up so the picked pouch is in the middle of its 14 degrees
+	BeltYaw = LookYaw - (-21.f + 14.f * BeltSel);
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) BeltYaw = Pawn->GetControlRotation().Yaw - (-21.f + 14.f * BeltSel);
+	BuildBelt();
+}
+
+float UHUInteractComponent::BeltWait(int32 Item) const
+{
+	if (Item < 0 || Item >= HUBelt::Count || !GetWorld()) return 0.f;
+	return FMath::Max(0.f, (float)(BeltUsed[Item] + HUBelt::Cooldown(Item) - GetWorld()->GetTimeSeconds()));
+}
+
+void UHUInteractComponent::BuildBelt()
+{
+	if (!Belt) return;
+	using namespace HUBuild;
+	Clear(BeltParts);
+	AActor* O = GetOwner();
+	auto P = [&](EShape S, FVector Pos, FVector Size, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator)
+	{
+		UStaticMeshComponent* M = Block(O, Belt, BeltParts, S, Pos, Size, Col, Rot, false);
+		if (M) { M->SetCastShadow(false); M->bOnlyOwnerSee = true; }
+		return M;
+	};
+	const FLinearColor Leather(0.05f, 0.04f, 0.035f), Buckle(0.55f, 0.5f, 0.35f);
+	// the band, curving round the front of the waist
+	for (int32 i = -3; i <= 3; i++)
+	{
+		const float A = FMath::DegreesToRadians(i * 22.f);
+		P(EShape::Cube, FVector(FMath::Cos(A) * 24.f, FMath::Sin(A) * 24.f, 0), FVector(3, 10, 5), Leather, FRotator(0, i * 22.f, 0));
+	}
+	P(EShape::Cube, FVector(25.5f, 0, 0), FVector(1, 6, 5), Buckle);
+	// the four pouches; the picked one rides up while you're looking at the belt
+	const float Ang[] = { -52.f, -24.f, 24.f, 52.f };
+	for (int32 i = 0; i < HUBelt::Count; i++)
+	{
+		const float A = FMath::DegreesToRadians(Ang[i]);
+		const bool bPick = bBeltOpen && i == BeltSel;
+		const FVector At(FMath::Cos(A) * 27.f, FMath::Sin(A) * 27.f, bPick ? 4.f : -2.f);
+		const FRotator R(0, Ang[i], 0);
+		P(EShape::Cube, At, FVector(5, 7, 9), Leather, R); // the pouch
+		switch (i)
+		{
+		case HUBelt::Cuffs:
+			for (float Sd : { -1.f, 1.f }) P(EShape::Cylinder, At + R.RotateVector(FVector(1.5f, Sd * 2.2f, 5.5f)), FVector(4.5f, 4.5f, 0.8f), FLinearColor(0.7f, 0.72f, 0.75f), R + FRotator(0, 0, 90));
+			break;
+		case HUBelt::Pepper:
+			P(EShape::Cylinder, At + FVector(0, 0, 6.5f), FVector(3, 3, 7), FLinearColor(0.75f, 0.12f, 0.05f));
+			P(EShape::Cube, At + FVector(0, 0, 10.5f), FVector(2, 2, 1.5f), FLinearColor(0.05f, 0.05f, 0.05f));
+			break;
+		case HUBelt::Taser:
+			P(EShape::Cube, At + R.RotateVector(FVector(0, 0, 7)), FVector(3, 4, 8), FLinearColor(0.85f, 0.7f, 0.05f), R);
+			break;
+		case HUBelt::Radio:
+			P(EShape::Cube, At + FVector(0, 0, 6.5f), FVector(3.5f, 5, 9), FLinearColor(0.08f, 0.08f, 0.09f), R);
+			P(EShape::Cylinder, At + R.RotateVector(FVector(0, 1.5f, 14)), FVector(0.8f, 0.8f, 7), FLinearColor(0.08f, 0.08f, 0.09f));
+			break;
+		}
+		if (bPick) P(EShape::Cube, At + FVector(0, 0, -6.f), FVector(5.5f, 7.5f, 0.6f), FLinearColor(1.f, 0.75f, 0.3f), R); // a gold rim under it
+	}
+}
+
+void UHUInteractComponent::UseBelt()
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!Pawn || !GetWorld()) return;
+	const int32 Item = BeltSel;
+	if (const float Wait = BeltWait(Item); Wait > 0.f)
+	{
+		Say(FString::Printf(TEXT("%s: %s (%d s)"), HUBelt::Name(Item), Item == HUBelt::Taser ? TEXT("loading a new cartridge") : TEXT("not ready"), FMath::CeilToInt(Wait)));
+		return;
+	}
+	// you're looking at your belt, so "in front of you" is the way your body faces
+	const FVector From = Pawn->GetActorLocation();
+	const FVector Fwd = FRotator(0.f, Pawn->GetControlRotation().Yaw, 0.f).Vector();
+	auto InFront = [&](AHUSuspectActor* S, float Range, float Cone)
+	{
+		if (!S || S->bCuffed || S->IsHidden()) return false;
+		const FVector To = (S->GetActorLocation() - From) * FVector(1, 1, 0);
+		const float D = To.Size();
+		return D < Range && (D < 60.f || FVector::DotProduct(To / D, Fwd) > FMath::Cos(FMath::DegreesToRadians(Cone)));
+	};
+	auto Nearest = [&](float Range, float Cone)
+	{
+		AHUSuspectActor* Best = nullptr; float BestD = Range;
+		for (TActorIterator<AHUSuspectActor> It(GetWorld()); It; ++It)
+			if (InFront(*It, Range, Cone))
+			{
+				const float D = FVector::Dist2D(It->GetActorLocation(), From);
+				if (D < BestD) { BestD = D; Best = *It; }
+			}
+		return Best;
+	};
+	switch (Item)
+	{
+	case HUBelt::Cuffs:
+	{
+		AHUSuspectActor* S = Nearest(220.f, 50.f);
+		if (!S) { Say(TEXT("Nobody close enough to cuff. Get right up to them, facing them.")); return; }
+		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
+		SendBelt(Item, S->GetPathName());
+		return;
+	}
+	case HUBelt::Pepper:
+	{
+		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
+		PlayReach();
+		int32 Hit = 0;
+		for (TActorIterator<AHUSuspectActor> It(GetWorld()); It; ++It)
+			if (InFront(*It, 330.f, 35.f)) { SendBelt(Item, It->GetPathName()); Hit++; }
+		if (!Hit) Say(TEXT("A hiss of pepper spray into the air. Nobody in it."));
+		return;
+	}
+	case HUBelt::Taser:
+	{
+		// the closest one you're facing, with nothing in the way
+		AHUSuspectActor* S = nullptr; float BestD = 750.f;
+		for (TActorIterator<AHUSuspectActor> It(GetWorld()); It; ++It)
+		{
+			if (!InFront(*It, 750.f, 14.f)) continue;
+			FHitResult Hit;
+			FCollisionQueryParams Params(TEXT("HUTaser"), false, Pawn);
+			if (GetWorld()->LineTraceSingleByChannel(Hit, From + FVector(0, 0, 40), It->GetActorLocation() + FVector(0, 0, 110), ECC_Visibility, Params) && Hit.GetActor() != *It) continue;
+			const float D = FVector::Dist2D(It->GetActorLocation(), From);
+			if (D < BestD) { BestD = D; S = *It; }
+		}
+		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
+		PlayReach();
+		if (!S) { Say(TEXT("The taser cracks - the probes hit nothing. Face them squarely; it reaches about 7 m.")); return; }
+		SendBelt(Item, S->GetPathName());
+		return;
+	}
+	case HUBelt::Radio:
+		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
+		SendBelt(Item, FString());
+		return;
+	}
+}
+
+void UHUInteractComponent::SendBelt(uint8 Item, const FString& TargetPath)
+{
+	const ENetMode Mode = GetWorld()->GetNetMode();
+	if (Mode == NM_Standalone) { MulticastBelt_Implementation(Item, TargetPath); return; }
+	if (GetOwner()->HasAuthority()) MulticastBelt(Item, TargetPath);
+	else ServerBelt(Item, TargetPath);
+}
+
+void UHUInteractComponent::ServerBelt_Implementation(uint8 Item, const FString& TargetPath)
+{
+	MulticastBelt(Item, TargetPath);
+}
+
+void UHUInteractComponent::MulticastBelt_Implementation(uint8 Item, const FString& TargetPath)
+{
+	APawn* User = Cast<APawn>(GetOwner());
+	if (!User) return;
+	AHUSuspectActor* S = TargetPath.IsEmpty() ? nullptr : FindObject<AHUSuspectActor>(nullptr, *TargetPath);
+	switch (Item)
+	{
+	case HUBelt::Cuffs:
+		if (S && !S->bCuffed)
+		{
+			// the arrest is the same as with cuffs in hand: act as if holding them, then put the hand back
+			const int32 Saved = Held;
+			Held = (int32)EHUTool::Handcuffs + 1;
+			IHUInteractable::Execute_Interact(S, User, false);
+			Held = Saved;
+		}
+		break;
+	case HUBelt::Pepper:
+	case HUBelt::Taser:
+		if (S) S->Subdue(User, Item == HUBelt::Taser);
+		break;
+	case HUBelt::Radio:
+	{
+		// whoever's at this screen hears it
+		APlayerController* Local = GetWorld()->GetFirstPlayerController();
+		APawn* Me = Local ? Local->GetPawn() : nullptr;
+		UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+		if (!Mine) break;
+		const FLinearColor RadioCol(0.55f, 0.8f, 1.f);
+		if (Me == User)
+		{
+			if (GetWorld()->GetNetMode() == NM_Standalone)
+			{
+				const UHUCaseSubsystem* C = Cases();
+				Mine->Notify(TEXT("RADIO"), FString::Printf(TEXT("DISPATCH: \"Copy, Detective. %d piece%s of evidence bagged, %d booked. The van's out front.\""),
+					C ? C->Found.Num() : 0, C && C->Found.Num() == 1 ? TEXT("") : TEXT("s"), C ? C->Arrested.Num() : 0), RadioCol);
+			}
+			else Mine->Notify(TEXT("RADIO"), TEXT("You key the radio. Your squad hears you, and where you are."), RadioCol);
+		}
+		else
+		{
+			const FString Who = User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName() : FString(TEXT("Your partner"));
+			Mine->Notify(TEXT("RADIO"), FString::Printf(TEXT("%s: \"Over here.\"  —  %d m %s"), *Who,
+				FMath::RoundToInt(FVector::Dist(User->GetActorLocation(), Me->GetActorLocation()) / 100.f), *DirWords(Me, User->GetActorLocation())), RadioCol);
+		}
+		break;
+	}
+	}
 }
 
 // ---------- hover feedback ----------

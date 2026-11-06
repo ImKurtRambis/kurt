@@ -1,6 +1,8 @@
 // On the player: traces what you're looking at, shows its prompt and any subtitle on screen, sends E / Q to it,
 // and carries the HOTBAR - what's in your hand:
-//   1 hands  ·  2 flashlight  ·  3 UV light  ·  4 print kit  ·  5 crowbar  ·  6 scanner  ·  7 handcuffs   (mouse wheel cycles)
+//   1 hands  ·  2 flashlight  ·  3 UV light  ·  4 print kit  ·  5 crowbar  ·  6 scanner   (mouse wheel cycles)
+// and the UTILITY BELT - look down (with nothing to pick up there): cuffs, pepper spray, taser, radio.
+//   Move the mouse left/right or scroll to pick a pouch, LEFT CLICK uses it. Your hand keeps what it's holding.
 //   LEFT CLICK uses what you're holding: lights switch on/off, the scanner pings, the print kit and crowbar work
 //   on the evidence you're looking at. F / V / R grab the flashlight / UV light / scanner and use it in one go.
 // Tools only work in your hand: prints need the print kit held, strongboxes need the crowbar held.
@@ -39,13 +41,23 @@ public:
 	UFUNCTION(NetMulticast, Reliable) void MulticastUse(const FString& TargetPath, FName Part, bool bSecondary, int32 HeldSlot);
 
 	// ---- the hotbar ----
-	static constexpr int32 SlotCount = 1 + (int32)EHUTool::Count;
+	static constexpr int32 SlotCount = 1 + (int32)EHUTool::Handcuffs; // the cuffs live on the belt
 	// 0 = empty hands, 1.. = EHUTool (slot - 1)
 	UPROPERTY(BlueprintReadOnly, Category = "Hotbar") int32 Held = 0;
 	UFUNCTION(BlueprintPure, Category = "Hotbar") bool IsHolding(EHUTool Tool) const { return Held == (int32)Tool + 1; }
 	UFUNCTION(BlueprintPure, Category = "Hotbar") bool SlotUsable(int32 Slot) const;
 	UFUNCTION(BlueprintCallable, Category = "Hotbar") void SelectSlot(int32 Slot);
 	UFUNCTION(BlueprintCallable, Category = "Hotbar") void UseHeld();
+
+	// ---- the utility belt (HUBelt in HUTools.h) ----
+	UPROPERTY(BlueprintReadOnly, Category = "Belt") bool bBeltOpen = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Belt") int32 BeltSel = 0;
+	// seconds until that pouch can be used again (0 = ready)
+	float BeltWait(int32 Item) const;
+	void UseBelt();
+	// a belt use goes to the host and every player's game applies it (same as Use)
+	UFUNCTION(Server, Reliable) void ServerBelt(uint8 Item, const FString& TargetPath);
+	UFUNCTION(NetMulticast, Reliable) void MulticastBelt(uint8 Item, const FString& TargetPath);
 
 	// lights: on only while held
 	UPROPERTY(BlueprintReadOnly, Category = "Kit") bool bLightOn = false;
@@ -127,7 +139,15 @@ private:
 	TWeakObjectPtr<AActor> HoldTarget;
 	TWeakObjectPtr<UPrimitiveComponent> HoldPart;
 	void Slot1() { SelectSlot(0); } void Slot2() { SelectSlot(1); } void Slot3() { SelectSlot(2); }
-	void Slot4() { SelectSlot(3); } void Slot5() { SelectSlot(4); } void Slot6() { SelectSlot(5); } void Slot7() { SelectSlot(6); }
+	void Slot4() { SelectSlot(3); } void Slot5() { SelectSlot(4); } void Slot6() { SelectSlot(5); }
+	// the belt at your waist (only you see it), and how you're picking from it
+	UPROPERTY() USceneComponent* Belt = nullptr;
+	UPROPERTY() TArray<UStaticMeshComponent*> BeltParts;
+	float BeltYaw = 0.f;
+	double BeltUsed[HUBelt::Count] = { -100.0, -100.0, -100.0, -100.0 };
+	void BuildBelt();
+	void SetBeltSel(int32 Sel, float LookYaw);
+	void SendBelt(uint8 Item, const FString& TargetPath);
 	void WheelUp(); void WheelDown();
 	void Setup(class APlayerController* PC);
 };
