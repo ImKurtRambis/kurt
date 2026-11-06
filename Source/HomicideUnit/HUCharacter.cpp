@@ -5,6 +5,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
+#include "Engine/Scene.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -18,6 +19,19 @@ AHUCharacter::AHUCharacter()
 	Eyes->SetupAttachment(GetCapsuleComponent());
 	Eyes->SetRelativeLocation(FVector(0, 0, 64));
 	Eyes->bUsePawnControlRotation = true;
+	// Give the primitive blockout a restrained noir grade without requiring a post-process asset.
+	Eyes->PostProcessBlendWeight = 1.f;
+	FPostProcessSettings& Look = Eyes->PostProcessSettings;
+	Look.bOverride_ColorSaturation = true;
+	Look.ColorSaturation = FVector4(0.78f, 0.78f, 0.78f, 1.f);
+	Look.bOverride_ColorContrast = true;
+	Look.ColorContrast = FVector4(1.12f, 1.12f, 1.12f, 1.f);
+	Look.bOverride_ColorGainShadows = true;
+	Look.ColorGainShadows = FVector4(0.91f, 0.96f, 1.05f, 1.f);
+	Look.bOverride_ColorGainHighlights = true;
+	Look.ColorGainHighlights = FVector4(1.04f, 1.f, 0.93f, 1.f);
+	Look.bOverride_VignetteIntensity = true;
+	Look.VignetteIntensity = 0.28f;
 	Interact = CreateDefaultSubobject<UHUInteractComponent>(TEXT("HUInteract"));
 	bUseControllerRotationYaw = true;
 	UCharacterMovementComponent* M = GetCharacterMovement();
