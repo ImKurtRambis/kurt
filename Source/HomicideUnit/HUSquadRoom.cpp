@@ -1,6 +1,7 @@
 #include "HUSquadRoom.h"
 #include "HUBuild.h"
 #include "HUSquadSubsystem.h"
+#include "HUCharacter.h"
 #include "HUPlayerState.h"
 #include "Components/InputComponent.h"
 #include "HUCaseSubsystem.h"
@@ -248,7 +249,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 			return FText::FromString(FString::Printf(TEXT("[E] Submit the case to the Captain  (%d booked)"), C->Arrested.Num()));
 		}
 	}
-	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee"));
+	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee  (faster work for a while)"));
 	if (ComputerParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Check the case archive"));
 	if (LaptopParts.Contains(I->FocusPart))
 		return FText::FromString(IsHost() ? FString::Printf(TEXT("Location: %s  ·  [E] next  ·  [Q] previous"), *PlaceLabel()) : FString::Printf(TEXT("Location: %s  (the host picks)"), *PlaceLabel()));
@@ -318,7 +319,13 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		}
 	}
 	if (ClockParts.Contains(I->FocusPart)) { if (User->IsLocallyControlled()) ToggleReady(); return; } // only your own punch card
-	if (CoffeeParts.Contains(I->FocusPart)) { const TCHAR* L[] = { TEXT("Burnt, bitter, hot. It does the job."), TEXT("Somebody made a fresh pot. A miracle."), TEXT("You top off the cup. Long night ahead.") }; I->Say(L[FMath::RandRange(0, 2)]); return; }
+	if (CoffeeParts.Contains(I->FocusPart))
+	{
+		const TCHAR* L[] = { TEXT("Burnt, bitter, hot. It does the job."), TEXT("Somebody made a fresh pot. A miracle."), TEXT("You top off the cup. Long night ahead.") };
+		I->Say(L[FMath::RandRange(0, 2)]);
+		if (AHUCharacter* Ch = Cast<AHUCharacter>(User)) { Ch->DrinkCoffee(); I->Notify(TEXT("COFFEE"), TEXT("Quicker hands, quicker feet - for a couple of minutes"), FLinearColor(0.85f, 0.6f, 0.35f)); }
+		return;
+	}
 	if (ComputerParts.Contains(I->FocusPart))
 	{
 		if (const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
@@ -422,4 +429,14 @@ void AHUSquadRoom::UpdateHolding()
 				T->SetTextRenderColor(bBooked ? FColor(110, 200, 255) : FColor(255, 181, 71));
 			}
 	}
+}
+float AHUSquadRoom::UseTime(APawn* User, bool bSecondary) const
+{
+	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!I || bSecondary) return 0.f;
+	if (CoffeeParts.Contains(I->FocusPart)) return 1.f;
+	if (CounterParts.Contains(I->FocusPart) && C && C->UnbookedCount() > 0) return 1.5f;
+	if (TrayParts.Contains(I->FocusPart) && C && C->bAwaitingCaptain && C->UnbookedCount() == 0) return 1.f;
+	return 0.f;
 }

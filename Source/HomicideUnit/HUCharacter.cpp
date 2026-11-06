@@ -81,7 +81,8 @@ void AHUCharacter::Tick(float DeltaSeconds)
 	}
 	// the pushable furniture lowers MaxWalkSpeed while you drag it - only change speed when not dragging
 	UCharacterMovementComponent* M = GetCharacterMovement();
-	if (M->MaxWalkSpeed >= WalkSpeed - 1.f) M->MaxWalkSpeed = PC->IsInputKeyDown(EKeys::LeftShift) ? RunSpeed : WalkSpeed;
+	const float Boost = IsCaffeinated() ? 1.2f : 1.f; // coffee: quicker on your feet
+	if (M->MaxWalkSpeed >= WalkSpeed - 1.f) M->MaxWalkSpeed = (PC->IsInputKeyDown(EKeys::LeftShift) ? RunSpeed : WalkSpeed) * Boost;
 }
 
 void AHUCharacter::SitDown(FVector SeatTop, float Yaw)
@@ -127,4 +128,15 @@ void AHUCharacter::BackToDesk()
 void AHUCharacter::ClientSitDown_Implementation(FVector SeatTop, float Yaw)
 {
 	SitDown(SeatTop, Yaw);
+}
+
+void AHUCharacter::DrinkCoffee(float Seconds)
+{
+	CoffeeLength = Seconds;
+	CoffeeUntil = GetWorld()->GetTimeSeconds() + Seconds;
+}
+
+float AHUCharacter::CoffeeLeft() const
+{
+	return GetWorld() ? FMath::Max(0.f, (float)(CoffeeUntil - GetWorld()->GetTimeSeconds())) : 0.f;
 }

@@ -3,6 +3,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUDraw.h"
 #include "HUSecurityDesk.h"
+#include "HUCharacter.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -100,6 +101,17 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		}
 	}
 
+	// ---- holding E on a timed task: a ring of dots filling around the crosshair ----
+	if (Owner->bHolding)
+	{
+		const int32 Dots = 28;
+		for (int32 k = 0; k < Dots; k++)
+		{
+			const float A = 2.f * PI * k / Dots - PI * 0.5f;
+			const bool bDone = (float)k / Dots < Owner->HoldProgress;
+			Box(Out, Ly, G, C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * 26.f - FVector2D(2.5f, 2.5f), FVector2D(5, 5), bDone ? Gold : FLinearColor(1, 1, 1, 0.18f), 3.f);
+		}
+	}
 	// ---- the prompt, with key caps, easing in under the crosshair ----
 	if (bAim)
 	{
@@ -189,7 +201,15 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		const bool bOn = (i == (int32)EHUTool::Flashlight + 1 && Owner->bFlashlightOn) || (i == (int32)EHUTool::UVLight + 1 && Owner->bUVOn);
 		if (bOn) Box(Out, Ly + 2, G, P + FVector2D(SlotW - 14, 7), FVector2D(7, 7), Green, 4.f);
 	}
-	if (Cases)
+	// ---- coffee: how long it lasts, beside the hotbar ----
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Owner->GetOwner()); Ch && Ch->IsCaffeinated())
+	{
+		const float Left = Ch->CoffeeLeft();
+		const FVector2D P(X0 + Total + 18, Y0 + 6);
+		Panel(Out, Ly, G, P, FVector2D(150, 46), 1.f, FLinearColor(0.85f, 0.6f, 0.35f), 9.f);
+		Text(Out, Ly + 2, G, FString::Printf(TEXT("COFFEE  %d:%02d"), FMath::FloorToInt(Left) / 60, FMath::FloorToInt(Left) % 60), Font("Bold", 10, 100), P + FVector2D(14, 8), FLinearColor(0.95f, 0.75f, 0.5f));
+		Bar(Out, Ly + 2, G, P + FVector2D(14, 30), FVector2D(122, 4), Left / FMath::Max(1.f, Ch->CoffeeLength), FLinearColor(0.85f, 0.6f, 0.35f));
+	}	if (Cases)
 	{
 		const FString Cash = FString::Printf(TEXT("$%d"), Cases->Cash);
 		const FVector2D S = Measure(Cash, Font("Bold", 14));

@@ -30,6 +30,7 @@ public:
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual bool Highlights() const override { return false; }
+	virtual float UseTime(APawn* User, bool bSecondary) const override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 

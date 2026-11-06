@@ -34,6 +34,7 @@ public:
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const override;
+	virtual float UseTime(APawn* User, bool bSecondary) const override;
 
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;

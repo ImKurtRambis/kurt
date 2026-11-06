@@ -226,3 +226,9 @@ void AHUVictim::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent
 	// light up just the part you're looking at (all of the hands, all of the head...)
 	if (const int32* Spot = Spots.Find(Part)) { for (const TPair<UPrimitiveComponent*, int32>& P : Spots) if (P.Value == *Spot) Out.Add(P.Key); }
 }
+float AHUVictim::UseTime(APawn* User, bool bSecondary) const
+{
+	if (bSecondary) return !bSearched && (Kind == EHUVictimKind::Body || Kind == EHUVictimKind::Belongings) ? 2.f : 0.f; // going through the pockets
+	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	return I && Spots.Contains(I->FocusPart) ? 1.5f : 0.f; // a careful look at one part of the body
+}

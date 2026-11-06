@@ -37,6 +37,7 @@ public:
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual void HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const override;
+	virtual float UseTime(APawn* User, bool bSecondary) const override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 

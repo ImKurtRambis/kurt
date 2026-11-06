@@ -28,4 +28,6 @@ public:
 	}
 	// false for things you just pick up (evidence): no glow, no spotlight - only the prompt
 	virtual bool Highlights() const { return true; }
+	// seconds you hold E (or Q) to do it - careful work takes a moment (0 = instant). Coffee makes it quicker.
+	virtual float UseTime(APawn* User, bool bSecondary) const { return 0.f; }
 };

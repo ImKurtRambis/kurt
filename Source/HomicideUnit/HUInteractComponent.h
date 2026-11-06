@@ -64,6 +64,10 @@ public:
 	void PlayReach() { ReachT = 0.f; }
 	bool IsGrabbing() const { return Grabbed.IsValid(); }
 
+	// holding E/Q on a timed task: how far along (0..1), and what it is
+	UPROPERTY(BlueprintReadOnly, Category = "Interact") float HoldProgress = 0.f;
+	UPROPERTY(BlueprintReadOnly, Category = "Interact") bool bHolding = false;
+
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
 
@@ -101,8 +105,16 @@ private:
 	class UHUCaseSubsystem* Cases() const;
 	void UpdateBeam();
 	void BuildHand();
-	void UsePrimary() { Use(false); }
-	void UseSecondary() { Use(true); }
+	void UsePrimary() { BeginUse(false); }
+	void UseSecondary() { BeginUse(true); }
+	void ReleasePrimary() { if (bHolding && !bHoldSecondary) CancelHold(); }
+	void ReleaseSecondary() { if (bHolding && bHoldSecondary) CancelHold(); }
+	void BeginUse(bool bSecondary);
+	void CancelHold() { bHolding = false; HoldProgress = 0.f; }
+	bool bHoldSecondary = false;
+	float HoldTotal = 0.f;
+	TWeakObjectPtr<AActor> HoldTarget;
+	TWeakObjectPtr<UPrimitiveComponent> HoldPart;
 	void Slot1() { SelectSlot(0); } void Slot2() { SelectSlot(1); } void Slot3() { SelectSlot(2); }
 	void Slot4() { SelectSlot(3); } void Slot5() { SelectSlot(4); } void Slot6() { SelectSlot(5); } void Slot7() { SelectSlot(6); }
 	void WheelUp(); void WheelDown();

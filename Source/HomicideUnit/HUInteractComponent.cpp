@@ -4,6 +4,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
 #include "HUBuild.h"
+#include "HUCharacter.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/InputComponent.h"
@@ -37,6 +38,8 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Keys->bBlockInput = false;
 	Keys->BindKey(EKeys::E, IE_Pressed, this, &UHUInteractComponent::UsePrimary);
 	Keys->BindKey(EKeys::Q, IE_Pressed, this, &UHUInteractComponent::UseSecondary);
+	Keys->BindKey(EKeys::E, IE_Released, this, &UHUInteractComponent::ReleasePrimary);
+	Keys->BindKey(EKeys::Q, IE_Released, this, &UHUInteractComponent::ReleaseSecondary);
 	Keys->BindKey(EKeys::F, IE_Pressed, this, &UHUInteractComponent::ToggleFlashlight);
 	Keys->BindKey(EKeys::V, IE_Pressed, this, &UHUInteractComponent::ToggleUV);
 	Keys->BindKey(EKeys::R, IE_Pressed, this, &UHUInteractComponent::Scan);
@@ -128,7 +131,7 @@ void UHUInteractComponent::UseHeld()
 	if (IsHolding(EHUTool::Flashlight) || IsHolding(EHUTool::UVLight)) { bLightOn = !bLightOn; UpdateBeam(); return; }
 	if (IsHolding(EHUTool::Scanner)) { Scan(); return; }
 	// hands, the print kit and the crowbar work on whatever you're looking at
-	Use(false);
+	BeginUse(false);
 }
 
 void UHUInteractComponent::ToggleFlashlight()
@@ -330,6 +333,12 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	// no glow or spotlight in the game (that's only for the dark desk menu): the crosshair and the prompt do the job.
 	// The prompt eases in again whenever you look at something new.
 	if (Focus != LastFocus || FocusPart != LastFocusPart) { PromptAge = 0.f; LastFocus = Focus; LastFocusPart = FocusPart; }
+	// a timed task: keep holding, keep looking at it
+	if (bHolding)
+	{
+		if (Focus != HoldTarget.Get() || FocusPart != HoldPart.Get()) CancelHold();
+		else if ((HoldProgress += DeltaTime / FMath::Max(0.05f, HoldTotal)) >= 1.f) { CancelHold(); Use(bHoldSecondary); }
+	}
 	PromptAge += DeltaTime;
 }
 
@@ -424,4 +433,16 @@ void UHUInteractComponent::SetGrabbing(AActor* Thing)
 	Grabbed = Thing;
 	if (Thing) { bLightOn = false; UpdateBeam(); }
 	BuildHand(); // switches between the two-handed push pose and whatever you're holding
+}
+// E / Q pressed: instant things happen now; careful work (UseTime) needs holding, faster with coffee
+void UHUInteractComponent::BeginUse(bool bSecondary)
+{
+	if (!Focus) return;
+	const IHUInteractable* II = Cast<IHUInteractable>(Focus);
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	float T = II ? II->UseTime(Pawn, bSecondary) : 0.f;
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn)) T /= Ch->TaskSpeed();
+	if (T <= 0.05f) { Use(bSecondary); return; }
+	bHolding = true; bHoldSecondary = bSecondary; HoldTotal = T; HoldProgress = 0.f;
+	HoldTarget = Focus; HoldPart = FocusPart;
 }

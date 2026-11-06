@@ -28,6 +28,14 @@ public:
 	// the host seating you (in a squad): sit on your own screen too
 	UFUNCTION(Client, Reliable) void ClientSitDown(FVector SeatTop, float Yaw);
 
+	// ---- coffee: for a while, careful work goes quicker and you're quicker on your feet ----
+	UFUNCTION(BlueprintCallable, Category = "Detective") void DrinkCoffee(float Seconds = 150.f);
+	UFUNCTION(BlueprintPure, Category = "Detective") float CoffeeLeft() const;
+	UFUNCTION(BlueprintPure, Category = "Detective") bool IsCaffeinated() const { return CoffeeLeft() > 0.f; }
+	// how much faster timed tasks go (1 normally, 1.6 on coffee)
+	UFUNCTION(BlueprintPure, Category = "Detective") float TaskSpeed() const { return IsCaffeinated() ? 1.6f : 1.f; }
+	float CoffeeLength = 150.f;
+
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* Input) override;
 
@@ -38,6 +46,7 @@ private:
 	void ToggleCrouch();
 	void BackToDesk();
 	FVector StandSpot;
+	double CoffeeUntil = -1.0;
 	void StartJump() { if (bSeated) StandUp(); else Jump(); }
 	void EndJump() { StopJumping(); }
 };

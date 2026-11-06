@@ -149,3 +149,17 @@ void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
 	}
 	Destroy();
 }
+
+// careful work takes a moment: picking it up, lifting prints, swabbing, prying a lock (only with the right tool in hand)
+float AHUEvidence::UseTime(APawn* User, bool bSecondary) const
+{
+	if (bSecondary) return 0.f;
+	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	switch (Conceal)
+	{
+	case EHUConceal::Locked: return !bOpened ? (I && I->IsHolding(EHUTool::Crowbar) ? 3.f : 0.f) : 0.8f;
+	case EHUConceal::Prints: return I && I->IsHolding(EHUTool::PrintKit) ? 2.5f : 0.f;
+	case EHUConceal::Trace:  return 2.f;
+	default:                 return 0.8f;
+	}
+}

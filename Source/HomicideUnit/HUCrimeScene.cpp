@@ -10,6 +10,7 @@
 #include "HUOfficer.h"
 #include "HUPoliceVan.h"
 #include "HUSecurityDesk.h"
+#include "HUCoffee.h"
 #include "HUInteractComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
@@ -250,6 +251,11 @@ void AHUCrimeScene::Build()
 		{
 			const FTransform VT(FRotator(0, 90, 0), FVector(X0 - 640, EntY + 820, 0));
 			if (AHUPoliceVan* Van = SpawnNamed<AHUPoliceVan>(VT * GetActorTransform())) Van->FinishSpawning(VT * GetActorTransform());
+		}
+		// the coffee patrol brought, on a folding table by the tape
+		{
+			const FTransform KT(FRotator(0, 90, 0), FVector(TX - 140, EntY + 560, 0));
+			if (AHUCoffee* K = SpawnNamed<AHUCoffee>(KT * GetActorTransform())) K->FinishSpawning(KT * GetActorTransform());
 		}
 		// officers holding the tape
 		int32 Var = 0;
