@@ -37,6 +37,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bThinking = false;
 	// the brain's answer (computed on the asker's PC), shown on every machine
 	void ApplyAnswer(APawn* User, const FString& Question, const FString& Answer);
+	// the questions you can ask (keys 1-6, or hold V and say one when Speak questions is on)
+	TArray<FString> QuestionLabels() const;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bMicOpen = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") FString Heard; // what speech-to-text heard last
 	TArray<FString> BaggedIds() const;
 	// a move in the interview (0 confront/press, 1 raise their record): runs on every machine, the same way
 	void ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId);
@@ -67,4 +71,10 @@ private:
 	void Speak(const FString& Said);
 	TWeakObjectPtr<class UAudioComponent> VoiceAudio;
 	void AskTyped();
+	void Ask(const FString& Shown, const FString& Question);
+	void AskPreset(int32 Index);
+	FString QuestionText(int32 Index) const;
+	int32 MatchQuestion(const FString& Said) const;
+	void Q1(); void Q2(); void Q3(); void Q4(); void Q5(); void Q6();
+	void MicDown(); void MicUp();
 };

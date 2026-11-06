@@ -1,4 +1,5 @@
 #include "HUPromptWidget.h"
+#include "HUListenSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
 #include "HUDraw.h"
@@ -43,7 +44,7 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		const UHUCaseSubsystem* CS = Owner->GetWorld()->GetGameInstance() ? Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
 		if (CS && CS->GetSuspect(Sus->SuspectId, S))
 		{
-			const float W = FMath::Min(1180.f, L.X - 80.f), H = FMath::Min(470.f, L.Y * 0.55f);
+			const float W = FMath::Min(1180.f, L.X - 80.f), H = FMath::Min(590.f, L.Y * 0.66f);
 			const FVector2D P((L.X - W) * 0.5f, L.Y - H - 28.f);
 			Panel(Out, Ly, G, P, FVector2D(W, H), 1.f, Gold, 14.f);
 			// who, and how they're holding up
@@ -70,6 +71,35 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				while (St.Len() > 8 && Measure(St, SF).X > ColW - (bBroken ? 150 : 40)) St = St.LeftChop(5) + TEXT("…\"");
 				Text(Out, Ly + 3, G, St, SF, RP, bBroken ? Dim : Ink);
 				if (bBroken) { Box(Out, Ly + 3, G, RP + FVector2D(ColW - 140, 1), FVector2D(110, 18), Red * FLinearColor(1, 1, 1, 0.85f), 9.f); TextCentered(Out, Ly + 4, G, TEXT("LIE ON RECORD"), Font("Bold", 8, 60), RP + FVector2D(ColW - 85, 10), FLinearColor::White); }
+			}
+
+			// questions you can ask: 1-6, or hold V and say one
+			{
+				const UHUListenSubsystem* Mic = Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+				const bool bMic = Mic && Mic->IsEnabled();
+				const float QY = 114 + S.Statements.Num() * 34 + 14;
+				Text(Out, Ly + 2, G, bMic ? TEXT("ASK  —  1-6, or hold V and say it") : TEXT("ASK  —  1-6"), Font("Bold", 9, 140), P + FVector2D(28, QY), Gold);
+				const TArray<FString> Qs = Sus->QuestionLabels();
+				for (int32 q = 0; q < Qs.Num(); q++)
+				{
+					const FVector2D QP = P + FVector2D(28, QY + 22 + q * 22);
+					Box(Out, Ly + 2, G, QP + FVector2D(0, 1), FVector2D(18, 17), FLinearColor(1, 1, 1, 0.12f), 4.f);
+					TextCentered(Out, Ly + 3, G, FString::FromInt(q + 1), Font("Bold", 9), QP + FVector2D(9, 9), Ink);
+					FString QT = Qs[q];
+					if (q == 4 && S.Statements.IsValidIndex(Sus->StatementSel)) QT = FString::Printf(TEXT("Tell me more about statement %d."), Sus->StatementSel + 1);
+					Text(Out, Ly + 3, G, QT, Font("Regular", 11), QP + FVector2D(28, 0), Sus->bThinking ? Dim : Ink);
+				}
+				if (Sus->bMicOpen || !Sus->Heard.IsEmpty())
+				{
+					const FVector2D HP = P + FVector2D(28, QY + 22 + Qs.Num() * 22 + 6);
+					if (Sus->bMicOpen)
+					{
+						Box(Out, Ly + 2, G, HP, FVector2D(10, 10), Red, 5.f);
+						Text(Out, Ly + 3, G, TEXT("LISTENING — let go of V when you're done"), Font("Bold", 10), HP + FVector2D(18, -3), Red);
+						Bar(Out, Ly + 2, G, HP + FVector2D(18, 16), FVector2D(200, 5), Mic ? Mic->Level() : 0.f, Red);
+					}
+					else Text(Out, Ly + 3, G, TEXT("HEARD:  ") + Sus->Heard, Font("Italic", 10), HP, Dim);
+				}
 			}
 
 			// what you're putting in front of them

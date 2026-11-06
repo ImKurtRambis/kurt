@@ -103,6 +103,7 @@ bool UHUInteractComponent::SlotUsable(int32 Slot) const
 
 void UHUInteractComponent::SelectSlot(int32 Slot)
 {
+	if (Interviewing.IsValid()) return; // 1-6 ask questions in an interview
 	if (Slot < 0 || Slot >= SlotCount || Slot == Held) return;
 	if (!SlotUsable(Slot)) { Say(FString::Printf(TEXT("You don't have a %s yet. The supply locker in the motor pool sells one."), HUTools::Name((EHUTool)(Slot - 1)))); return; }
 	Held = Slot;

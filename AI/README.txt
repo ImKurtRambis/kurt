@@ -15,3 +15,5 @@ When present it's used first (no key needed); suspects and the 911 caller speak 
 EMOTIONAL voice for strong GPUs (optional): Chatterbox (MIT) via devnen/Chatterbox-TTS-Server in portable mode:
   AI\chatterbox\  (python start.py --portable --nvidia-cu128), config.yaml: model.repo_id chatterbox, host 127.0.0.1
 The game starts it on first use (port 8004); until it's ready, Kokoro speaks. Suspect mood sets the emotion.
+
+SPEAK QUESTIONS (optional, Settings > Speak questions): Moonshine tiny English (sherpa-onnx ASR model) in AI\stt\ (*.onnx + tokens.txt). Uses AI\voice\bin\sherpa-onnx-offline.exe.

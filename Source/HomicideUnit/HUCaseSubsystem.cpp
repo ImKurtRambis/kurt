@@ -14,7 +14,7 @@ void UHUCaseSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	if (UHUSave* S = Cast<UHUSave>(UGameplayStatics::LoadGameFromSlot(TEXT("HomicideUnit"), 0)))
 	{
 		Cash = S->Cash; OwnedTools = S->OwnedTools; CasesSolved = S->CasesSolved;
-		DetectiveName = S->DetectiveName; JoinAddress = S->JoinAddress; MouseSensitivity = S->MouseSensitivity; FieldOfView = S->FieldOfView; VoiceProvider = S->VoiceProvider; VoiceKey = S->VoiceKey;
+		DetectiveName = S->DetectiveName; JoinAddress = S->JoinAddress; MouseSensitivity = S->MouseSensitivity; FieldOfView = S->FieldOfView; VoiceProvider = S->VoiceProvider; VoiceKey = S->VoiceKey; bVoiceQuestions = S->bVoiceQuestions;
 	}
 }
 
@@ -23,7 +23,7 @@ void UHUCaseSubsystem::SaveProgress()
 	UHUSave* S = Cast<UHUSave>(UGameplayStatics::CreateSaveGameObject(UHUSave::StaticClass()));
 	if (!S) return;
 	S->Cash = Cash; S->OwnedTools = OwnedTools; S->CasesSolved = CasesSolved;
-	S->DetectiveName = DetectiveName; S->JoinAddress = JoinAddress; S->MouseSensitivity = MouseSensitivity; S->FieldOfView = FieldOfView; S->VoiceProvider = VoiceProvider; S->VoiceKey = VoiceKey;
+	S->DetectiveName = DetectiveName; S->JoinAddress = JoinAddress; S->MouseSensitivity = MouseSensitivity; S->FieldOfView = FieldOfView; S->VoiceProvider = VoiceProvider; S->VoiceKey = VoiceKey; S->bVoiceQuestions = bVoiceQuestions;
 	UGameplayStatics::SaveGameToSlot(S, TEXT("HomicideUnit"), 0);
 }
 

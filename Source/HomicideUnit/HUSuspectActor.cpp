@@ -4,6 +4,7 @@
 #include "HUInteractComponent.h"
 #include "HUBrainSubsystem.h"
 #include "HUVoiceSubsystem.h"
+#include "HUListenSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "HUInterrogation.h"
@@ -157,8 +158,16 @@ void AHUSuspectActor::OpenInterview(APawn* User)
 		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AHUSuspectActor::EvRight);
 		InputComponent->BindKey(EKeys::R, IE_Pressed, this, &AHUSuspectActor::RecordKey);
 		InputComponent->BindKey(EKeys::AnyKey, IE_Pressed, this, &AHUSuspectActor::TypeKey);
+		InputComponent->BindKey(EKeys::One, IE_Pressed, this, &AHUSuspectActor::Q1);
+		InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AHUSuspectActor::Q2);
+		InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AHUSuspectActor::Q3);
+		InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &AHUSuspectActor::Q4);
+		InputComponent->BindKey(EKeys::Five, IE_Pressed, this, &AHUSuspectActor::Q5);
+		InputComponent->BindKey(EKeys::Six, IE_Pressed, this, &AHUSuspectActor::Q6);
+		InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AHUSuspectActor::MicDown);
+		InputComponent->BindKey(EKeys::V, IE_Released, this, &AHUSuspectActor::MicUp);
 	}
-	bTyping = false; Draft.Reset();
+	bTyping = false; Draft.Reset(); bMicOpen = false; Heard.Reset();
 	if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
 }
 
@@ -197,9 +206,14 @@ void AHUSuspectActor::TypeKey(FKey Key)
 void AHUSuspectActor::AskTyped()
 {
 	bTyping = false;
-	const FString Q = Draft.TrimStartAndEnd();
+	const FString Typed = Draft.TrimStartAndEnd();
 	Draft.Reset();
-	if (Q.IsEmpty()) return;
+	if (!Typed.IsEmpty()) Ask(Typed, Typed);
+}
+
+void AHUSuspectActor::Ask(const FString& Q, const FString& Prompt)
+{
+	if (Q.IsEmpty() || bThinking) return;
 	UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>();
 	TWeakObjectPtr<AHUSuspectActor> Self(this);
 	TWeakObjectPtr<APawn> Asker = Interviewer;
@@ -218,7 +232,7 @@ void AHUSuspectActor::AskTyped()
 		UHUInteractComponent* I = Asker.IsValid() ? Asker->FindComponentByClass<UHUInteractComponent>() : nullptr;
 		if (I) I->SendAnswer(Self->GetPathName(), Q, A);
 	};
-	if (B && B->IsReady()) { bThinking = true; LastReply = TEXT("..."); B->AskSuspect(SuspectId, Q, FHUBrainReply::CreateLambda(Deliver)); }
+	if (B && B->IsReady()) { bThinking = true; LastReply = TEXT("..."); B->AskSuspect(SuspectId, Prompt, FHUBrainReply::CreateLambda(Deliver)); }
 	else { if (B) B->WarmUp(); Deliver(FString()); }
 }
 
@@ -312,4 +326,89 @@ void AHUSuspectActor::Speak(const FString& Said)
 		if (Self->VoiceAudio.IsValid()) Self->VoiceAudio->Stop();
 		Self->VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(Self.Get(), S, Self->GetActorLocation() + FVector(0, 0, 170));
 	}), Speed, Emotion);
+}
+// ---------- the question list ----------
+static const TCHAR* QShort[] = { TEXT("Where were you when it happened?"), TEXT("How did you know the victim?"), TEXT("Did you see or hear anything?"),
+	TEXT("Who else was there?"), TEXT("Tell me more about what you said."), TEXT("Why did you lie to me?") };
+
+TArray<FString> AHUSuspectActor::QuestionLabels() const
+{
+	TArray<FString> L;
+	for (int32 i = 0; i < 6; i++) L.Add(QShort[i]);
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	FHUSuspect S;
+	bool bAnyLie = false;
+	if (C && C->GetSuspect(SuspectId, S)) for (int32 i = 0; i < S.Statements.Num(); i++) bAnyLie |= C->IsBroken(SuspectId, i);
+	if (!bAnyLie) L[5] = TEXT("Is there anything you're not telling me?");
+	return L;
+}
+
+// what the brain is actually asked (the selected statement is spelled out for "tell me more")
+FString AHUSuspectActor::QuestionText(int32 Index) const
+{
+	const TArray<FString> L = QuestionLabels();
+	if (Index != 4) return L.IsValidIndex(Index) ? L[Index] : FString();
+	FHUSuspect S;
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (C && C->GetSuspect(SuspectId, S) && S.Statements.IsValidIndex(StatementSel))
+		return FString::Printf(TEXT("You told me: \"%s\" Tell me more about that."), *S.Statements[StatementSel].Text);
+	return L[4];
+}
+
+void AHUSuspectActor::AskPreset(int32 Index)
+{
+	if (!bInterviewing || bTyping || bThinking || bMicOpen) return;
+	const TArray<FString> L = QuestionLabels();
+	if (L.IsValidIndex(Index)) Ask(L[Index], QuestionText(Index));
+}
+void AHUSuspectActor::Q1() { AskPreset(0); } void AHUSuspectActor::Q2() { AskPreset(1); } void AHUSuspectActor::Q3() { AskPreset(2); }
+void AHUSuspectActor::Q4() { AskPreset(3); } void AHUSuspectActor::Q5() { AskPreset(4); } void AHUSuspectActor::Q6() { AskPreset(5); }
+
+// the closest preset to what was said: key words for each question (-1: nothing close)
+int32 AHUSuspectActor::MatchQuestion(const FString& Said) const
+{
+	static const TArray<TArray<FString>> Keys = {
+		{ TEXT("where"), TEXT("were"), TEXT("alibi"), TEXT("night"), TEXT("happened"), TEXT("when"), TEXT("time"), TEXT("doing") },
+		{ TEXT("know"), TEXT("knew"), TEXT("victim"), TEXT("relationship"), TEXT("friend"), TEXT("meet"), TEXT("met") },
+		{ TEXT("see"), TEXT("saw"), TEXT("hear"), TEXT("heard"), TEXT("notice"), TEXT("noticed"), TEXT("anything") },
+		{ TEXT("who"), TEXT("else"), TEXT("anyone"), TEXT("somebody"), TEXT("someone"), TEXT("people") },
+		{ TEXT("more"), TEXT("tell"), TEXT("explain"), TEXT("said"), TEXT("statement"), TEXT("story"), TEXT("details") },
+		{ TEXT("lie"), TEXT("lied"), TEXT("lying"), TEXT("truth"), TEXT("hiding"), TEXT("honest"), TEXT("not") } };
+	TArray<FString> Words;
+	FString Clean;
+	for (TCHAR Ch : Said.ToLower()) Clean.AppendChar(FChar::IsAlpha(Ch) || Ch == '\'' ? Ch : ' ');
+	Clean.ParseIntoArrayWS(Words);
+	int32 Best = -1, BestScore = 0;
+	for (int32 q = 0; q < Keys.Num(); q++)
+	{
+		int32 Score = 0;
+		for (const FString& W : Words) if (Keys[q].Contains(W)) Score++;
+		if (Score > BestScore) { Best = q; BestScore = Score; }
+	}
+	return Best;
+}
+
+void AHUSuspectActor::MicDown()
+{
+	if (!bInterviewing || bTyping || bThinking || bMicOpen) return;
+	UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+	if (!L || !L->IsEnabled()) return;
+	if (L->StartListening()) { bMicOpen = true; Heard.Reset(); }
+}
+
+void AHUSuspectActor::MicUp()
+{
+	if (!bMicOpen) return;
+	bMicOpen = false;
+	UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+	if (!L) return;
+	Heard = TEXT("...");
+	TWeakObjectPtr<AHUSuspectActor> Self(this);
+	L->StopListening(FHUHeard::CreateLambda([Self](const FString& Text)
+	{
+		if (!Self.IsValid() || !Self->bInterviewing) return;
+		const int32 Q = Self->MatchQuestion(Text);
+		Self->Heard = Text.IsEmpty() ? FString(TEXT("(didn't catch that)")) : Q < 0 ? FString::Printf(TEXT("\"%s\" — not one of the questions"), *Text) : Text;
+		if (Q >= 0) Self->AskPreset(Q);
+	}));
 }

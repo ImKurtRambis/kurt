@@ -108,6 +108,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Player") float FieldOfView = 90.f;
 	// voices: 0 Windows, 1 OpenAI, 2 ElevenLabs (see HUVoiceSubsystem), and the key you pasted in
 	UPROPERTY(BlueprintReadWrite, Category = "Player") uint8 VoiceProvider = 2; // ElevenLabs
+	// Settings: hold V in interviews to SAY a question (local speech-to-text)
+	UPROPERTY(BlueprintReadWrite, Category = "Player") bool bVoiceQuestions = false;
 	UPROPERTY() FString VoiceKey;
 	UFUNCTION(BlueprintPure, Category = "Kit") bool HasTool(EHUTool Tool) const { return Tool == EHUTool::Handcuffs || (OwnedTools & (1 << (int32)Tool)) != 0; }
 	// false if you can't afford it or already own it

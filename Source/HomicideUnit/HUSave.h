@@ -19,4 +19,5 @@ public:
 	UPROPERTY() float FieldOfView = 90.f;
 	UPROPERTY() uint8 VoiceProvider = 2; // ElevenLabs
 	UPROPERTY() FString VoiceKey;
+	UPROPERTY() bool bVoiceQuestions = false;
 };

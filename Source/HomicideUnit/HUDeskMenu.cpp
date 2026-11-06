@@ -1,4 +1,5 @@
 #include "HUDeskMenu.h"
+#include "HUListenSubsystem.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUMenuWidget.h"
@@ -254,7 +255,7 @@ static int32 OrderIndex(int32 Item) { for (int32 i = 0; i < UE_ARRAY_COUNT(DeskO
 
 int32 AHUDeskMenu::RowsIn(EHUMenuPanel P) const
 {
-	switch (P) { case EHUMenuPanel::Settings: return 9; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 1; default: return 0; }
+	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 1; default: return 0; }
 }
 
 void AHUDeskMenu::Prev()
@@ -434,6 +435,7 @@ void AHUDeskMenu::ChangeSetting(int32 Dir)
 			C->SaveProgress();
 		}
 		return;
+	case 9: if (C) { C->bVoiceQuestions = !C->bVoiceQuestions; C->SaveProgress(); } return;
 	}
 	S->ApplySettings(false);
 	S->SaveSettings();
@@ -511,6 +513,11 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 		else if (const UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>(); V && V->Key().Len() > 10) Lines.Add(FString::Printf(TEXT("%sVoice API key:  %s...%s  (from ElevenLabsKey.txt)"), Sel(8), *V->Key().Left(3), *V->Key().Right(4)));
 		else Lines.Add(FString::Printf(TEXT("%sVoice API key:  not set — put it in ElevenLabsKey.txt in the project folder, or copy it and press ENTER here"), Sel(8)));
 		Lines.Add(TEXT(""));
+		{
+			const UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+			Lines.Add(FString::Printf(TEXT("%sSpeak questions (mic):  %s%s"), Sel(9), C && C->bVoiceQuestions ? TEXT("On — hold V in an interview and say a question") : TEXT("Off — pick questions with 1-6"),
+				L && !L->IsInstalled() ? TEXT("   (speech files not installed — see AI\\README.txt)") : TEXT("")));
+		}
 		Lines.Add(TEXT("↑ ↓ choose   ·   ← → / ENTER change   ·   saved automatically   ·   ESC back"));
 		break;
 	}
