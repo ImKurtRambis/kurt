@@ -36,19 +36,22 @@ void AHUVictim::OnConstruction(const FTransform& Transform)
 		// a pool of blood under the head and shoulders
 		Block(this, R, Blocks, EShape::Cylinder, FVector(30, 10, 0.3f), FVector(80, 62, 0.6f), Blood);
 		Block(this, R, Blocks, EShape::Cylinder, FVector(62, 30, 0.3f), FVector(26, 18, 0.6f), Blood);
-		// the body, face up, one arm flung out, one knee bent
-		Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 10), FVector(62, 36, 18), Coat);
-		Block(this, R, Blocks, EShape::Cube, FVector(-30, 0, 9), FVector(10, 34, 16), Coat * 0.8f);
-		Block(this, R, Blocks, EShape::Sphere, FVector(43, 2, 11), FVector(21, 19, 20), Skin);
-		Block(this, R, Blocks, EShape::Sphere, FVector(46, 2, 14), FVector(19, 18, 12), FLinearColor(0.08f, 0.06f, 0.04f));
-		Block(this, R, Blocks, EShape::Cylinder, FVector(-68, 9, 7), FVector(13, 13, 72), Pants, AlongX);
-		Block(this, R, Blocks, EShape::Cylinder, FVector(-60, -14, 9), FVector(13, 13, 70), Pants, FRotator(90, -14, 0));
-		Block(this, R, Blocks, EShape::Cube, FVector(-108, 9, 6), FVector(12, 10, 10), Shoe);
-		Block(this, R, Blocks, EShape::Cube, FVector(-98, -24, 6), FVector(12, 10, 10), Shoe);
-		Block(this, R, Blocks, EShape::Cylinder, FVector(18, 38, 6), FVector(10, 10, 54), Coat, FRotator(90, 55, 0));   // flung out
-		Block(this, R, Blocks, EShape::Sphere, FVector(34, 60, 5), FVector(9, 7, 6), Skin);
-		Block(this, R, Blocks, EShape::Cylinder, FVector(-2, -22, 7), FVector(10, 10, 50), Coat, FRotator(90, -8, 0));   // at the side
-		Block(this, R, Blocks, EShape::Sphere, FVector(-28, -25, 5), FVector(9, 7, 6), Skin);
+		// the body, face up, one arm flung out, one knee bent - each part examinable: head, neck, hands, torso, legs
+		Spots.Reset();
+		auto Part = [&](int32 Spot, EShape S, FVector P, FVector Sz, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator) { if (UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Sz, Col, Rot)) Spots.Add(M, Spot); };
+		Part(3, EShape::Cube, FVector(0, 0, 10), FVector(62, 36, 18), Coat);
+		Part(3, EShape::Cube, FVector(-30, 0, 9), FVector(10, 34, 16), Coat * 0.8f);
+		Part(1, EShape::Cylinder, FVector(33, 2, 10), FVector(11, 11, 12), Skin, AlongX);
+		Part(0, EShape::Sphere, FVector(43, 2, 11), FVector(21, 19, 20), Skin);
+		Part(0, EShape::Sphere, FVector(46, 2, 14), FVector(19, 18, 12), FLinearColor(0.08f, 0.06f, 0.04f));
+		Part(4, EShape::Cylinder, FVector(-68, 9, 7), FVector(13, 13, 72), Pants, AlongX);
+		Part(4, EShape::Cylinder, FVector(-60, -14, 9), FVector(13, 13, 70), Pants, FRotator(90, -14, 0));
+		Part(4, EShape::Cube, FVector(-108, 9, 6), FVector(12, 10, 10), Shoe);
+		Part(4, EShape::Cube, FVector(-98, -24, 6), FVector(12, 10, 10), Shoe);
+		Part(2, EShape::Cylinder, FVector(18, 38, 6), FVector(10, 10, 54), Coat, FRotator(90, 55, 0));   // flung out
+		Part(2, EShape::Sphere, FVector(34, 60, 5), FVector(9, 7, 6), Skin);
+		Part(2, EShape::Cylinder, FVector(-2, -22, 7), FVector(10, 10, 50), Coat, FRotator(90, -8, 0));   // at the side
+		Part(2, EShape::Sphere, FVector(-28, -25, 5), FVector(9, 7, 6), Skin);
 		break;
 	}
 	case EHUVictimKind::Outline:
@@ -107,6 +110,10 @@ FString AHUVictim::Notes() const
 
 FText AHUVictim::GetPrompt_Implementation(APawn* User) const
 {
+	// looking at a part of the body: examine that part
+	if (const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
+		if (const int32* Spot = Spots.Find(I->FocusPart))
+			return FText::FromString(FString::Printf(TEXT("[E] Examine the %s%s  ·  [Q] Search the pockets"), SpotName(*Spot), Examined.Contains(*Spot) ? TEXT(" (checked)") : TEXT("")));
 	const TCHAR* Look = Kind == EHUVictimKind::Body ? TEXT("[E] Examine the body") : Kind == EHUVictimKind::Outline ? TEXT("[E] Examine where the victim lay")
 		: Kind == EHUVictimKind::Belongings ? TEXT("[E] Examine the victim's things") : TEXT("[E] Examine where the fire started");
 	FString P = Look;
@@ -119,7 +126,12 @@ void AHUVictim::Interact_Implementation(APawn* User, bool bSecondary)
 {
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I) return;
-	if (!bSecondary) { I->Say(Notes()); return; }
+	if (!bSecondary)
+	{
+		if (const int32* Spot = Spots.Find(I->FocusPart)) { ExamineSpot(*Spot, I); return; }
+		I->Say(Notes());
+		return;
+	}
 	if (bSearched || Kind == EHUVictimKind::Scorch || Kind == EHUVictimKind::Outline) return;
 	bSearched = true;
 	I->PlayReach();
@@ -133,4 +145,84 @@ void AHUVictim::Interact_Implementation(APawn* User, bool bSecondary)
 		Pocket = nullptr;
 	}
 	else I->Say(Kind == EHUVictimKind::Body ? TEXT("Keys, some change, a bus transfer. Nothing that helps.") : TEXT("A compact, tissues, a bus transfer. Nothing that helps."));
+}
+
+const TCHAR* AHUVictim::SpotName(int32 Spot)
+{
+	switch (Spot) { case 0: return TEXT("head"); case 1: return TEXT("neck"); case 2: return TEXT("hands and arms"); case 3: return TEXT("torso"); default: return TEXT("legs and shoes"); }
+}
+
+// What each part of the body tells you. Fixed per case: the wound matches the weapon; one part carries a sign
+// of what kind of offender did this (it counts toward the profile); the rest are the ordinary forensics.
+FString AHUVictim::Finding(int32 Spot, EHUProfile& OutSign) const
+{
+	OutSign = EHUProfile::None;
+	const UHUCaseSubsystem* S = Cases();
+	if (!S || !S->bCaseActive) return TEXT("");
+	const FHUCase& C = S->Current;
+	const FString W = C.Weapon.ToLower();
+
+	// the wound, from the weapon
+	int32 WoundSpot = 3; FString Wound = TEXT("A single heavy wound to the chest.");
+	if (W.Contains(TEXT("knife"))) { WoundSpot = 3; Wound = TEXT("Three deep stab wounds to the chest, close together. Single-edged blade, about six inches."); }
+	else if (W.Contains(TEXT("ice pick"))) { WoundSpot = 0; Wound = TEXT("One thin puncture at the base of the skull. Almost no blood outside - whoever did it knew exactly where to put it."); }
+	else if (W.Contains(TEXT("tire iron"))) { WoundSpot = 0; Wound = TEXT("A depressed fracture above the left ear. One heavy, narrow blow - something like a tire iron."); }
+	else if (W.Contains(TEXT("lamp"))) { WoundSpot = 0; Wound = TEXT("Blunt trauma to the back of the head, two blows. Flecks of brass in the wound."); }
+	else if (W.Contains(TEXT("rope"))) { WoundSpot = 1; Wound = TEXT("A ligature mark around the neck, angled upward - strangled from behind. Rough rope fibres in the skin."); }
+	else if (W.Contains(TEXT("revolver"))) { WoundSpot = 3; Wound = TEXT("A gunshot wound to the chest, powder burns around it - fired from less than a foot away."); }
+	else if (W.Contains(TEXT("poison"))) { WoundSpot = 0; Wound = TEXT("No wounds anywhere. Lips tinged blue, pupils like pinpricks, a faint bitter smell on the breath. Poison."); }
+
+	// the offender's sign, on a different part of the body
+	struct FSign { int32 Spot; const TCHAR* Text; };
+	FSign Sign = { 2, TEXT("") };
+	switch ((EHUProfile)C.Profile)
+	{
+	case EHUProfile::SerialKiller:   Sign = { 2, TEXT("A small mark cut carefully into the left wrist - after death. Deliberate. A signature.") }; break;
+	case EHUProfile::Arsonist:       Sign = { 0, TEXT("Singed eyebrows, soot in the nostrils. They were close to a fire not long before they died.") }; break;
+	case EHUProfile::Poisoner:       Sign = { 2, TEXT("A tiny puncture in the crook of the elbow. An injection - or a test dose.") }; break;
+	case EHUProfile::ChildPredator:  Sign = { 3, TEXT("Folded in the shirt pocket, a note in the victim's hand: 'Tell the police about them tomorrow. The kids aren't safe.'") }; break;
+	case EHUProfile::ContractKiller: Sign = { 2, TEXT("Hands clean, nails unbroken - no struggle at all. One clean job. They never saw it coming.") }; break;
+	case EHUProfile::Passion:        Sign = { 3, TEXT("Far more injuries than it took to kill. Someone kept going after it was over. That's rage - and it's personal.") }; break;
+	case EHUProfile::Robber:         Sign = { 4, TEXT("Trouser pockets turned out, the wallet gone - and a pale band on the wrist where a watch used to be.") }; break;
+	case EHUProfile::ConArtist:      Sign = { 2, TEXT("Ink on the right palm, smudged backwards - someone else's signature, pressed there off a wet document.") }; break;
+	case EHUProfile::Enforcer:       Sign = { 2, TEXT("Bruised knuckles, two broken fingers. They were beaten before they died - a lesson first.") }; break;
+	case EHUProfile::Stalker:        Sign = { 0, TEXT("A lock of hair cut off, neatly, at the back of the head. Someone wanted a keepsake.") }; break;
+	default: break;
+	}
+	if (Sign.Spot == WoundSpot) Sign.Spot = WoundSpot == 2 ? 3 : 2; // keep them on different parts
+
+	// everything else: the ordinary forensics
+	const FString Ordinary[] = {
+		FString::Printf(TEXT("Eyes half open. Rigor's setting in at the jaw - dead since around %s."), *C.Time),
+		TEXT("Nothing on the neck. No marks, no bruising."),
+		TEXT("Under the fingernails: skin and a little blood. They scratched someone. Whoever it was has marks."),
+		TEXT("The shirt's torn at the collar. There was a struggle, however short."),
+		TEXT("Scuffs on the heels. Lividity says they weren't moved - they fell right here."),
+	};
+
+	if (Spot == WoundSpot) return TEXT("CAUSE OF DEATH: ") + Wound;
+	if (Spot == Sign.Spot && FCString::Strlen(Sign.Text) > 0) { OutSign = (EHUProfile)C.Profile; return Sign.Text; }
+	return Ordinary[FMath::Clamp(Spot, 0, 4)];
+}
+
+void AHUVictim::ExamineSpot(int32 Spot, UHUInteractComponent* I)
+{
+	EHUProfile Sign;
+	const FString Text = Finding(Spot, Sign);
+	const bool bFirst = !Examined.Contains(Spot);
+	Examined.Add(Spot);
+	I->PlayReach();
+	I->Say(FString::Printf(TEXT("THE %s:  %s"), *FString(SpotName(Spot)).ToUpper(), *Text));
+	if (bFirst && Sign != EHUProfile::None)
+	{
+		if (UHUCaseSubsystem* S = Cases()) S->AddBodyLead(Sign);
+		I->Notify(TEXT("PROFILE LEAD"), FString::Printf(TEXT("The body points to a %s"), HUProfiles::Name(Sign)), FLinearColor(0.8f, 0.55f, 0.98f));
+	}
+	if (bFirst && Examined.Num() == 5) I->Notify(TEXT("BODY EXAMINED"), TEXT("Head to toe. Search the pockets too (Q)."), FLinearColor(0.36f, 0.76f, 1.f));
+}
+
+void AHUVictim::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const
+{
+	// light up just the part you're looking at (all of the hands, all of the head...)
+	if (const int32* Spot = Spots.Find(Part)) { for (const TPair<UPrimitiveComponent*, int32>& P : Spots) if (P.Value == *Spot) Out.Add(P.Key); }
 }

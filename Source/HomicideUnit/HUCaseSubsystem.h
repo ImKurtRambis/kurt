@@ -78,6 +78,9 @@ public:
 	// how many bagged pieces point at each profile, most first
 	UFUNCTION(BlueprintPure, Category = "Profile") TArray<EHUProfile> GetProfileLeads(TArray<int32>& Counts) const;
 	UFUNCTION(BlueprintPure, Category = "Profile") FString DescribeProfileLeads() const;
+	// signs found on the victim's body (they count toward the leads too)
+	TMap<EHUProfile, int32> BodyLeads;
+	void AddBodyLead(EHUProfile P) { BodyLeads.FindOrAdd(P)++; }
 
 	// ---- money and kit (saved between sessions) ----
 	UPROPERTY(BlueprintReadOnly, Category = "Kit") int32 Cash = 250;

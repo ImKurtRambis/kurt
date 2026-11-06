@@ -81,6 +81,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	{ int32 D, Hd, L; GetRules(D, Hd, L); Current.Solution.RequiredBreaks = L; }
 	InScene.Reset();
 	Arrested.Reset();
+	BodyLeads.Reset();
 	Found.Reset();
 	BrokenKeys.Reset();
 	Breaks = 0;
@@ -245,6 +246,7 @@ TArray<EHUProfile> UHUCaseSubsystem::GetProfileLeads(TArray<int32>& Counts) cons
 {
 	TMap<EHUProfile, int32> Tally;
 	for (const FString& Id : Found) if (const EHUProfile* P = ClueProfile.Find(Id)) Tally.FindOrAdd(*P)++;
+	for (const TPair<EHUProfile, int32>& B : BodyLeads) Tally.FindOrAdd(B.Key) += B.Value;
 	Tally.ValueSort([](int32 A, int32 B) { return A > B; });
 	TArray<EHUProfile> Out; Counts.Reset();
 	for (const TPair<EHUProfile, int32>& T : Tally) { Out.Add(T.Key); Counts.Add(T.Value); }
