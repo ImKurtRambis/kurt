@@ -11,3 +11,7 @@ Free offline VOICE (Kokoro via sherpa-onnx, both Apache-2.0):
   AI\voice\bin\sherpa-onnx-offline-tts.exe (+ DLLs)
   AI\voice\kokoro\model.onnx, voices.bin, tokens.txt, espeak-ng-data\
 When present it's used first (no key needed); suspects and the 911 caller speak with it.
+
+EMOTIONAL voice for strong GPUs (optional): Chatterbox (MIT) via devnen/Chatterbox-TTS-Server in portable mode:
+  AI\chatterbox\  (python start.py --portable --nvidia-cu128), config.yaml: model.repo_id chatterbox, host 127.0.0.1
+The game starts it on first use (port 8004); until it's ready, Kokoro speaks. Suspect mood sets the emotion.

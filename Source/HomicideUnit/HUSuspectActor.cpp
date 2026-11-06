@@ -303,6 +303,7 @@ void AHUSuspectActor::Speak(const FString& Said)
 	const EHUSuspectMood M = C->MoodOf(SuspectId);
 	const float Speed = M == EHUSuspectMood::Rattled ? 1.1f : M == EHUSuspectMood::Cracking ? 1.2f : M == EHUSuspectMood::Broken ? 0.85f : M == EHUSuspectMood::Defensive ? 1.05f : 1.f;
 	// a voice per suspect (the 911 caller and the captain use others)
+	const float Emotion = M == EHUSuspectMood::Calm ? 0.35f : M == EHUSuspectMood::Defensive ? 0.5f : M == EHUSuspectMood::Rattled ? 0.65f : M == EHUSuspectMood::Cracking ? 0.85f : 0.5f;
 	const int32 VoiceNum = 1 + (int32)(GetTypeHash(SuspectId) % 10);
 	TWeakObjectPtr<AHUSuspectActor> Self(this);
 	V->Synthesize(Said, VoiceNum, FString(), false, FHUVoiceReady::CreateLambda([Self](USoundWave* S, float)
@@ -310,5 +311,5 @@ void AHUSuspectActor::Speak(const FString& Said)
 		if (!Self.IsValid() || !S) return;
 		if (Self->VoiceAudio.IsValid()) Self->VoiceAudio->Stop();
 		Self->VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(Self.Get(), S, Self->GetActorLocation() + FVector(0, 0, 170));
-	}), Speed);
+	}), Speed, Emotion);
 }
