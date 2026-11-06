@@ -40,6 +40,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | HUD & menus (drawn in C++, no UMG assets) | `HUPromptWidget.*`, `HUMenuWidget.*`, shared kit `HUDraw.h` |
 | Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker` |
 | Tools & concealment | `HUTools.h` |
+| Interrogation (pressure, moods, confession) | `HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`, interview UI in `AHUSuspectActor` + `HUPromptWidget` |
 | Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |
 | Placeholder geometry | `HUBuild.*` (`Block`, `WallWithDoor`, `Clear`) |
 
@@ -58,6 +59,6 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 
 ## Not done yet (good next tasks)
 
-- Interview screen: confront a suspect's statement with bagged evidence (`UHUCaseSubsystem::Challenge` exists; no UI yet).
+- Interrogation AI: a local LLM (llama.cpp) that acts out the suspect from their facts + pressure state (`HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`); offline voices (Kokoro / Chatterbox) whose emotion follows pressure. See the zero-cost plan: no per-use API calls in the final build.
 - Real characters (MetaHuman + Motion Matching), prop library for Fab/Megascans meshes, comic/noir post-process.
 - Offline voices (Kokoro via NNE) to replace paid TTS.

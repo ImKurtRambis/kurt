@@ -5,6 +5,7 @@
 #include "HUEvidence.h"
 #include "HUBuild.h"
 #include "HUCharacter.h"
+#include "HUSuspectActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/InputComponent.h"
@@ -445,4 +446,22 @@ void UHUInteractComponent::BeginUse(bool bSecondary)
 	if (T <= 0.05f) { Use(bSecondary); return; }
 	bHolding = true; bHoldSecondary = bSecondary; HoldTotal = T; HoldProgress = 0.f;
 	HoldTarget = Focus; HoldPart = FocusPart;
+}
+// ---------- interviews, shared with the squad ----------
+void UHUInteractComponent::SendInterrogation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)
+{
+	const ENetMode Mode = GetWorld()->GetNetMode();
+	if (Mode == NM_Standalone) { MulticastInterrogate_Implementation(SuspectPath, Action, Statement, ClueId); return; }
+	if (GetOwner()->HasAuthority()) MulticastInterrogate(SuspectPath, Action, Statement, ClueId);
+	else ServerInterrogate(SuspectPath, Action, Statement, ClueId);
+}
+
+void UHUInteractComponent::ServerInterrogate_Implementation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)
+{
+	MulticastInterrogate(SuspectPath, Action, Statement, ClueId);
+}
+
+void UHUInteractComponent::MulticastInterrogate_Implementation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)
+{
+	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyInterrogation(Cast<APawn>(GetOwner()), Action, Statement, ClueId);
 }

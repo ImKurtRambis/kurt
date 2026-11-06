@@ -25,6 +25,16 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Suspect") bool bCuffed = false;
 	UFUNCTION(BlueprintPure, Category = "Suspect") bool IsEscortedBy(const APawn* P) const { return bCuffed && Escort.Get() == P; }
 	UFUNCTION(BlueprintPure, Category = "Suspect") FString DisplayName() const;
+	// ---- the interview (yours alone on screen; what's said is shared with the squad) ----
+	//   W/S statement · A/D evidence (or none, to just press them) · E confront / press · R their record · Q leave
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bInterviewing = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") int32 StatementSel = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") int32 EvidenceSel = -1; // -1: no evidence, just press
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") FString LastReply;
+	TArray<FString> BaggedIds() const;
+	// a move in the interview (0 confront/press, 1 raise their record): runs on every machine, the same way
+	void ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId);
+
 	// into the back of the van: gone from the scene, on the way to the precinct
 	UFUNCTION(BlueprintCallable, Category = "Suspect") void LoadIntoVan();
 
@@ -32,6 +42,7 @@ public:
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -41,4 +52,9 @@ private:
 	TWeakObjectPtr<APawn> Escort;
 	int32 Line = -1;
 	void Pose();
+	TWeakObjectPtr<APawn> Interviewer;
+	void OpenInterview(APawn* User);
+	void CloseInterview();
+	void SendMove(uint8 Action);
+	void StmtUp(); void StmtDown(); void EvLeft(); void EvRight(); void RecordKey();
 };

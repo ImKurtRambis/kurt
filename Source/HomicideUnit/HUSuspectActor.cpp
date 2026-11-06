@@ -5,6 +5,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/GameInstance.h"
+#include "Components/InputComponent.h"
+#include "GameFramework/PlayerController.h"
 
 using namespace HUBuild;
 
@@ -82,6 +84,7 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!Cases || !Cases->GetSuspect(SuspectId, S) || !I) return;
 
+	if (bSecondary && bInterviewing && Interviewer.Get() == User) { CloseInterview(); return; }
 	if (bCuffed)
 	{
 		if (bSecondary)
@@ -113,15 +116,93 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 		I->Notify(TEXT("ARRESTED"), FString::Printf(TEXT("%s — walk them to the van outside"), *S.Name), FLinearColor(1.f, 0.7f, 0.3f));
 		return;
 	}
-	// otherwise, talk: intro first, then each statement in turn, round and round
-	Line = (Line + 1) % (S.Statements.Num() + 1);
-	const FString Said = Line == 0 ? S.Intro : S.Statements[Line - 1].Text;
-	I->Subtitle = FText::FromString(FString::Printf(TEXT("%s:  \"%s\""), *S.Name.ToUpper(), *Said));
+	// otherwise: the interview (opened only on the screen of whoever's doing it)
+	if (!User->IsLocallyControlled()) return;
+	if (bInterviewing && Interviewer.Get() == User) { SendMove(0); return; } // E in the interview: confront / press
+	OpenInterview(User);
+	I->Say(FString::Printf(TEXT("%s:  \"%s\""), *S.Name.ToUpper(), *S.Intro));
+}
+
+// ---------- the interview ----------
+TArray<FString> AHUSuspectActor::BaggedIds() const
+{
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	return C ? C->Found : TArray<FString>();
+}
+
+void AHUSuspectActor::OpenInterview(APawn* User)
+{
+	APlayerController* PC = Cast<APlayerController>(User->GetController());
+	if (!PC) return;
+	bInterviewing = true; Interviewer = User; StatementSel = 0; EvidenceSel = BaggedIds().Num() > 0 ? 0 : -1; LastReply.Reset();
+	PC->SetIgnoreMoveInput(true);
+	PC->SetIgnoreLookInput(true);
+	if (UHUInteractComponent* I = User->FindComponentByClass<UHUInteractComponent>()) I->Interviewing = this;
+	EnableInput(PC);
+	if (InputComponent && InputComponent->KeyBindings.Num() == 0)
+	{
+		InputComponent->BindKey(EKeys::W, IE_Pressed, this, &AHUSuspectActor::StmtUp);
+		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AHUSuspectActor::StmtUp);
+		InputComponent->BindKey(EKeys::S, IE_Pressed, this, &AHUSuspectActor::StmtDown);
+		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AHUSuspectActor::StmtDown);
+		InputComponent->BindKey(EKeys::A, IE_Pressed, this, &AHUSuspectActor::EvLeft);
+		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AHUSuspectActor::EvLeft);
+		InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AHUSuspectActor::EvRight);
+		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AHUSuspectActor::EvRight);
+		InputComponent->BindKey(EKeys::R, IE_Pressed, this, &AHUSuspectActor::RecordKey);
+	}
+}
+
+void AHUSuspectActor::CloseInterview()
+{
+	if (APawn* U = Interviewer.Get())
+	{
+		if (APlayerController* PC = Cast<APlayerController>(U->GetController())) { PC->SetIgnoreMoveInput(false); PC->SetIgnoreLookInput(false); DisableInput(PC); }
+		if (UHUInteractComponent* I = U->FindComponentByClass<UHUInteractComponent>()) I->Interviewing = nullptr;
+	}
+	bInterviewing = false; Interviewer = nullptr;
+}
+
+void AHUSuspectActor::StmtUp() { FHUSuspect S; if (bInterviewing && GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + S.Statements.Num() - 1) % FMath::Max(1, S.Statements.Num()); }
+void AHUSuspectActor::StmtDown() { FHUSuspect S; if (bInterviewing && GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + 1) % FMath::Max(1, S.Statements.Num()); }
+void AHUSuspectActor::EvLeft() { if (bInterviewing) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel <= -1 ? N - 1 : EvidenceSel - 1; } }
+void AHUSuspectActor::EvRight() { if (bInterviewing) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel >= N - 1 ? -1 : EvidenceSel + 1; } }
+void AHUSuspectActor::RecordKey() { if (bInterviewing) SendMove(1); }
+
+void AHUSuspectActor::SendMove(uint8 Action)
+{
+	const TArray<FString> Bag = BaggedIds();
+	const FString Clue = Action == 0 && Bag.IsValidIndex(EvidenceSel) ? Bag[EvidenceSel] : FString();
+	if (UHUInteractComponent* I = Interviewer.IsValid() ? Interviewer->FindComponentByClass<UHUInteractComponent>() : nullptr)
+		I->SendInterrogation(GetPathName(), Action, StatementSel, Clue);
+}
+
+void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId)
+{
+	UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	FHUSuspect S;
+	if (!C || !C->GetSuspect(SuspectId, S)) return;
+	const int32 BreaksBefore = C->Breaks;
+	const bool bConfessedBefore = !C->Confessed.IsEmpty();
+	const FString Reply = Action == 1 ? C->RaiseRecord(SuspectId) : !ClueId.IsEmpty() ? C->Confront(SuspectId, Statement, ClueId) : C->Press(SuspectId, Statement);
+	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!I) return;
+	if (User->IsLocallyControlled()) LastReply = Reply;
+	I->Say(FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Reply));
+	if (C->Breaks > BreaksBefore) I->Notify(TEXT("LIE ON THE RECORD"), FString::Printf(TEXT("%s — %d of %d lies"), *S.Name, C->Breaks, C->Current.Solution.RequiredBreaks), FLinearColor(0.95f, 0.35f, 0.3f));
+	if (!bConfessedBefore && !C->Confessed.IsEmpty()) I->Notify(TEXT("CONFESSION"), FString::Printf(TEXT("%s confessed. Cuff them, van, book, submit."), *S.Name), FLinearColor(0.95f, 0.76f, 0.32f));
+}
+
+void AHUSuspectActor::EndPlay(const EEndPlayReason::Type Reason)
+{
+	CloseInterview();
+	Super::EndPlay(Reason);
 }
 
 void AHUSuspectActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bInterviewing) { const APawn* V = Interviewer.Get(); if (!V || FVector::Dist2D(V->GetActorLocation(), GetActorLocation()) > 450.f) CloseInterview(); }
 	const APawn* E = Escort.Get();
 	if (!bCuffed || !E) return;
 	// a step behind and to the side of whoever's walking them, facing the way they're going

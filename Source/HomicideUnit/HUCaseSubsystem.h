@@ -8,6 +8,7 @@
 #include "HUCaseTypes.h"
 #include "HUTools.h"
 #include "HUProfiles.h"
+#include "HUInterrogation.h"
 #include "HUCaseSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHUClueFound, const FHUClue&, Clue);
@@ -64,6 +65,20 @@ public:
 
 	// the briefing deck for the projector
 	UFUNCTION(BlueprintCallable, Category = "Case") TArray<FHUSlide> BuildBriefingSlides(const FString& DetectiveName) const;
+
+	// ---- interrogation (see HUInterrogation.h): pressure per suspect, and what each move does ----
+	UPROPERTY(BlueprintReadOnly, Category = "Interrogation") TMap<FString, float> Pressure;
+	UPROPERTY(BlueprintReadOnly, Category = "Interrogation") TMap<FString, int32> Misses;
+	UPROPERTY(BlueprintReadOnly, Category = "Interrogation") TSet<FString> Lawyered;
+	UPROPERTY(BlueprintReadOnly, Category = "Interrogation") FString Confessed;   // the suspect who confessed
+	TMap<FString, int32> PressCount;
+	TSet<FString> RecordRaised;
+	UFUNCTION(BlueprintPure, Category = "Interrogation") float GetPressure(const FString& Id) const { return Pressure.FindRef(Id); }
+	UFUNCTION(BlueprintPure, Category = "Interrogation") EHUSuspectMood MoodOf(const FString& Id) const { return HUInterrogation::MoodFor(GetPressure(Id), Lawyered.Contains(Id)); }
+	// each returns what the suspect says back
+	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString Confront(const FString& Id, int32 Statement, const FString& ClueId);
+	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString Press(const FString& Id, int32 Statement);
+	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString RaiseRecord(const FString& Id);
 
 	// ---- the offender profile ----
 	UPROPERTY(BlueprintReadOnly, Category = "Profile") EHUProfile TrueProfile = EHUProfile::None;
@@ -133,5 +148,7 @@ public:
 
 private:
 	TSet<FString> BrokenKeys;
+	void AddPressure(const FString& Id, float Amount) { Pressure.FindOrAdd(Id) = FMath::Clamp(Pressure.FindRef(Id) + Amount, 0.f, 100.f); }
+	FString CheckBreaking(const FString& Id, const FString& Line);
 	void AssignProfiles();
 };

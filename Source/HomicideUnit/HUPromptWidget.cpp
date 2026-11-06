@@ -4,6 +4,7 @@
 #include "HUDraw.h"
 #include "HUSecurityDesk.h"
 #include "HUCharacter.h"
+#include "HUSuspectActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -35,6 +36,66 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 	const int32 Ly = LayerId + 1;
 	const float Now = Owner->GetWorld()->GetRealTimeSeconds();
 	const UHUCaseSubsystem* Cases = Owner->GetWorld()->GetGameInstance() ? Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	// ---- interviewing a suspect: statements on the left, your evidence and their answer on the right ----
+	if (const AHUSuspectActor* Sus = Owner->Interviewing.Get())
+	{
+		FHUSuspect S;
+		const UHUCaseSubsystem* CS = Owner->GetWorld()->GetGameInstance() ? Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+		if (CS && CS->GetSuspect(Sus->SuspectId, S))
+		{
+			const float W = FMath::Min(1180.f, L.X - 80.f), H = FMath::Min(470.f, L.Y * 0.55f);
+			const FVector2D P((L.X - W) * 0.5f, L.Y - H - 28.f);
+			Panel(Out, Ly, G, P, FVector2D(W, H), 1.f, Gold, 14.f);
+			// who, and how they're holding up
+			const EHUSuspectMood Mood = CS->MoodOf(S.Id);
+			const float Pres = CS->GetPressure(S.Id);
+			const FLinearColor MoodCol = Mood == EHUSuspectMood::Calm ? Blue : Mood == EHUSuspectMood::Defensive ? Ink : Mood == EHUSuspectMood::Rattled ? Amber : Mood == EHUSuspectMood::Lawyered ? Dim : Red;
+			Text(Out, Ly + 2, G, S.Name.ToUpper(), Heading(16), P + FVector2D(28, 20), Ink);
+			Text(Out, Ly + 2, G, S.Role.ToUpper(), Font("Regular", 10, 120), P + FVector2D(28, 46), Dim);
+			Text(Out, Ly + 2, G, HUInterrogation::MoodName(Mood), Font("Bold", 11, 140), P + FVector2D(W - 300, 20), MoodCol);
+			Text(Out, Ly + 2, G, FString::Printf(TEXT("PRESSURE  %d"), FMath::RoundToInt(Pres)), Font("Bold", 9, 100), P + FVector2D(W - 300, 40), Dim);
+			Bar(Out, Ly + 2, G, P + FVector2D(W - 300, 58), FVector2D(272, 7), Pres / 100.f, MoodCol);
+			Text(Out, Ly + 2, G, FString::Printf(TEXT("LIES ON THE RECORD  %d / %d"), CS->Breaks, CS->Current.Solution.RequiredBreaks), Font("Bold", 9, 100), P + FVector2D(28, 64), Dim);
+
+			// what they've told you: pick one to work on
+			const float ColW = W * 0.54f;
+			Text(Out, Ly + 2, G, TEXT("WHAT THEY SAID"), Font("Bold", 9, 140), P + FVector2D(28, 92), Gold);
+			for (int32 i = 0; i < S.Statements.Num(); i++)
+			{
+				const FVector2D RP = P + FVector2D(28, 114 + i * 34);
+				const bool bSel = i == Sus->StatementSel, bBroken = CS->IsBroken(S.Id, i);
+				if (bSel) Box(Out, Ly + 2, G, RP - FVector2D(10, 4), FVector2D(ColW - 20, 30), Gold * FLinearColor(1, 1, 1, 0.14f), 7.f);
+				FString St = TEXT("\"") + S.Statements[i].Text + TEXT("\"");
+				const FSlateFontInfo SF = Font(bSel ? "Bold" : "Regular", 12);
+				while (St.Len() > 8 && Measure(St, SF).X > ColW - (bBroken ? 150 : 40)) St = St.LeftChop(5) + TEXT("…\"");
+				Text(Out, Ly + 3, G, St, SF, RP, bBroken ? Dim : Ink);
+				if (bBroken) { Box(Out, Ly + 3, G, RP + FVector2D(ColW - 140, 1), FVector2D(110, 18), Red * FLinearColor(1, 1, 1, 0.85f), 9.f); TextCentered(Out, Ly + 4, G, TEXT("LIE ON RECORD"), Font("Bold", 8, 60), RP + FVector2D(ColW - 85, 10), FLinearColor::White); }
+			}
+
+			// what you're putting in front of them
+			const float RX = P.X + ColW + 20, RW = W - ColW - 48;
+			Text(Out, Ly + 2, G, TEXT("CONFRONT THEM WITH"), Font("Bold", 9, 140), FVector2D(RX, P.Y + 92), Gold);
+			const TArray<FString> Bag = Sus->BaggedIds();
+			FString EvName = TEXT("No evidence — just press them"), EvDetail = TEXT("Push them on what they said and watch how they react.");
+			FHUClue K;
+			if (Bag.IsValidIndex(Sus->EvidenceSel) && CS->GetClue(Bag[Sus->EvidenceSel], K)) { EvName = K.Name; EvDetail = K.Detail; }
+			Box(Out, Ly + 2, G, FVector2D(RX, P.Y + 112), FVector2D(RW, 34), FLinearColor(1, 1, 1, 0.07f), 8.f);
+			TextCentered(Out, Ly + 3, G, FString::Printf(TEXT("◂   %s   ▸"), *EvName), Font("Bold", 12), FVector2D(RX + RW * 0.5f, P.Y + 129), Ink);
+			const TArray<FString> DetailRows = Wrap(EvDetail, Font("Regular", 10), RW - 10);
+			for (int32 r = 0; r < DetailRows.Num() && r < 3; r++) Text(Out, Ly + 3, G, DetailRows[r], Font("Regular", 10), FVector2D(RX + 4, P.Y + 156 + r * 15), Dim);
+			if (Bag.Num() > 0) Text(Out, Ly + 3, G, FString::Printf(TEXT("%d piece%s bagged"), Bag.Num(), Bag.Num() == 1 ? TEXT("") : TEXT("s")), Font("Regular", 9), FVector2D(RX + RW - 90, P.Y + 92), Dim);
+
+			// their answer
+			Text(Out, Ly + 2, G, TEXT("THEIR ANSWER"), Font("Bold", 9, 140), FVector2D(RX, P.Y + 214), Gold);
+			const TArray<FString> Reply = Wrap(Sus->LastReply.IsEmpty() ? FString(TEXT("\"") + S.Intro + TEXT("\"")) : Sus->LastReply, Font("Italic", 12), RW - 10);
+			for (int32 r = 0; r < Reply.Num() && r < 8; r++) Text(Out, Ly + 3, G, Reply[r], Font("Italic", 12), FVector2D(RX + 4, P.Y + 236 + r * 19), Ink);
+
+			const FString Keys = TEXT("[W] [S] statement     [A] [D] evidence     [E] confront / press     [R] their record     [Q] leave");
+			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 11), FVector2D(0, 0), Dim, 1.f, false);
+			Prompt(Out, Ly + 3, G, Keys, Font("Regular", 11), FVector2D(P.X + (W - KW) * 0.5f, P.Y + H - 36), Dim, 1.f, true);
+			return Ly + 6;
+		}
+	}
 	// ---- watching the security tapes: the feed fills the screen ----
 	if (const AHUSecurityDesk* Desk = Owner->Watching.Get())
 	{

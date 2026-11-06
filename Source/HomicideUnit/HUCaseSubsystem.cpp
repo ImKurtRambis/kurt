@@ -84,6 +84,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	BookingStep.Reset();
 	bAwaitingCaptain = false;
 	BodyLeads.Reset();
+	Pressure.Reset(); Misses.Reset(); Lawyered.Reset(); Confessed.Reset(); PressCount.Reset(); RecordRaised.Reset();
 	Found.Reset();
 	BrokenKeys.Reset();
 	Breaks = 0;
@@ -395,7 +396,7 @@ void UHUCaseSubsystem::ResolveArrests()
 	int32 Pay = 0;
 	FString V;
 	if (Arrested.Num() == 0) V = FString::Printf(TEXT("CASE LEFT OPEN — nobody came back in the van. %s is still out there."), K.Name.IsEmpty() ? TEXT("Whoever did it") : *K.Name);
-	else if (bGotThem && Breaks >= C.Solution.RequiredBreaks) { Pay = 250; V = FString::Printf(TEXT("CASE CLOSED — %s is booked, and the lies on the record make it stick."), *K.Name); }
+	else if (bGotThem && (Breaks >= C.Solution.RequiredBreaks || Confessed == C.Solution.Killer)) { Pay = 250; V = FString::Printf(TEXT("CASE CLOSED — %s is booked, and the lies on the record make it stick."), *K.Name); }
 	else if (bGotThem) { Pay = 150; V = FString::Printf(TEXT("CASE CLOSED (THIN) — you brought in %s, the right one. With only %d of %d lies on the record, the DA's nervous."), *K.Name, Breaks, C.Solution.RequiredBreaks); }
 	else V = FString::Printf(TEXT("WRONG ARREST — the one who did it walked. It was %s."), *K.Name);
 	if (Wrong > 0) { Pay -= 75 * Wrong; V += FString::Printf(TEXT("  %d innocent %s booked: −$%d."), Wrong, Wrong == 1 ? TEXT("person") : TEXT("people"), 75 * Wrong); }
@@ -407,4 +408,65 @@ void UHUCaseSubsystem::ResolveArrests()
 	BookingStep.Reset();
 	bAwaitingCaptain = false;
 	bCaseActive = false;
+}
+// ---------- interrogation ----------
+FString UHUCaseSubsystem::Confront(const FString& Id, int32 Statement, const FString& ClueId)
+{
+	FHUSuspect S;
+	if (!GetSuspect(Id, S) || Lawyered.Contains(Id)) return TEXT("\"I'm not saying another word without my lawyer.\"");
+	const EHUChallengeResult R = Challenge(Id, Statement, ClueId);
+	if (R == EHUChallengeResult::AlreadyDone) return TEXT("\"We've been over that. You already know.\"");
+	if (R == EHUChallengeResult::Broken)
+	{
+		AddPressure(Id, 35.f);
+		const FString Line = S.Statements.IsValidIndex(Statement) && !S.Statements[Statement].OnBreak.IsEmpty() ? S.Statements[Statement].OnBreak : FString(TEXT("...Okay. Okay, that's not exactly how it went."));
+		return CheckBreaking(Id, TEXT("\"") + Line + TEXT("\""));
+	}
+	// the wrong evidence: they get their confidence back, and three misses ends the interview
+	AddPressure(Id, -15.f);
+	const int32 M = ++Misses.FindOrAdd(Id);
+	if (M >= 3) { Lawyered.Add(Id); return TEXT("\"We're done here. I want a lawyer.\"  (They won't talk any more this case.)"); }
+	return TEXT("\"") + FString(HUInterrogation::WrongLine(M + Statement)) + TEXT("\"");
+}
+
+FString UHUCaseSubsystem::Press(const FString& Id, int32 Statement)
+{
+	if (Lawyered.Contains(Id)) return TEXT("\"Lawyer.\"");
+	const int32 N = PressCount.FindOrAdd(Id + FString::Printf(TEXT("#%d"), Statement))++;
+	AddPressure(Id, 6.f / (1 + N)); // pushing the same point gets less and less
+	return CheckBreaking(Id, TEXT("\"") + FString(HUInterrogation::PressLine(MoodOf(Id), N + Statement)) + TEXT("\""));
+}
+
+FString UHUCaseSubsystem::RaiseRecord(const FString& Id)
+{
+	if (Lawyered.Contains(Id)) return TEXT("\"Lawyer.\"");
+	const FString* Rec = SuspectRecord.Find(Id);
+	const EHUProfile* P = SuspectProfile.Find(Id);
+	if (RecordRaised.Contains(Id)) return TEXT("\"You already threw that in my face.\"");
+	RecordRaised.Add(Id);
+	if (P && *P == TrueProfile && *P != EHUProfile::None)
+	{
+		AddPressure(Id, 12.f);
+		return CheckBreaking(Id, FString::Printf(TEXT("\"That - %s - that was a long time ago. It's got nothing to do with tonight.\""), Rec ? **Rec : TEXT("that")));
+	}
+	return TEXT("\"My record? Go ahead and read it. It won't tell you anything about tonight.\"");
+}
+
+// at full pressure: the one who did it confesses (if enough of their lies are on the record); anyone else breaks down
+FString UHUCaseSubsystem::CheckBreaking(const FString& Id, const FString& Line)
+{
+	if (GetPressure(Id) < 100.f || !Confessed.IsEmpty()) return Line;
+	FHUSuspect S; GetSuspect(Id, S);
+	if (Id == Current.Solution.Killer)
+	{
+		int32 Theirs = 0;
+		for (int32 i = 0; i < S.Statements.Num(); i++) if (!S.Statements[i].Truth && IsBroken(Id, i)) Theirs++;
+		if (Theirs >= 2)
+		{
+			Confessed = Id;
+			return Line + FString::Printf(TEXT("  ...  \"Fine. FINE. It was me. I did it - %s. I didn't... it wasn't supposed to go like that.\"  (CONFESSION ON THE RECORD)"), *Current.Victim);
+		}
+		return Line + TEXT("  (They're close to breaking - but you need more of their lies on the record.)");
+	}
+	return Line + TEXT("  ...  \"All right! Yes, I lied about that. But I didn't do this. I swear to God I didn't do this.\"");
 }

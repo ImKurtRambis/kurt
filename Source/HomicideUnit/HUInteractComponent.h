@@ -68,6 +68,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Interact") float HoldProgress = 0.f;
 	UPROPERTY(BlueprintReadOnly, Category = "Interact") bool bHolding = false;
 
+	// the suspect you're interviewing (the HUD shows the interview)
+	TWeakObjectPtr<class AHUSuspectActor> Interviewing;
+	// an interview move goes to the host, and every player's game applies it (same as Use)
+	void SendInterrogation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
+	UFUNCTION(Server, Reliable) void ServerInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
+	UFUNCTION(NetMulticast, Reliable) void MulticastInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
+
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
 
