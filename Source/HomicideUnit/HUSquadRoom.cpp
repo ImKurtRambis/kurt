@@ -60,7 +60,7 @@ bool AHUSquadRoom::IsHost() const { return GetNetMode() != NM_Client; }
 void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset();
+	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset();
 	USceneComponent* R = RootComponent;
 	const FLinearColor Floor(0.16f, 0.12f, 0.08f), Wall(0.32f, 0.36f, 0.33f), Trim(0.12f, 0.08f, 0.05f), Desk(0.25f, 0.14f, 0.06f), Steel(0.3f, 0.32f, 0.34f);
 	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(RX * 2, RY * 2, 10), Floor);
@@ -106,6 +106,26 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
 	FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0)));
 	FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f)));
+	// HOLDING: a barred cell in the corner where the van's prisoners wait to be booked
+	const FLinearColor Bars(0.35f, 0.37f, 0.4f);
+	Block(this, R, Blocks, EShape::Cube, FVector(500, 395, 1), FVector(300, 190, 2), FLinearColor(0.2f, 0.2f, 0.21f), FRotator::ZeroRotator, false);
+	for (float X = 355.f; X <= 645.f; X += 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(X, 300, 120), FVector(3, 3, 240), Bars);   // the bars along the front
+	for (float Y = 310.f; Y <= 490.f; Y += 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(350, Y, 120), FVector(3, 3, 240), Bars);   // and the side
+	Block(this, R, Blocks, EShape::Cube, FVector(500, 300, 238), FVector(300, 6, 6), Bars);
+	Block(this, R, Blocks, EShape::Cube, FVector(560, 470, 22), FVector(160, 40, 6), FLinearColor(0.3f, 0.3f, 0.3f));                           // the bench
+	// the height chart for mugshots, on the cell's back wall
+	for (int32 i = 0; i < 6; i++) Block(this, R, Blocks, EShape::Cube, FVector(430, 496, 120 + i * 20), FVector(80, 2, 1.5f), FLinearColor(0.85f, 0.85f, 0.8f), FRotator::ZeroRotator, false);
+	// the BOOKING COUNTER beside it: a ledger, an ink pad, a camera on a tripod
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 400, 50), FVector(70, 170, 100), Desk));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 380, 101.5f), FVector(30, 40, 3), FLinearColor(0.12f, 0.15f, 0.3f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 430, 101.2f), FVector(14, 18, 2.4f), FLinearColor(0.05f, 0.05f, 0.05f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(260, 470, 145), FVector(18, 22, 14), FLinearColor(0.08f, 0.08f, 0.08f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(260, 470, 115), FVector(3, 3, 50), Steel));
+	// the CAPTAIN'S IN-TRAY: where a finished case goes
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 74), FVector(110, 120, 6), Desk));
+	for (float DX : { -48.f, 48.f }) for (float DY : { -52.f, 52.f }) Block(this, R, Blocks, EShape::Cube, FVector(450 + DX, -420 + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 82), FVector(36, 46, 8), FLinearColor(0.4f, 0.3f, 0.15f)));
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 85), FVector(30, 40, 3), FLinearColor(0.75f, 0.6f, 0.32f)));
 	// overhead lamps
 	for (float X : { -350.f, 0.f, 350.f }) Block(this, R, Blocks, EShape::Cube, FVector(X, 0, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
 }
@@ -114,7 +134,8 @@ void AHUSquadRoom::BeginPlay()
 {
 	Super::BeginPlay();
 	// back from a scene (or a fresh shift): the last case is over, and nobody's punched in yet
-	if (UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()) { C->ResolveArrests(); C->bCaseActive = false; C->bBriefed = false; }
+	// back from a scene: the case waits for booking and the Captain (it isn't judged until it's submitted)
+	if (UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()) { C->bAwaitingCaptain = C->bCaseActive; C->bBriefed = false; }
 	if (IsHost())
 		if (const AGameStateBase* GS = GetWorld()->GetGameState())
 			for (APlayerState* P : GS->PlayerArray) if (AHUPlayerState* HP = Cast<AHUPlayerState>(P)) HP->bReady = false;
@@ -148,6 +169,8 @@ void AHUSquadRoom::Tick(float DeltaSeconds)
 			}
 	if (const UHUCaseSubsystem* CS = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); CS && !CS->LastVerdict.IsEmpty()) Roster += TEXT("<br>LAST SHIFT:  ") + CS->LastVerdict.Left(60) + TEXT("<br>");
 	Roster += FString::Printf(TEXT("<br>CASE:  %s  ·  %s"), *PlaceLabel(), DifficultyName(DifficultyChoice));
+	if (const UHUCaseSubsystem* CS3 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); CS3 && CS3->bAwaitingCaptain)
+		Roster += FString::Printf(TEXT("<br>LAST CASE OPEN — %d IN HOLDING, %d TO BOOK. SUBMIT IT TO THE CAPTAIN."), CS3->Arrested.Num(), CS3->UnbookedCount());
 	Roster += Countdown >= 0 ? FString::Printf(TEXT("<br>EVERYONE'S IN — ROLL CALL IN %d"), Countdown) : FString::Printf(TEXT("<br>%d / 4  —  PUNCH IN AT THE TIME CLOCK (OR PRESS Y) WHEN READY"), N);
 	BoardRoster->SetText(FText::FromString(Roster));
 
@@ -160,6 +183,7 @@ void AHUSquadRoom::Tick(float DeltaSeconds)
 		C->ChosenDifficulty = DifficultyChoice >= 0 ? FString(DifficultyName(DifficultyChoice)).ToLower() : FString();
 	}
 
+	UpdateHolding();
 	// Y readies you up from anywhere in the room
 	if (!bKeysBound)
 		if (APlayerController* LPC = GetWorld()->GetFirstPlayerController())
@@ -174,7 +198,8 @@ void AHUSquadRoom::Tick(float DeltaSeconds)
 		int32 Total = 0, Ready = 0;
 		if (const AGameStateBase* GS = GetWorld()->GetGameState())
 			for (const APlayerState* P : GS->PlayerArray) { Total++; if (const AHUPlayerState* HP = Cast<AHUPlayerState>(P)) if (HP->bReady) Ready++; }
-		if (Total > 0 && Ready == Total)
+		const UHUCaseSubsystem* CS2 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+		if (Total > 0 && Ready == Total && !(CS2 && CS2->bAwaitingCaptain)) // the last case has to be submitted first
 		{
 			if (Countdown < 0) { Countdown = 5; Tock = 1.f; }
 			Tock -= DeltaSeconds;
@@ -202,6 +227,27 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I) return FText::GetEmpty();
 	if (BoardParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Copy the squad code"));
+	if (const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
+	{
+		if (CounterParts.Contains(I->FocusPart))
+		{
+			for (const FString& Id : C->Arrested)
+				if (!C->IsBooked(Id))
+				{
+					FHUSuspect S; C->GetSuspect(Id, S);
+					const int32 Step = C->BookingStep.FindRef(Id);
+					const TCHAR* What[] = { TEXT("take the mugshot"), TEXT("roll the fingerprints"), TEXT("bag their property") };
+					return FText::FromString(FString::Printf(TEXT("[E] Book %s — %s (%d/3)"), *S.Name, What[FMath::Clamp(Step, 0, 2)], Step + 1));
+				}
+			return FText::FromString(C->Arrested.Num() > 0 ? TEXT("Booking counter — everyone in holding is booked") : TEXT("Booking counter — nobody in holding"));
+		}
+		if (TrayParts.Contains(I->FocusPart))
+		{
+			if (!C->bAwaitingCaptain) return FText::FromString(TEXT("The Captain's in-tray — empty"));
+			if (C->UnbookedCount() > 0) return FText::FromString(FString::Printf(TEXT("Book everyone in holding first (%d left)"), C->UnbookedCount()));
+			return FText::FromString(FString::Printf(TEXT("[E] Submit the case to the Captain  (%d booked)"), C->Arrested.Num()));
+		}
+	}
 	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee"));
 	if (ComputerParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Check the case archive"));
 	if (LaptopParts.Contains(I->FocusPart))
@@ -244,6 +290,33 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		return;
 	}
 	if (bSecondary) return;
+	if (UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
+	{
+		if (CounterParts.Contains(I->FocusPart))
+		{
+			for (const FString& Id : C->Arrested)
+				if (!C->IsBooked(Id))
+				{
+					FHUSuspect S; C->GetSuspect(Id, S);
+					int32& Step = C->BookingStep.FindOrAdd(Id);
+					const TCHAR* Done[] = { TEXT("*FLASH* Front, then profile, against the height chart."), TEXT("Ten fingers rolled in ink, one card for the file."), TEXT("Wallet, keys, belt and laces into a property bag, signed and sealed.") };
+					I->PlayReach();
+					I->Say(FString::Printf(TEXT("BOOKING %s:  %s"), *S.Name.ToUpper(), Done[FMath::Clamp(Step, 0, 2)]));
+					if (++Step >= 3) I->Notify(TEXT("BOOKED"), FString::Printf(TEXT("%s is in the system"), *S.Name), FLinearColor(0.36f, 0.76f, 1.f));
+					return;
+				}
+			return;
+		}
+		if (TrayParts.Contains(I->FocusPart))
+		{
+			if (!C->bAwaitingCaptain || C->UnbookedCount() > 0) return;
+			I->PlayReach();
+			C->ResolveArrests(); // judged, paid, closed
+			I->Say(TEXT("THE CAPTAIN:  ") + C->LastVerdict);
+			I->Notify(TEXT("CASE SUBMITTED"), C->LastVerdict, FLinearColor(0.95f, 0.76f, 0.32f));
+			return;
+		}
+	}
 	if (ClockParts.Contains(I->FocusPart)) { if (User->IsLocallyControlled()) ToggleReady(); return; } // only your own punch card
 	if (CoffeeParts.Contains(I->FocusPart)) { const TCHAR* L[] = { TEXT("Burnt, bitter, hot. It does the job."), TEXT("Somebody made a fresh pot. A miracle."), TEXT("You top off the cup. Long night ahead.") }; I->Say(L[FMath::RandRange(0, 2)]); return; }
 	if (ComputerParts.Contains(I->FocusPart))
@@ -261,6 +334,7 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 	if (DoorParts.Contains(I->FocusPart))
 	{
 		if (!(IsHost() && User->IsLocallyControlled())) { if (User->IsLocallyControlled()) I->Say(TEXT("The doors open when everyone's punched in at the time clock.")); return; }
+		if (const UHUCaseSubsystem* CS4 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); CS4 && CS4->bAwaitingCaptain) { I->Say(TEXT("The last case is still open. Book the prisoners and submit it to the Captain first.")); return; }
 		if (S) S->StartShift();
 	}
 }
@@ -284,7 +358,7 @@ void AHUSquadRoom::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 }
 void AHUSquadRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const
 {
-	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &CoffeeParts, &ClockParts })
+	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &CoffeeParts, &ClockParts, &CounterParts, &TrayParts })
 		if (G->Contains(Part)) { Out.Append(*G); return; }
 	if (ComputerParts.Contains(Part)) Out.Add(Part); // just the one computer
 }
@@ -304,4 +378,48 @@ void AHUSquadRoom::ToggleReady()
 		if (APawn* P = PC->GetPawn())
 			if (UHUInteractComponent* I = P->FindComponentByClass<UHUInteractComponent>())
 				I->Say(bNow ? TEXT("*KA-CHUNK* You punch in. Ready for the shift.") : TEXT("You punch back out. Not ready."));
+}
+// the prisoners in holding: a figure for each, a name card, BOOKED once they're done
+void AHUSquadRoom::UpdateHolding()
+{
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	TArray<FString> Want = C && C->bAwaitingCaptain ? C->Arrested : TArray<FString>();
+	TArray<FString> Gone;
+	for (const TPair<FString, USceneComponent*>& P : Prisoners) if (!Want.Contains(P.Key)) Gone.Add(P.Key);
+	for (const FString& Id : Gone) { if (USceneComponent* G = Prisoners.FindRef(Id)) { TArray<USceneComponent*> Kids; G->GetChildrenComponents(true, Kids); for (USceneComponent* K : Kids) K->DestroyComponent(); G->DestroyComponent(); } Prisoners.Remove(Id); }
+	for (int32 i = 0; i < Want.Num(); i++)
+	{
+		const FString& Id = Want[i];
+		USceneComponent* G = Prisoners.FindRef(Id);
+		if (!G)
+		{
+			G = NewObject<USceneComponent>(this);
+			G->SetupAttachment(RootComponent);
+			G->SetRelativeLocation(FVector(420 + (i % 3) * 90, 350 + (i / 3) * 70, 0));
+			G->SetRelativeRotation(FRotator(0, -90, 0)); // facing out through the bars
+			G->RegisterComponent();
+			TArray<UStaticMeshComponent*> Parts;
+			const FLinearColor Coat = FLinearColor(0.15f + 0.05f * (i % 3), 0.13f, 0.12f + 0.04f * (i % 2));
+			Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 45), FVector(40, 46, 90), FLinearColor(0.05f, 0.05f, 0.06f), FRotator::ZeroRotator, false);
+			Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 125), FVector(52, 60, 76), Coat, FRotator::ZeroRotator, false);
+			Block(this, G, Parts, EShape::Sphere, FVector(0, 0, 178), FVector(26, 24, 30), FLinearColor(0.58f, 0.42f, 0.33f), FRotator::ZeroRotator, false);
+			UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
+			T->SetupAttachment(G);
+			T->SetRelativeLocation(FVector(0, 0, 210));
+			T->SetRelativeRotation(FRotator(0, 180, 0));
+			T->SetHorizontalAlignment(EHTA_Center);
+			T->SetWorldSize(11.f);
+			T->RegisterComponent();
+			Prisoners.Add(Id, G);
+		}
+		TArray<USceneComponent*> Kids; G->GetChildrenComponents(false, Kids);
+		for (USceneComponent* K : Kids)
+			if (UTextRenderComponent* T = Cast<UTextRenderComponent>(K))
+			{
+				FHUSuspect S; if (C) C->GetSuspect(Id, S);
+				const bool bBooked = C && C->IsBooked(Id);
+				T->SetText(FText::FromString(S.Name.ToUpper() + (bBooked ? TEXT("<br>BOOKED") : TEXT("<br>AWAITING BOOKING"))));
+				T->SetTextRenderColor(bBooked ? FColor(110, 200, 255) : FColor(255, 181, 71));
+			}
+	}
 }

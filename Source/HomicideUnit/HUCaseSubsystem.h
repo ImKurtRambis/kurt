@@ -109,7 +109,12 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Case") TArray<FString> Arrested;
 	// how the last case ended (shown back at the precinct)
 	UPROPERTY(BlueprintReadOnly, Category = "Case") FString LastVerdict;
-	// the van's arrived at the precinct: judge the arrests, pay out, close the case
+	// back at the precinct: each prisoner is booked (mugshot, prints, property: 3 steps), then the case goes to the Captain
+	UPROPERTY(BlueprintReadOnly, Category = "Case") TMap<FString, int32> BookingStep;
+	UPROPERTY(BlueprintReadOnly, Category = "Case") bool bAwaitingCaptain = false;
+	UFUNCTION(BlueprintPure, Category = "Case") bool IsBooked(const FString& Id) const { const int32* S = BookingStep.Find(Id); return S && *S >= 3; }
+	UFUNCTION(BlueprintPure, Category = "Case") int32 UnbookedCount() const { int32 N = 0; for (const FString& Id : Arrested) if (!IsBooked(Id)) N++; return N; }
+	// the Captain takes the case: judge the arrests, pay out, close it
 	UFUNCTION(BlueprintCallable, Category = "Case") void ResolveArrests();
 
 	// evidence that proves some statement is a lie (what you build the case from)

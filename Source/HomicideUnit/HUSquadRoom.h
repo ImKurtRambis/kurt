@@ -52,6 +52,11 @@ private:
 	UPROPERTY() TArray<UPrimitiveComponent*> ComputerParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> CoffeeParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> ClockParts;
+	UPROPERTY() TArray<UPrimitiveComponent*> CounterParts;
+	UPROPERTY() TArray<UPrimitiveComponent*> TrayParts;
+	// the prisoners in holding (figures, by suspect id)
+	UPROPERTY() TMap<FString, USceneComponent*> Prisoners;
+	void UpdateHolding();
 	float Tock = 0.f;
 	bool bStarting = false;
 	bool bKeysBound = false;

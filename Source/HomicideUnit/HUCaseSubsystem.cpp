@@ -81,6 +81,8 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	{ int32 D, Hd, L; GetRules(D, Hd, L); Current.Solution.RequiredBreaks = L; }
 	InScene.Reset();
 	Arrested.Reset();
+	BookingStep.Reset();
+	bAwaitingCaptain = false;
 	BodyLeads.Reset();
 	Found.Reset();
 	BrokenKeys.Reset();
@@ -386,4 +388,7 @@ void UHUCaseSubsystem::ResolveArrests()
 	if (Pay > 0) V += FString::Printf(TEXT("  Pay: +$%d."), Pay);
 	LastVerdict = V;
 	Arrested.Reset();
+	BookingStep.Reset();
+	bAwaitingCaptain = false;
+	bCaseActive = false;
 }
