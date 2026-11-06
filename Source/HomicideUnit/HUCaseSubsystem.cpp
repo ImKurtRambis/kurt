@@ -1,4 +1,5 @@
 #include "HUCaseSubsystem.h"
+#include "HUBrainSubsystem.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -85,6 +86,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	bAwaitingCaptain = false;
 	BodyLeads.Reset();
 	Pressure.Reset(); Misses.Reset(); Lawyered.Reset(); Confessed.Reset(); PressCount.Reset(); RecordRaised.Reset();
+	if (UHUBrainSubsystem* Brain = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) Brain->ResetConversations();
 	Found.Reset();
 	BrokenKeys.Reset();
 	Breaks = 0;

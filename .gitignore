@@ -10,3 +10,6 @@ ElevenLabsKey.txt
 .idea/
 *.suo
 *.sln.DotSettings.user
+
+AI/llama/
+AI/models/

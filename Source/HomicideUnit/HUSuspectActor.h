@@ -31,6 +31,12 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") int32 StatementSel = 0;
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") int32 EvidenceSel = -1; // -1: no evidence, just press
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") FString LastReply;
+	// T: type your own question (the local AI brain answers in character; questions alone don't add pressure)
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bTyping = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") FString Draft;
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bThinking = false;
+	// the brain's answer (computed on the asker's PC), shown on every machine
+	void ApplyAnswer(APawn* User, const FString& Question, const FString& Answer);
 	TArray<FString> BaggedIds() const;
 	// a move in the interview (0 confront/press, 1 raise their record): runs on every machine, the same way
 	void ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId);
@@ -57,4 +63,6 @@ private:
 	void CloseInterview();
 	void SendMove(uint8 Action);
 	void StmtUp(); void StmtDown(); void EvLeft(); void EvRight(); void RecordKey();
+	void TypeKey(FKey Key);
+	void AskTyped();
 };

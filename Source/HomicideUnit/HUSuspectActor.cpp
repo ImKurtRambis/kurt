@@ -2,6 +2,8 @@
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
+#include "HUBrainSubsystem.h"
+#include "HUInterrogation.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/GameInstance.h"
@@ -84,6 +86,7 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!Cases || !Cases->GetSuspect(SuspectId, S) || !I) return;
 
+	if (bInterviewing && Interviewer.Get() == User && (bTyping || bThinking)) return; // typing / waiting on an answer
 	if (bSecondary && bInterviewing && Interviewer.Get() == User) { CloseInterview(); return; }
 	if (bCuffed)
 	{
@@ -150,7 +153,10 @@ void AHUSuspectActor::OpenInterview(APawn* User)
 		InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AHUSuspectActor::EvRight);
 		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AHUSuspectActor::EvRight);
 		InputComponent->BindKey(EKeys::R, IE_Pressed, this, &AHUSuspectActor::RecordKey);
+		InputComponent->BindKey(EKeys::AnyKey, IE_Pressed, this, &AHUSuspectActor::TypeKey);
 	}
+	bTyping = false; Draft.Reset();
+	if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
 }
 
 void AHUSuspectActor::CloseInterview()
@@ -163,11 +169,71 @@ void AHUSuspectActor::CloseInterview()
 	bInterviewing = false; Interviewer = nullptr;
 }
 
-void AHUSuspectActor::StmtUp() { FHUSuspect S; if (bInterviewing && GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + S.Statements.Num() - 1) % FMath::Max(1, S.Statements.Num()); }
-void AHUSuspectActor::StmtDown() { FHUSuspect S; if (bInterviewing && GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + 1) % FMath::Max(1, S.Statements.Num()); }
-void AHUSuspectActor::EvLeft() { if (bInterviewing) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel <= -1 ? N - 1 : EvidenceSel - 1; } }
-void AHUSuspectActor::EvRight() { if (bInterviewing) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel >= N - 1 ? -1 : EvidenceSel + 1; } }
-void AHUSuspectActor::RecordKey() { if (bInterviewing) SendMove(1); }
+// typing a question: the other interview keys stand down until Enter / Esc
+void AHUSuspectActor::TypeKey(FKey Key)
+{
+	if (!bInterviewing || bThinking) return;
+	if (!bTyping) { if (Key == EKeys::T) { bTyping = true; Draft.Reset(); } return; }
+	if (Key == EKeys::Enter) { AskTyped(); return; }
+	if (Key == EKeys::Escape) { bTyping = false; Draft.Reset(); return; }
+	if (Key == EKeys::BackSpace) { if (Draft.Len()) Draft.LeftChopInline(1); return; }
+	if (Draft.Len() >= 140) return;
+	const APlayerController* P = Interviewer.IsValid() ? Cast<APlayerController>(Interviewer->GetController()) : nullptr;
+	const bool bShift = P && (P->IsInputKeyDown(EKeys::LeftShift) || P->IsInputKeyDown(EKeys::RightShift));
+	const FString K = Key.GetFName().ToString();
+	static const TMap<FString, FString> Map = {
+		{ TEXT("Zero"), TEXT("0") }, { TEXT("One"), TEXT("1") }, { TEXT("Two"), TEXT("2") }, { TEXT("Three"), TEXT("3") }, { TEXT("Four"), TEXT("4") },
+		{ TEXT("Five"), TEXT("5") }, { TEXT("Six"), TEXT("6") }, { TEXT("Seven"), TEXT("7") }, { TEXT("Eight"), TEXT("8") }, { TEXT("Nine"), TEXT("9") },
+		{ TEXT("SpaceBar"), TEXT(" ") }, { TEXT("Period"), TEXT(".") }, { TEXT("Comma"), TEXT(",") }, { TEXT("Apostrophe"), TEXT("'") }, { TEXT("Hyphen"), TEXT("-") } };
+	if (K.Len() == 1 && FChar::IsAlpha(K[0])) Draft += (bShift || Draft.IsEmpty()) ? K.ToUpper() : K.ToLower();
+	else if (K == TEXT("Slash")) Draft += bShift ? TEXT("?") : TEXT("/");
+	else if (K == TEXT("One") && bShift) Draft += TEXT("!");
+	else if (const FString* C = Map.Find(K)) Draft += *C;
+}
+
+void AHUSuspectActor::AskTyped()
+{
+	bTyping = false;
+	const FString Q = Draft.TrimStartAndEnd();
+	Draft.Reset();
+	if (Q.IsEmpty()) return;
+	UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>();
+	TWeakObjectPtr<AHUSuspectActor> Self(this);
+	TWeakObjectPtr<APawn> Asker = Interviewer;
+	auto Deliver = [Self, Asker, Q](const FString& Answer)
+	{
+		if (!Self.IsValid()) return;
+		Self->bThinking = false;
+		FString A = Answer;
+		if (A.IsEmpty())
+		{
+			// no brain installed (or it failed): a written line for their mood
+			const UHUCaseSubsystem* C = Self->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+			const EHUSuspectMood M = C ? C->MoodOf(Self->SuspectId) : EHUSuspectMood::Calm;
+			A = M == EHUSuspectMood::Lawyered ? TEXT("I want my lawyer.") : HUInterrogation::PressLine(M, GetTypeHash(Q));
+		}
+		UHUInteractComponent* I = Asker.IsValid() ? Asker->FindComponentByClass<UHUInteractComponent>() : nullptr;
+		if (I) I->SendAnswer(Self->GetPathName(), Q, A);
+	};
+	if (B && B->IsReady()) { bThinking = true; LastReply = TEXT("..."); B->AskSuspect(SuspectId, Q, FHUBrainReply::CreateLambda(Deliver)); }
+	else { if (B) B->WarmUp(); Deliver(FString()); }
+}
+
+void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FString& Answer)
+{
+	FHUSuspect S;
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C || !C->GetSuspect(SuspectId, S)) return;
+	if (User && User->IsLocallyControlled()) LastReply = Answer;
+	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
+		I->Say(FString::Printf(TEXT("\"%s\"   %s:  %s"), *Question, *S.Name.ToUpper(), *Answer));
+}
+
+void AHUSuspectActor::StmtUp() { FHUSuspect S; if (bInterviewing &&GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + S.Statements.Num() - 1) % FMath::Max(1, S.Statements.Num()); }
+void AHUSuspectActor::StmtDown() { FHUSuspect S; if (bInterviewing && !bTyping && GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + 1) % FMath::Max(1, S.Statements.Num()); }
+void AHUSuspectActor::EvLeft() { if (bInterviewing && !bTyping) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel <= -1 ? N - 1 : EvidenceSel - 1; } }
+void AHUSuspectActor::EvRight() { if (bInterviewing && !bTyping) { const int32 N = BaggedIds().Num(); EvidenceSel = EvidenceSel >= N - 1 ? -1 : EvidenceSel + 1; } }
+void AHUSuspectActor::RecordKey() { if (bInterviewing && !bTyping && !bThinking) SendMove(1); }
 
 void AHUSuspectActor::SendMove(uint8 Action)
 {

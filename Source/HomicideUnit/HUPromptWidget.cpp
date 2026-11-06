@@ -90,7 +90,14 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			const TArray<FString> Reply = Wrap(Sus->LastReply.IsEmpty() ? FString(TEXT("\"") + S.Intro + TEXT("\"")) : Sus->LastReply, Font("Italic", 12), RW - 10);
 			for (int32 r = 0; r < Reply.Num() && r < 8; r++) Text(Out, Ly + 3, G, Reply[r], Font("Italic", 12), FVector2D(RX + 4, P.Y + 236 + r * 19), Ink);
 
-			const FString Keys = TEXT("[W] [S] statement     [A] [D] evidence     [E] confront / press     [R] their record     [Q] leave");
+			if (Sus->bTyping || Sus->bThinking)
+			{
+				Box(Out, Ly + 2, G, FVector2D(P.X + 24, P.Y + H - 84), FVector2D(W - 48, 36), FLinearColor(1, 1, 1, 0.09f), 8.f);
+				const FString Line = Sus->bThinking ? FString(TEXT("They're thinking...")) : FString::Printf(TEXT("YOU:  %s%s"), *Sus->Draft, (FMath::FloorToInt(GetWorld()->GetTimeSeconds() * 2.f) % 2) ? TEXT("|") : TEXT(" "));
+				Text(Out, Ly + 3, G, Line, Font("Regular", 12), FVector2D(P.X + 36, P.Y + H - 76), Ink);
+			}
+			const FString Keys = Sus->bTyping ? FString(TEXT("type your question     [Enter] ask     [Esc] cancel"))
+				: FString(TEXT("[W] [S] statement     [A] [D] evidence     [E] confront / press     [R] record     [T] ask a question     [Q] leave"));
 			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 11), FVector2D(0, 0), Dim, 1.f, false);
 			Prompt(Out, Ly + 3, G, Keys, Font("Regular", 11), FVector2D(P.X + (W - KW) * 0.5f, P.Y + H - 36), Dim, 1.f, true);
 			return Ly + 6;

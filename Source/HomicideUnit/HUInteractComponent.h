@@ -74,6 +74,10 @@ public:
 	void SendInterrogation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
 	UFUNCTION(Server, Reliable) void ServerInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
 	UFUNCTION(NetMulticast, Reliable) void MulticastInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
+	// a typed question and the suspect's answer (from the asker's local brain), shown to the squad
+	void SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
+	UFUNCTION(Server, Reliable) void ServerAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
+	UFUNCTION(NetMulticast, Reliable) void MulticastAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
 
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;

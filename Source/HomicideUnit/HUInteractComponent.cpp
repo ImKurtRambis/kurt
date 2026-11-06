@@ -456,6 +456,22 @@ void UHUInteractComponent::SendInterrogation(const FString& SuspectPath, uint8 A
 	else ServerInterrogate(SuspectPath, Action, Statement, ClueId);
 }
 
+void UHUInteractComponent::SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer)
+{
+	const ENetMode Mode = GetWorld()->GetNetMode();
+	if (Mode == NM_Standalone) { MulticastAnswer_Implementation(SuspectPath, Question, Answer); return; }
+	if (GetOwner()->HasAuthority()) MulticastAnswer(SuspectPath, Question, Answer);
+	else ServerAnswer(SuspectPath, Question, Answer);
+}
+void UHUInteractComponent::ServerAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer)
+{
+	MulticastAnswer(SuspectPath, Question.Left(200), Answer.Left(400));
+}
+void UHUInteractComponent::MulticastAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer)
+{
+	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyAnswer(Cast<APawn>(GetOwner()), Question, Answer);
+}
+
 void UHUInteractComponent::ServerInterrogate_Implementation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)
 {
 	MulticastInterrogate(SuspectPath, Action, Statement, ClueId);
