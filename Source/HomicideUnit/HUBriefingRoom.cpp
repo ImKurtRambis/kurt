@@ -312,7 +312,6 @@ void AHUBriefingRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveCom
 	if (const FVector* Seat = Seats.Find(Part)) for (const TPair<UPrimitiveComponent*, FVector>& S : Seats) if (S.Value.Equals(*Seat)) Out.Add(S.Key);
 }
 // ---------- the 911 call, played over the room while the briefing runs ----------
-static const FName CallChannel(TEXT("HU911"));
 
 void AHUBriefingRoom::Play911(float DeltaSeconds)
 {
@@ -324,7 +323,6 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 		if (CallEndTimer > 0.f && (CallEndTimer -= DeltaSeconds) <= 0.f && I) I->CallLine = FText::GetEmpty();
 		return;
 	}
-	UTextToSpeechEngineSubsystem* TTS = GEngine ? GEngine->GetEngineSubsystem<UTextToSpeechEngineSubsystem>() : nullptr;
 	UHUVoiceSubsystem* Voice = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
 	if (CallIdx < 0)
 	{
@@ -334,11 +332,10 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 		const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		if (C) C->Build911Call(CallSpeakers, CallLines);
 		if (CallLines.Num() == 0) { bCallDone = true; return; }
-		if (TTS && !TTS->DoesChannelExist(CallChannel)) { TTS->AddDefaultChannel(CallChannel); TTS->ActivateChannel(CallChannel); TTS->SetVolumeOnChannel(CallChannel, 0.9f); }
 		// with a voice key, ask for every line up front, acted: a calm dispatcher and a terrified caller
 		CallSounds.Init(nullptr, CallLines.Num());
 		CallSeconds.Init(0.f, CallLines.Num());
-		CallState.Init(Voice && Voice->HasNeuralVoice() ? 0 : 2, CallLines.Num()); // 0 waiting, 1 ready, 2 use Windows
+		CallState.Init(Voice && Voice->HasNeuralVoice() ? 0 : 2, CallLines.Num()); // 0 waiting, 1 ready, 2 caption only
 		if (Voice && Voice->HasNeuralVoice())
 		{
 			const int32 CallerVoice = 1 + FMath::Abs(C ? C->Current.Number : 0) % 7;
@@ -364,8 +361,7 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 	// the current line still playing (or still up long enough to read)?
 	if (LineTime >= 0.f)
 	{
-		const bool bSpeaking = TTS && TTS->IsSpeakingOnChannel(CallChannel);
-		if (bSpeaking || LineTime < LineLength) return;
+		if (LineTime < LineLength) return;
 		CallIdx++;
 		LineTime = -1.f;
 		LineWait = 0.f;
@@ -396,7 +392,5 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 }
 void AHUBriefingRoom::EndPlay(const EEndPlayReason::Type Reason)
 {
-	if (UTextToSpeechEngineSubsystem* TTS = GEngine ? GEngine->GetEngineSubsystem<UTextToSpeechEngineSubsystem>() : nullptr)
-		if (TTS->DoesChannelExist(CallChannel)) TTS->StopSpeakingOnChannel(CallChannel);
 	Super::EndPlay(Reason);
 }
