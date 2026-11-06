@@ -325,11 +325,12 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 			FocusPart = Hit.GetComponent();
 			Prompt = IHUInteractable::Execute_GetPrompt(A, Pawn);
 			// only things with something to do light up
-			if (!Prompt.IsEmpty()) { const IHUInteractable* II = Cast<IHUInteractable>(A); if (!II || II->Highlights()) { if (II) II->HoverParts(FocusPart, Parts); if (Parts.Num() == 0) A->GetComponents<UPrimitiveComponent>(Parts); } }
 		}
 	}
-	SetHover(Parts);
-	AnimateHover(DeltaTime);
+	// no glow or spotlight in the game (that's only for the dark desk menu): the crosshair and the prompt do the job.
+	// The prompt eases in again whenever you look at something new.
+	if (Focus != LastFocus || FocusPart != LastFocusPart) { PromptAge = 0.f; LastFocus = Focus; LastFocusPart = FocusPart; }
+	PromptAge += DeltaTime;
 }
 
 // ---------- hover feedback ----------

@@ -52,7 +52,9 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 3. **Spawn scene actors with fixed names** (`AHUCrimeScene::SpawnNamed<T>`), never auto-named — squad replay finds actors by path name.
 4. **Randomness:** layout uses the case's `MapSeed`; evidence placement uses `SquadSeed` in a squad (random solo). Don't use `FMath::Rand` for anything that must match across players.
 5. **No assets required:** if you add a mesh/material slot, keep the block fallback so the game runs without art.
-6. Keep the style of the existing code: short functions, comments that say *why*, `HU` prefix, UPROPERTYs for anything Blueprint-tweakable.
+6. **No hover glow/spotlight in the game** (only the dark desk menu has that). In-game feedback is the crosshair ticks + the prompt.
+7. **Working alongside another AI:** pull before you start (git pull), commit small focused changes, push when a change builds. Don't reformat files you aren't changing.
+8. Keep the style of the existing code: short functions, comments that say *why*, `HU` prefix, UPROPERTYs for anything Blueprint-tweakable.
 
 ## Not done yet (good next tasks)
 

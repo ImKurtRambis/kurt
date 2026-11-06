@@ -91,6 +91,8 @@ private:
 	double LastScan = -100.0;
 	float Bob = 0.f;
 	float ReachT = -1.f;
+	TWeakObjectPtr<AActor> LastFocus;
+	TWeakObjectPtr<UPrimitiveComponent> LastFocusPart;
 	float GrabBlend = 0.f;
 	TWeakObjectPtr<AActor> Grabbed;
 	class UHUCaseSubsystem* Cases() const;
