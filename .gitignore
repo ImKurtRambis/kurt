@@ -1,0 +1,12 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+*.VC.db
+ElevenLabsKey.txt
+*.sav
+.idea/
+*.suo
+*.sln.DotSettings.user

@@ -1,0 +1,61 @@
+# Homicide Unit — guide for AI coding assistants (ChatGPT/Codex, Claude, Copilot…)
+
+A noir detective co-op game in **Unreal Engine 5.8**, **C++ first**. Almost everything is built in code — there are
+almost no Blueprint or art assets yet: rooms, props and people are made of engine basic shapes at runtime
+(`HUBuild::Block`), so you can change the game by editing `.h/.cpp` files only.
+
+**Project folder:** `C:\Users\luism\Unreal Projects\HomicideUnit`  ·  **Engine:** `C:\Program Files\Epic Games\UE_5.8`
+**All game code:** `Source/HomicideUnit/` (one module, everything prefixed `HU`).
+
+## Build, run, test (PowerShell, from the project folder)
+
+| What | Command |
+|---|---|
+| Build (the editor/game DLL) | `powershell -ExecutionPolicy Bypass -File Tools\Build.ps1` |
+| Play in a window | `powershell -ExecutionPolicy Bypass -File Tools\Run.ps1` |
+| Smoke-test a level headless (loads it, scans the log for errors) | `powershell -ExecutionPolicy Bypass -File Tools\TestLevel.ps1 -Map L_Scene` |
+| Two-player test on one PC (host + client over LAN) | `powershell -ExecutionPolicy Bypass -File Tools\TestSquad.ps1` |
+| Create any missing levels | `UnrealEditor-Cmd.exe HomicideUnit.uproject -run=pythonscript -script="Tools\CreateLevels.py"` |
+
+- **Close the game/editor before building** (a running `UnrealEditor.exe` locks the DLL). `Build.ps1` does this for you.
+- A build is done when it prints `Result: Succeeded`. Fix every `error C####` it prints.
+- After C++ changes, always build, then `TestLevel.ps1` the levels you touched.
+
+## The game loop and the levels (`Content/Maps`)
+
+1. **L_Menu** — `AHUDeskMenu`: you sit at your desk; objects on it are the menu (case files = start, cell phone = join a squad by 6-digit code, computer = settings, etc.). Widget: `UHUMenuWidget`.
+2. **L_Lobby** — `AHUSquadRoom`: the squad room / pre-lobby. Chalkboard with the squad code + roster, laptop (location) and folder (difficulty) for the host, a time clock to ready up (Y). All ready → countdown → `UHUSquadSubsystem::StartShift()` server-travels everyone.
+3. **L_Briefing** — `AHUBriefingRoom` (+ `AHUBriefingLaptop`, `AHUMotorPool`, `AHUCruiser`, `AHUSupplyLocker`): Captain's slides on a projector, a 911 call plays (`Play911`), corridor to the motor pool, cruiser drives the squad to the scene.
+4. **L_Scene** — `AHUCrimeScene`: generates the whole crime scene from the case (rooms, lofts, ladders, crawlspace, street outside, patrol, prisoner van, suspects, victim, evidence). Your cruiser drives back to L_Lobby, where `ResolveArrests()` judges the case.
+
+## Where things live
+
+| Area | Files |
+|---|---|
+| Case data structs | `HUCaseTypes.h` |
+| Case generator (incident × hidden offender profile × place) | `HUCaseGen.*`, profiles in `HUProfiles.h` |
+| The case in play, money, kit, save, rules, verdict | `HUCaseSubsystem.*`, `HUSave.h` |
+| Squads / online (Steam or LAN sessions, 6-digit codes) | `HUSquadSubsystem.*`, `HUPlayerState.*`, `HUGameModes.*` |
+| The player | `HUCharacter.*` (movement, sitting), `HUInteractComponent.*` (look-at, E/Q, hotbar 1–7, flashlight/UV/scanner, hand viewmodel, hover glow, notifications, **squad interaction replay**) |
+| HUD & menus (drawn in C++, no UMG assets) | `HUPromptWidget.*`, `HUMenuWidget.*`, shared kit `HUDraw.h` |
+| Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker` |
+| Tools & concealment | `HUTools.h` |
+| Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |
+| Placeholder geometry | `HUBuild.*` (`Block`, `WallWithDoor`, `Clear`) |
+
+## Rules that keep the game working
+
+1. **Interactables** implement `IHUInteractable` (`GetPrompt`, `Interact`; optional `HoverParts`, `Highlights`). Show text with `UHUInteractComponent::Say()` / `Notify()`.
+2. **Multiplayer = replay.** Every machine builds the *same* scene from the squad code. `UHUInteractComponent::Use()` sends an interaction to the host, which multicasts it; **every machine runs `Interact` on its own copy**. So `Interact` must be **deterministic** and must not assume the user is the local player:
+   - Personal things (shop, own ready state, clipboard) → guard with `User->IsLocallyControlled()`.
+   - Host-only things (travel, case choice) → also check `GetNetMode() != NM_Client`.
+3. **Spawn scene actors with fixed names** (`AHUCrimeScene::SpawnNamed<T>`), never auto-named — squad replay finds actors by path name.
+4. **Randomness:** layout uses the case's `MapSeed`; evidence placement uses `SquadSeed` in a squad (random solo). Don't use `FMath::Rand` for anything that must match across players.
+5. **No assets required:** if you add a mesh/material slot, keep the block fallback so the game runs without art.
+6. Keep the style of the existing code: short functions, comments that say *why*, `HU` prefix, UPROPERTYs for anything Blueprint-tweakable.
+
+## Not done yet (good next tasks)
+
+- Interview screen: confront a suspect's statement with bagged evidence (`UHUCaseSubsystem::Challenge` exists; no UI yet).
+- Real characters (MetaHuman + Motion Matching), prop library for Fab/Megascans meshes, comic/noir post-process.
+- Offline voices (Kokoro via NNE) to replace paid TTS.

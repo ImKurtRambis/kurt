@@ -1,0 +1,77 @@
+// THE DESK MENU: the main menu is your desk at the precinct, late at night (same as the browser game).
+// You sit at your desk; everything on it does something:
+//   CASE FILES (start / continue your career)  ·  DESK PHONE (host a squad)  ·  YOUR CELL PHONE (join a squad)
+//   THE COMPUTER (settings)  ·  POLICE MANUAL (how to play)  ·  THE PAPER (what's new)
+//   YOUR NAME PLATE (your personnel file: type your name)  ·  FRAMED PHOTO (credits)  ·  CAR KEYS (go home: quit)
+// Hover an object to light it up and read what it does; click it - or ← → and ENTER. ESC closes a panel.
+// Your name, the join address and your settings are saved.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "HUDeskMenu.generated.h"
+
+UENUM(BlueprintType)
+enum class EHUDeskItem : uint8 { Manual, DeskPhone, CellPhone, Photo, CaseFiles, NamePlate, Paper, Computer, CarKeys, Count UMETA(Hidden) };
+
+UENUM(BlueprintType)
+enum class EHUMenuPanel : uint8 { None, Manual, Paper, Credits, Personnel, Settings, Join, Quit, Missing, Squad };
+
+UCLASS(Blueprintable)
+class HOMICIDEUNIT_API AHUDeskMenu : public AActor
+{
+	GENERATED_BODY()
+public:
+	AHUDeskMenu();
+
+	UPROPERTY(VisibleAnywhere) USceneComponent* Root;
+	UPROPERTY(VisibleAnywhere) class UCameraComponent* Seat;
+	UPROPERTY(VisibleAnywhere) class USpotLightComponent* Highlight;
+	UPROPERTY(VisibleAnywhere) class UPointLightComponent* Lamp;
+	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* PlateText;
+
+	// the level the case files and the desk phone take you to
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Menu") FName BriefingLevel = TEXT("L_Briefing");
+
+	// read by the menu widget
+	UPROPERTY(BlueprintReadOnly) int32 Pick = (int32)EHUDeskItem::CaseFiles;
+	UPROPERTY(BlueprintReadOnly) int32 Hover = -1;
+	UPROPERTY(BlueprintReadOnly) EHUMenuPanel Panel = EHUMenuPanel::None;
+	UPROPERTY(BlueprintReadOnly) int32 Row = 0;
+	UPROPERTY(BlueprintReadOnly) bool bTyping = false;
+
+	static const TCHAR* ItemName(EHUDeskItem I);
+	FString ItemDoes(EHUDeskItem I) const;
+	// the panel's title and lines (for the widget)
+	void PanelText(FString& Title, TArray<FString>& Lines) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Menu") void Use(EHUDeskItem Item);
+
+	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void Tick(float DeltaSeconds) override;
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() TMap<UPrimitiveComponent*, int32> ItemOf;
+	FVector ItemPos[(int32)EHUDeskItem::Count];
+	UPROPERTY() class UHUMenuWidget* Widget = nullptr;
+	FString Typed;          // what's being typed
+	int32 TypingField = 0;  // 0 name, 1 join address
+	bool bPlayAfterName = false;
+	FString MissingLevel;
+
+	void Prev(); void Next(); void Activate(); void Back(); void Click(); void Up(); void Down();
+	void OnAnyKey(FKey Key);
+	void StartTyping(int32 Field);
+	void FinishTyping(bool bKeep);
+	void ChangeSetting(int32 Dir);
+	int32 RowsIn(EHUMenuPanel P) const;
+	bool LevelExists(FName Level) const;
+	void GoTo(FName Level, const FString& Options);
+	FString Name() const;
+	class UHUCaseSubsystem* Cases() const;
+	class APlayerController* PC() const;
+};

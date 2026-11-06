@@ -1,0 +1,43 @@
+// The detective you play: first person. WASD walk, mouse look, SHIFT run, SPACE jump, C / CTRL crouch,
+// ESC back to the desk. Reads mouse sensitivity and field of view from your saved settings.
+// Carries the interaction component (E / Q, flashlight, UV, scanner) from the start.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "HUCharacter.generated.h"
+
+UCLASS()
+class HOMICIDEUNIT_API AHUCharacter : public ACharacter
+{
+	GENERATED_BODY()
+public:
+	AHUCharacter();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) class UCameraComponent* Eyes;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) class UHUInteractComponent* Interact;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") float WalkSpeed = 330.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") float RunSpeed = 560.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") FName MenuLevel = TEXT("L_Menu");
+
+	// ---- sitting: E on a chair sits you down facing the way it faces; WASD, SPACE or E again stands you up ----
+	UPROPERTY(BlueprintReadOnly, Category = "Detective") bool bSeated = false;
+	// SeatTop: the world point on the seat cushion; Yaw: the way the chair faces
+	UFUNCTION(BlueprintCallable, Category = "Detective") void SitDown(FVector SeatTop, float Yaw);
+	UFUNCTION(BlueprintCallable, Category = "Detective") void StandUp();
+	// the host seating you (in a squad): sit on your own screen too
+	UFUNCTION(Client, Reliable) void ClientSitDown(FVector SeatTop, float Yaw);
+
+	virtual void Tick(float DeltaSeconds) override;
+	virtual void SetupPlayerInputComponent(class UInputComponent* Input) override;
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	void ToggleCrouch();
+	void BackToDesk();
+	FVector StandSpot;
+	void StartJump() { if (bSeated) StandUp(); else Jump(); }
+	void EndJump() { StopJumping(); }
+};

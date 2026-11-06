@@ -1,0 +1,3426 @@
+[
+ {
+  "Number": 201,
+  "Title": "BUNCO SQUAD — FORGERY #201: PIERCE & SONS WAREHOUSE",
+  "Crime": "forgery",
+  "Place": "PIERCE & SONS WAREHOUSE",
+  "Victim": "Angela Russo",
+  "Time": "11:39 PM",
+  "Weapon": "stolen checkbook",
+  "Brief": {
+   "title": "BUNCO SQUAD — FORGERY #201: PIERCE & SONS WAREHOUSE",
+   "body": [
+    "Victim: ANGELA RUSSO — warehouse owner. The bank caught $9,000 in bad paper today.",
+    "The method: checks torn from the back of the book, where nobody looks. The bank's examiner flagged it at 11:39 PM.",
+    "Nobody outside the warehouse could have done it. The forger is still on the payroll.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who forged it, what proves motive, what proves the method"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s0",
+   "Motive": "c201_motive",
+   "Means": "c201_means",
+   "Alibi": "c201_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Derek Ashford",
+    "Role": "Shipping Clerk",
+    "X": 525,
+    "Y": 475,
+    "Intro": "Bad checks? Here? You've got the wrong place, detective.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I had no quarrel. Angela Russo and I had no secrets between us. None that mattered.",
+      "Truth": false,
+      "Evidence": [
+       "c201_motive",
+       "c201_back1"
+      ],
+      "OnBreak": "He was bleeding me dry. Every month it was more, and every month I paid because I had to."
+     },
+     {
+      "Text": "I've never even seen the company checkbook.",
+      "Truth": false,
+      "Evidence": [
+       "c201_means"
+      ],
+      "OnBreak": "Nobody looks at the back of a checkbook. I started there and worked forward."
+     },
+     {
+      "Text": "I was restocking in the back when it happened. The shift roster will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c201_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't restocking in the back. He was bleeding me dry. Every month it was more, and every month I paid because I had to."
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Nicole Crane",
+    "Role": "Truck Driver",
+    "X": 875,
+    "Y": 475,
+    "Intro": "Angela Russo trusts everybody. I always said it'd cost him.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I had no secrets between us. None that mattered.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I handed over every dollar I owed Angela Russo. We were square.",
+      "Truth": false,
+      "Evidence": [
+       "c201_h0"
+      ],
+      "OnBreak": "I took those from the float. It was going back in the till Friday, before anyone counted. That's the truth of it."
+     },
+     {
+      "Text": "I was restocking in the back when it happened. The shift roster will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Brittany Whitlock",
+    "Role": "Foreman",
+    "X": 1125,
+    "Y": 625,
+    "Intro": "I told the patrolman everything already. But sure — ask again.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I were square. Not a cent between us.",
+      "Truth": false,
+      "Evidence": [
+       "c201_h1"
+      ],
+      "OnBreak": "I borrowed from him. Once. He never let me forget it — but I never begged him either."
+     },
+     {
+      "Text": "Angela Russo and I had no secrets between us. None that mattered.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was restocking in the back when it happened. The shift roster will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Amber Devereaux",
+    "Role": "Forklift Operator",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c201_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Jessica Winters",
+    "Role": "Night Watchman",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c201_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Eddie Malone",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Mike Doyle",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Tony Fine",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Ray Trent",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Kim Callahan",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c201_motive",
+    "Name": "Blackmail Note",
+    "Detail": "A typed note in Angela Russo's wastebasket: \"FRIDAY. THE MONEY. OR EVERYONE LEARNS WHAT YOU DID.\" Unsigned — but the paper matches Derek Ashford's own order pad.",
+    "X": 730,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_means",
+    "Name": "Torn Check Stubs",
+    "Detail": "The checkbook's last pages are gone. Their stubs turn up wedged where nobody would look — between the crate stacks, made out in a hand that isn't the victim's.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_alibi",
+    "Name": "Shift Roster",
+    "Detail": "The shift roster has an entry timed 11:39 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize. One more thing: a night man mentions seeing faces slip toward the rooming house on Delancey.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_h0",
+    "Name": "Marked Bills",
+    "Detail": "Two bills from the house float — the marked ones — turned up in Nicole Crane's coat pocket at the cloakroom.",
+    "X": 1150,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_h1",
+    "Name": "Unpaid Note",
+    "Detail": "An unpaid note in the victim's desk, made out to Brittany Whitlock: $600, due last week.",
+    "X": 730,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_f0",
+    "Name": "Dust Offset",
+    "Detail": "A clean rectangle in the dust where something heavy stood. Whatever was there left the room in somebody's hands.",
+    "X": 80,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c201_f1",
+    "Name": "Cold Coffee",
+    "Detail": "Two cups of coffee, both cold and full. Whoever was meeting Angela Russo here left in a hurry — or never meant to drink at all.",
+    "X": 1120,
+    "Y": 425,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c201_side0",
+    "Name": "Service Door Log",
+    "Detail": "Amber Devereaux signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_side1",
+    "Name": "Service Door Log",
+    "Detail": "Jessica Winters signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_back1",
+    "Name": "Dock Gate Log",
+    "Detail": "Found in the loading dock, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c201_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 202,
+  "Title": "ASSAULT UNIT #202: THE ELKS LODGE HALL",
+  "Crime": "assault",
+  "Place": "THE ELKS LODGE HALL",
+  "Victim": "Angela Russo",
+  "Time": "11:55 PM",
+  "Weapon": "pipe wrench",
+  "Brief": {
+   "title": "ASSAULT UNIT #202: THE ELKS LODGE HALL",
+   "body": [
+    "Victim: ANGELA RUSSO — lodge treasurer. Alive at County General. Crushing trauma to the temple.",
+    "The victim cannot testify yet. One of the people gathered here did this.",
+    "No body — but the lodge hasn't been touched since it happened.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who did it, what proves motive, what proves the assault"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s2",
+   "Motive": "c202_motive",
+   "Means": "c202_means",
+   "Alibi": "c202_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Ray Trent",
+    "Role": "Visiting Brother",
+    "X": 525,
+    "Y": 525,
+    "Intro": "Terrible thing, Angela Russo going like that. Ask me anything you like.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I had no quarrel. His money was his money. I never asked him for a cent of it, and he knew that.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I handed over every dollar I owed Angela Russo. We were square.",
+      "Truth": false,
+      "Evidence": [
+       "c202_h0"
+      ],
+      "OnBreak": "I took those from the float. It was going back in the till Friday, before anyone counted. That's the truth of it."
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Marcus Bishop",
+    "Role": "Exalted Ruler",
+    "X": 850,
+    "Y": 500,
+    "Intro": "I told the patrolman everything already. But sure — ask again.",
+    "Statements": [
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was on my cell out in the hallway when it happened. The attendance book will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Nobody came through that door all night except staff. Nobody.",
+      "Truth": false,
+      "Evidence": [
+       "c202_h1"
+      ],
+      "OnBreak": "I had a visitor. Someone I shouldn't have been seen with. That's all I'll say without my lawyer."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Amber Devereaux",
+    "Role": "Past Ruler",
+    "X": 1150,
+    "Y": 550,
+    "Intro": "Terrible thing, Angela Russo going like that. Ask me anything you like.",
+    "Statements": [
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": false,
+      "Evidence": [
+       "c202_means",
+       "c202_back1"
+      ],
+      "OnBreak": "The wrench lives at the trophy shelf. I use it every shift. It was just there — and then it was in my hand."
+     },
+     {
+      "Text": "Angela Russo and I had no quarrel. His money was his money. I never asked him for a cent of it, and he knew that.",
+      "Truth": false,
+      "Evidence": [
+       "c202_motive"
+      ],
+      "OnBreak": "He was changing the will. Everything I was promised — gone by Friday, and for what? For one bad summer. I asked him to wait. He wouldn't."
+     },
+     {
+      "Text": "I was on my cell out in the hallway when it happened. The attendance book will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c202_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't on my cell out in the hallway. He was changing the will. Everything I was promised — gone by Friday, and for what? For one bad summer. I asked him to wait. He wouldn't."
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Brittany Whitlock",
+    "Role": "Steward",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c202_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Kim Callahan",
+    "Role": "Doorkeeper",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c202_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Chris Whitmore",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Tony Fine",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Eddie Malone",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Tanya Calloway",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Dana Farrell",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c202_motive",
+    "Name": "Amended Will",
+    "Detail": "A lawyer's draft in Angela Russo's desk, dated this week: a new will cutting Amber Devereaux out entirely. It was to be signed Friday morning. One more thing: a night man mentions seeing faces slip toward the back of the pawnshop after dark.",
+    "X": 730,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_means",
+    "Name": "Greasy Wrench",
+    "Detail": "A pipe wrench from the trophy shelf, still greasy on the grip and wiped of everything else. The jaw marks match the wound.",
+    "X": 1150,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_alibi",
+    "Name": "Attendance Book",
+    "Detail": "The attendance book has an entry timed 11:55 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 80,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_h0",
+    "Name": "Marked Bills",
+    "Detail": "Two bills from the house float — the marked ones — turned up in Ray Trent's coat pocket at the cloakroom.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_h1",
+    "Name": "Foreign Ticket Stub",
+    "Detail": "A ticket stub from across town, dated tonight, tucked in the door frame — and the cloakroom check belongs to Marcus Bishop.",
+    "X": 860,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_f0",
+    "Name": "Dust Offset",
+    "Detail": "A clean rectangle in the dust where something heavy stood. Whatever was there left the room in somebody's hands.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c202_f1",
+    "Name": "Mud Print",
+    "Detail": "A half footprint in storeroom mud, size eight. Everyone still in the building swears they never left the front room.",
+    "X": 1120,
+    "Y": 540,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c202_side0",
+    "Name": "Service Door Log",
+    "Detail": "Brittany Whitlock signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_side1",
+    "Name": "Service Door Log",
+    "Detail": "Kim Callahan signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_back1",
+    "Name": "Meeting Minutes",
+    "Detail": "Found in the meeting room, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c202_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 203,
+  "Title": "ROBBERY DETAIL #203: THE GRAND MERIDIAN HOTEL",
+  "Crime": "heist",
+  "Place": "THE GRAND MERIDIAN HOTEL",
+  "Victim": "Danny Marsh",
+  "Time": "11:10 PM",
+  "Weapon": "the combination",
+  "Brief": {
+   "title": "ROBBERY DETAIL #203: THE GRAND MERIDIAN HOTEL",
+   "body": [
+    "Victim: DANNY MARSH — casino floor manager. The office safe was cleaned out at 11:10 PM: $18,000.",
+    "How: the safe dialed open — first try, by the look of it. No sign of a break-in from outside.",
+    "Nobody has left since closing. The thief is still in the hotel — and so is the money, somewhere.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who took it, what proves motive, what proves the method"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s1",
+   "Motive": "c203_motive",
+   "Means": "c203_means",
+   "Alibi": "c203_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Jessica Winters",
+    "Role": "Concierge",
+    "X": 375,
+    "Y": 525,
+    "Intro": "Danny Marsh has been good to all of us. Whoever did this ought to be ashamed.",
+    "Statements": [
+     {
+      "Text": "I don't drink. Never touched a drop.",
+      "Truth": false,
+      "Evidence": [
+       "c203_h0"
+      ],
+      "OnBreak": "So I drink. Four whiskeys and a bad memory of the evening. Ask anyone at the end of the bar."
+     },
+     {
+      "Text": "I was sweeping up before closing when it happened. The visitor register will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Carmen Ruiz",
+    "Role": "Suite Guest",
+    "X": 800,
+    "Y": 425,
+    "Intro": "Danny Marsh has been good to all of us. Whoever did this ought to be ashamed.",
+    "Statements": [
+     {
+      "Text": "Danny Marsh and I had no quarrel. Trouble with the outfit? Nobody's got trouble with the outfit. You pay, and things stay quiet.",
+      "Truth": false,
+      "Evidence": [
+       "c203_motive",
+       "c203_back1"
+      ],
+      "OnBreak": "I collect for the outfit. Everybody pays — that's the whole arrangement. He stopped. I warned him twice. The outfit doesn't forgive, and neither did I."
+     },
+     {
+      "Text": "I was sweeping up before closing when it happened. The visitor register will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c203_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't sweeping up before closing. I collect for the outfit. Everybody pays — that's the whole arrangement. He stopped. I warned him twice. The outfit doesn't forgive, and neither did I."
+     },
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": false,
+      "Evidence": [
+       "c203_means"
+      ],
+      "OnBreak": "I watched Danny Marsh work the dial for a month. Four numbers. I texted them to myself so I wouldn't lose my nerve."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Chris Whitmore",
+    "Role": "Desk Clerk",
+    "X": 1150,
+    "Y": 425,
+    "Intro": "Danny Marsh has been good to all of us. Whoever did this ought to be ashamed.",
+    "Statements": [
+     {
+      "Text": "Danny Marsh and I were square. Not a cent between us.",
+      "Truth": false,
+      "Evidence": [
+       "c203_h1"
+      ],
+      "OnBreak": "I borrowed from him. Once. He never let me forget it — but I never begged him either."
+     },
+     {
+      "Text": "Trouble with the outfit? Nobody's got trouble with the outfit. You pay, and things stay quiet.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Ray Trent",
+    "Role": "Bellhop",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c203_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Amber Devereaux",
+    "Role": "Housekeeper",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c203_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Kim Callahan",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Derek Ashford",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Tony Fine",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Jason Adler",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Eddie Malone",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c203_motive",
+    "Name": "Envelope of Cash",
+    "Detail": "A fat envelope of small bills in Danny Marsh's safe, marked \"PROTECTION — CARMEN RUIZ\". The entries stop three months ago. Danny Marsh had stopped paying. One more thing: a night man mentions seeing faces slip toward the back of the pawnshop after dark.",
+    "X": 1150,
+    "Y": 310,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_means",
+    "Name": "Combination Scrap",
+    "Detail": "A saved text message on a phone left at the linen closet: four numbers, sent to nobody. They open the safe. Every one of them.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_alibi",
+    "Name": "Visitor Register",
+    "Detail": "The visitor register has an entry timed 11:10 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 470,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_h0",
+    "Name": "Bar Tab",
+    "Detail": "Jessica Winters's tab from that night: four whiskeys, put on a credit card at closing.",
+    "X": 600,
+    "Y": 655,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_h1",
+    "Name": "Unpaid Note",
+    "Detail": "An unpaid note in the victim's desk, made out to Chris Whitmore: $900, due last week.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_f0",
+    "Name": "Scratched Lock",
+    "Detail": "The back-door lock shows fresh scratches. Forced recently — or opened with a key and made to look forced.",
+    "X": 80,
+    "Y": 310,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c203_f1",
+    "Name": "Perfume Trail",
+    "Detail": "A faint trail of gardenia leads from the front room to the back corridor — and stops dead at a door that locks from the inside.",
+    "X": 860,
+    "Y": 195,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c203_side0",
+    "Name": "Service Door Log",
+    "Detail": "Ray Trent signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_side1",
+    "Name": "Service Door Log",
+    "Detail": "Amber Devereaux signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_back1",
+    "Name": "Laundry Cart Towel",
+    "Detail": "Found in the service corridor & laundry, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c203_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 204,
+  "Title": "ASSAULT UNIT #204: THE ARAGON BALLROOM",
+  "Crime": "assault",
+  "Place": "THE ARAGON BALLROOM",
+  "Victim": "Angela Russo",
+  "Time": "10:32 PM",
+  "Weapon": "pipe wrench",
+  "Brief": {
+   "title": "ASSAULT UNIT #204: THE ARAGON BALLROOM",
+   "body": [
+    "Victim: ANGELA RUSSO — band manager. Alive at County General. Crushing trauma to the temple.",
+    "The victim cannot testify yet. One of the people gathered here did this.",
+    "No body — but the venue hasn't been touched since it happened.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who did it, what proves motive, what proves the assault"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s1",
+   "Motive": "c204_motive",
+   "Means": "c204_means",
+   "Alibi": "c204_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Brittany Whitlock",
+    "Role": "Tour Manager",
+    "X": 525,
+    "Y": 500,
+    "Intro": "I've got nothing to hide, detective. Nothing at all.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I were square. Not a cent between us.",
+      "Truth": false,
+      "Evidence": [
+       "c204_h0"
+      ],
+      "OnBreak": "I borrowed from him. Once. He never let me forget it — but I never begged him either."
+     },
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Angela Russo and I had no quarrel. Money between us? Never. Angela Russo was careful about that with everyone.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Tony Fine",
+    "Role": "Lead Singer",
+    "X": 850,
+    "Y": 525,
+    "Intro": "Angela Russo was a good boss. This is a terrible loss.",
+    "Statements": [
+     {
+      "Text": "Angela Russo and I had no quarrel. Money between us? Never. Angela Russo was careful about that with everyone.",
+      "Truth": false,
+      "Evidence": [
+       "c204_motive",
+       "c204_back1"
+      ],
+      "OnBreak": "I owed him $400. He was calling the loan Friday, and I'd have lost everything I own. I asked for more time."
+     },
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": false,
+      "Evidence": [
+       "c204_means"
+      ],
+      "OnBreak": "The wrench lives at the lighting truss. I use it every shift. It was just there — and then it was in my hand."
+     },
+     {
+      "Text": "I was in my booth with a book when it happened. The set list will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c204_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't in my booth with a book. I owed him $400. He was calling the loan Friday, and I'd have lost everything I own. I asked for more time."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Jason Adler",
+    "Role": "Bouncer",
+    "X": 1150,
+    "Y": 475,
+    "Intro": "I've got nothing to hide, detective. Nothing at all.",
+    "Statements": [
+     {
+      "Text": "I never picked up a pipe wrench in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Money between us? Never. Angela Russo was careful about that with everyone.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I don't drink. Never touched a drop.",
+      "Truth": false,
+      "Evidence": [
+       "c204_h1"
+      ],
+      "OnBreak": "So I drink. Four whiskeys and a bad memory of the evening. Ask anyone at the end of the bar."
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Marcus Bishop",
+    "Role": "Sound Tech",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c204_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Ray Trent",
+    "Role": "Drummer",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c204_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Mike Doyle",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Jessica Winters",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Kim Callahan",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Amber Devereaux",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Carmen Ruiz",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c204_motive",
+    "Name": "Pawn Ticket",
+    "Detail": "A pawn ticket in Angela Russo's name, pawned by Tony Fine — a $400 loan Angela Russo cosigned. It comes due Friday.",
+    "X": 990,
+    "Y": 540,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_means",
+    "Name": "Greasy Wrench",
+    "Detail": "A pipe wrench from the lighting truss, still greasy on the grip and wiped of everything else. The jaw marks match the wound. One more thing: a night man mentions seeing faces slip toward the boathouse under the bridge.",
+    "X": 80,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_alibi",
+    "Name": "Set List",
+    "Detail": "The set list has an entry timed 10:32 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 1150,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_h0",
+    "Name": "Unpaid Note",
+    "Detail": "An unpaid note in the victim's desk, made out to Brittany Whitlock: $400, due last week.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_h1",
+    "Name": "Bar Tab",
+    "Detail": "Jason Adler's tab from that night: four whiskeys, put on a credit card at closing.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_f0",
+    "Name": "Perfume Trail",
+    "Detail": "A faint trail of gardenia leads from the front room to the back corridor — and stops dead at a door that locks from the inside.",
+    "X": 730,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c204_f1",
+    "Name": "Cold Coffee",
+    "Detail": "Two cups of coffee, both cold and full. Whoever was meeting Angela Russo here left in a hurry — or never meant to drink at all.",
+    "X": 470,
+    "Y": 540,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c204_side0",
+    "Name": "Service Door Log",
+    "Detail": "Marcus Bishop signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_side1",
+    "Name": "Service Door Log",
+    "Detail": "Ray Trent signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_back1",
+    "Name": "Kitchen Glove",
+    "Detail": "Found in the service kitchen, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c204_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 205,
+  "Title": "CASE FILE #205: THE VELVET LOUNGE",
+  "Crime": "homicide",
+  "Place": "THE VELVET LOUNGE",
+  "Victim": "Greg Pierce",
+  "Time": "11:10 PM",
+  "Weapon": "ice pick",
+  "Brief": {
+   "title": "CASE FILE #205: THE VELVET LOUNGE",
+   "body": [
+    "Victim: GREG PIERCE — club owner. Found at 11:10 PM.",
+    "Cause of death: a single thin puncture at the base of the skull. No weapon recovered at the scene.",
+    "Several witnesses remain inside the club. Nobody has been allowed to leave.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene for evidence          (walk up, press E)",
+    "  • Interview all 10 suspects       (press E near them)",
+    "  • CHALLENGE statements with contradicting evidence",
+    "  • File your verdict at the Captain's desk",
+    "",
+    "Challenge a TRUE statement and the suspect lawyers up."
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s1",
+   "Motive": "c205_motive",
+   "Means": "c205_means",
+   "Alibi": "c205_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Tanya Calloway",
+    "Role": "Bartender",
+    "X": 525,
+    "Y": 475,
+    "Intro": "Greg Pierce was the heart of this place. This is a terrible loss.",
+    "Statements": [
+     {
+      "Text": "I was out front having a smoke when it happened. The guest list will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Greg Pierce and I had no quarrel. The job was his until he said otherwise. That's business. I'd never —",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was never alone all night — not once.",
+      "Truth": false,
+      "Evidence": [
+       "c205_h0"
+      ],
+      "OnBreak": "I made that call myself. I was alone maybe ten minutes. Ten minutes and a locked door between me and everything else."
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Kim Callahan",
+    "Role": "Bottle Service",
+    "X": 875,
+    "Y": 425,
+    "Intro": "Terrible thing, Greg Pierce going like that. Ask me anything you like.",
+    "Statements": [
+     {
+      "Text": "I don't even know where a man keeps an ice pick these days.",
+      "Truth": false,
+      "Evidence": [
+       "c205_means",
+       "c205_back1"
+      ],
+      "OnBreak": "The pick from the bar prep station. It's small. Quiet. A man doesn't even have to look at what he's doing."
+     },
+     {
+      "Text": "Greg Pierce and I had no quarrel. The job was his until he said otherwise. That's business. I'd never —",
+      "Truth": false,
+      "Evidence": [
+       "c205_motive"
+      ],
+      "OnBreak": "Fifteen years I gave that place. Then he brings in somebody younger and puts my name on the street. I asked him to make it right. He said the memo was already sent."
+     },
+     {
+      "Text": "I was out front having a smoke when it happened. The guest list will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c205_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't out front having a smoke. Fifteen years I gave that place. Then he brings in somebody younger and puts my name on the street. I asked him to make it right. He said the memo was already sent."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Amber Devereaux",
+    "Role": "Club Promoter",
+    "X": 1150,
+    "Y": 425,
+    "Intro": "Greg Pierce was the heart of this place. This is a terrible loss.",
+    "Statements": [
+     {
+      "Text": "I don't even know where a man keeps an ice pick these days.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I don't gamble. Never have, never will.",
+      "Truth": false,
+      "Evidence": [
+       "c205_h1"
+      ],
+      "OnBreak": "Alright, I had a little something on the fourth race. That's not a crime. That's not murder."
+     },
+     {
+      "Text": "The job was his until he said otherwise. That's business. I'd never —",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Jessica Winters",
+    "Role": "DJ",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c205_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Brittany Whitlock",
+    "Role": "Bouncer at the Door",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c205_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Ray Trent",
+    "Role": "VIP Regular",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Dana Farrell",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Eddie Malone",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Tony Fine",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Nicole Crane",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c205_motive",
+    "Name": "Memorandum",
+    "Detail": "A memorandum in Greg Pierce's outbox, initialed by the owners: Greg Pierce's position was going to somebody new — and the man losing it was Kim Callahan. One more thing: a night man mentions seeing faces slip toward the boathouse under the bridge.",
+    "X": 340,
+    "Y": 195,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_means",
+    "Name": "Bloodied Pick",
+    "Detail": "An ice pick, dropped behind the bar prep station — handle clean, but the tip was wiped with oil. Oil hides a blood test. Somebody knew that.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_alibi",
+    "Name": "Guest List",
+    "Detail": "The guest list has an entry timed 11:10 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 1120,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_h0",
+    "Name": "Cell Phone Records",
+    "Detail": "The carrier's records put Tanya Calloway's cell on an eight-minute call at 11:20, off the tower right outside — calling a cab company, with nobody else on the line.",
+    "X": 600,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_h1",
+    "Name": "Betting Slip",
+    "Detail": "A betting slip from that afternoon — $500 on the 4th at Empire — made out to Amber Devereaux.",
+    "X": 80,
+    "Y": 655,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_f0",
+    "Name": "Mud Print",
+    "Detail": "A half footprint in storeroom mud, size eight. Everyone still in the building swears they never left the front room.",
+    "X": 1150,
+    "Y": 310,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c205_f1",
+    "Name": "Perfume Trail",
+    "Detail": "A faint trail of gardenia leads from the front room to the back corridor — and stops dead at a door that locks from the inside.",
+    "X": 990,
+    "Y": 540,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c205_side0",
+    "Name": "Service Door Log",
+    "Detail": "Jessica Winters signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_side1",
+    "Name": "Service Door Log",
+    "Detail": "Brittany Whitlock signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_back1",
+    "Name": "Stockroom Inventory Sheet",
+    "Detail": "Found in the back office & stockroom, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c205_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 206,
+  "Title": "ROBBERY DETAIL #206: THE MIRAMAR DINER",
+  "Crime": "heist",
+  "Place": "THE MIRAMAR DINER",
+  "Victim": "Big Jimmy Ferro",
+  "Time": "11:19 PM",
+  "Weapon": "safe drill",
+  "Brief": {
+   "title": "ROBBERY DETAIL #206: THE MIRAMAR DINER",
+   "body": [
+    "Victim: BIG JIMMY FERRO — night cook. The office safe was cleaned out at 11:19 PM: $18,000.",
+    "How: the dial drilled clean through. No sign of a break-in from outside.",
+    "Nobody has left since closing. The thief is still in the diner — and so is the money, somewhere.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who took it, what proves motive, what proves the method"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s1",
+   "Motive": "c206_motive",
+   "Means": "c206_means",
+   "Alibi": "c206_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Jason Adler",
+    "Role": "Line Cook",
+    "X": 500,
+    "Y": 500,
+    "Intro": "Big Jimmy Ferro has been good to all of us. Whoever did this ought to be ashamed.",
+    "Statements": [
+     {
+      "Text": "I don't drink. Never touched a drop.",
+      "Truth": false,
+      "Evidence": [
+       "c206_h0"
+      ],
+      "OnBreak": "So I drink. Four whiskeys and a bad memory of the evening. Ask anyone at the end of the bar."
+     },
+     {
+      "Text": "I was in my booth with a book when it happened. The order slips will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "The job was his until he said otherwise. That's business. I'd never —",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Dana Farrell",
+    "Role": "Gas Station Clerk",
+    "X": 825,
+    "Y": 475,
+    "Intro": "I told the patrolman everything already. But sure — ask again.",
+    "Statements": [
+     {
+      "Text": "I was in my booth with a book when it happened. The order slips will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c206_alibi",
+       "c206_back1"
+      ],
+      "OnBreak": "Alright, alright — I wasn't in my booth with a book. Fifteen years I gave that place. Then he brings in somebody younger and puts my name on the street. I asked him to make it right. He said the memo was already sent."
+     },
+     {
+      "Text": "A drill? I wouldn't know which end does the work.",
+      "Truth": false,
+      "Evidence": [
+       "c206_means"
+      ],
+      "OnBreak": "I waited for the jukebox. Four minutes of noise is all a drill needs."
+     },
+     {
+      "Text": "Big Jimmy Ferro and I had no quarrel. The job was his until he said otherwise. That's business. I'd never —",
+      "Truth": false,
+      "Evidence": [
+       "c206_motive"
+      ],
+      "OnBreak": "Fifteen years I gave that place. Then he brings in somebody younger and puts my name on the street. I asked him to make it right. He said the memo was already sent."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Brittany Whitlock",
+    "Role": "Server",
+    "X": 1125,
+    "Y": 625,
+    "Intro": "Big Jimmy Ferro has been good to all of us. Whoever did this ought to be ashamed.",
+    "Statements": [
+     {
+      "Text": "I was in my booth with a book when it happened. The order slips will bear me out.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was never alone all night — not once.",
+      "Truth": false,
+      "Evidence": [
+       "c206_h1"
+      ],
+      "OnBreak": "I made that call myself. I was alone maybe ten minutes. Ten minutes and a locked door between me and everything else."
+     },
+     {
+      "Text": "A drill? I wouldn't know which end does the work.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Jessica Winters",
+    "Role": "Night Regular",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c206_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Amber Devereaux",
+    "Role": "Manager",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c206_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Marcus Bishop",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Ray Trent",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Chris Whitmore",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Tony Fine",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Tanya Calloway",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c206_motive",
+    "Name": "Memorandum",
+    "Detail": "A memorandum in Big Jimmy Ferro's outbox, initialed by the owners: Big Jimmy Ferro's position was going to somebody new — and the man losing it was Dana Farrell. One more thing: a night man mentions seeing faces slip toward the all-night diner out on Route 9.",
+    "X": 80,
+    "Y": 425,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_means",
+    "Name": "Brass Shavings",
+    "Detail": "Brass shavings swept out of sight — behind the counter. Same alloy as the safe dial. The jukebox would have covered the whine.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_alibi",
+    "Name": "Order Slips",
+    "Detail": "The order slips has an entry timed 11:19 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 990,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_h0",
+    "Name": "Bar Tab",
+    "Detail": "Jason Adler's tab from that night: four whiskeys, put on a credit card at closing.",
+    "X": 730,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_h1",
+    "Name": "Cell Phone Records",
+    "Detail": "The carrier's records put Brittany Whitlock's cell on an eight-minute call at 11:20, off the tower right outside — calling a cab company, with nobody else on the line.",
+    "X": 1150,
+    "Y": 195,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_f0",
+    "Name": "Second Glass",
+    "Detail": "A second glass, rinsed and turned upside-down. Someone had a drink with Big Jimmy Ferro shortly before the end — someone who cleaned up after.",
+    "X": 470,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c206_f1",
+    "Name": "Perfume Trail",
+    "Detail": "A faint trail of gardenia leads from the front room to the back corridor — and stops dead at a door that locks from the inside.",
+    "X": 1120,
+    "Y": 540,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c206_side0",
+    "Name": "Service Door Log",
+    "Detail": "Jessica Winters signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_side1",
+    "Name": "Service Door Log",
+    "Detail": "Amber Devereaux signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_back1",
+    "Name": "Order Ticket Spike",
+    "Detail": "Found in the kitchen, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c206_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 207,
+  "Title": "CASE FILE #207: THE RIVERSIDE PIER",
+  "Crime": "homicide",
+  "Place": "THE RIVERSIDE PIER",
+  "Victim": "Big Jimmy Ferro",
+  "Time": "11:48 PM",
+  "Weapon": "brass lamp",
+  "Brief": {
+   "title": "CASE FILE #207: THE RIVERSIDE PIER",
+   "body": [
+    "Victim: BIG JIMMY FERRO — card game dealer. Found at 11:48 PM.",
+    "Cause of death: blunt force trauma. No weapon recovered at the scene.",
+    "Several witnesses remain inside the pier. Nobody has been allowed to leave.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene for evidence          (walk up, press E)",
+    "  • Interview all 10 suspects       (press E near them)",
+    "  • CHALLENGE statements with contradicting evidence",
+    "  • File your verdict at the Captain's desk",
+    "",
+    "Challenge a TRUE statement and the suspect lawyers up."
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s0",
+   "Motive": "c207_motive",
+   "Means": "c207_means",
+   "Alibi": "c207_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Derek Ashford",
+    "Role": "Purser",
+    "X": 475,
+    "Y": 500,
+    "Intro": "I've got nothing to hide, detective. Nothing at all.",
+    "Statements": [
+     {
+      "Text": "I was out front having a smoke when it happened. The gate ledger will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c207_alibi",
+       "c207_back1"
+      ],
+      "OnBreak": "Alright, alright — I wasn't out front having a smoke. He caught me. Made me sign a confession and said it would sit in his drawer until Friday — when he'd hand it to the cops with my name on it."
+     },
+     {
+      "Text": "I never picked up a brass lamp in my life.",
+      "Truth": false,
+      "Evidence": [
+       "c207_means"
+      ],
+      "OnBreak": "It was just there. Sitting on the pilot house, right where we argued. I don't even remember lifting it."
+     },
+     {
+      "Text": "Big Jimmy Ferro and I had no quarrel. Missing stock? Ask Big Jimmy Ferro. He counted everything twice a day. I'd never touch what wasn't mine.",
+      "Truth": false,
+      "Evidence": [
+       "c207_motive"
+      ],
+      "OnBreak": "He caught me. Made me sign a confession and said it would sit in his drawer until Friday — when he'd hand it to the cops with my name on it."
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Jason Adler",
+    "Role": "Deckhand",
+    "X": 825,
+    "Y": 450,
+    "Intro": "Terrible thing, Big Jimmy Ferro going like that. Ask me anything you like.",
+    "Statements": [
+     {
+      "Text": "I never picked up a brass lamp in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Nobody came through that door all night except staff. Nobody.",
+      "Truth": false,
+      "Evidence": [
+       "c207_h0"
+      ],
+      "OnBreak": "I had a visitor. Someone I shouldn't have been seen with. That's all I'll say without my lawyer."
+     },
+     {
+      "Text": "Big Jimmy Ferro and I had no quarrel. Missing stock? Ask Big Jimmy Ferro. He counted everything twice a day. I'd never touch what wasn't mine.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Kim Callahan",
+    "Role": "Night Fisher",
+    "X": 1150,
+    "Y": 475,
+    "Intro": "I told the patrolman everything already. But sure — ask again.",
+    "Statements": [
+     {
+      "Text": "I never picked up a brass lamp in my life.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Missing stock? Ask Big Jimmy Ferro. He counted everything twice a day. I'd never touch what wasn't mine.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I handed over every dollar I owed Big Jimmy Ferro. We were square.",
+      "Truth": false,
+      "Evidence": [
+       "c207_h1"
+      ],
+      "OnBreak": "I took those from the float. It was going back in the till Friday, before anyone counted. That's the truth of it."
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Tony Fine",
+    "Role": "Dock Boss",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c207_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Nicole Crane",
+    "Role": "Card Dealer",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c207_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Brittany Whitlock",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Ray Trent",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Tanya Calloway",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Amber Devereaux",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Marcus Bishop",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c207_motive",
+    "Name": "Inventory Sheet",
+    "Detail": "An inventory sheet, initialed by Big Jimmy Ferro: stock worth $900 unaccounted for — and a note in the margin naming Derek Ashford. One more thing: a night man mentions seeing faces slip toward the rooming house on Delancey.",
+    "X": 1120,
+    "Y": 195,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_means",
+    "Name": "Bloodied Trophy",
+    "Detail": "The heavy brass piece from the pilot house is dented and wiped clean — too clean. There's blood still in the engraving.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_alibi",
+    "Name": "Gate Ledger",
+    "Detail": "The gate ledger has an entry timed 11:48 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 340,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_h0",
+    "Name": "Foreign Ticket Stub",
+    "Detail": "A ticket stub from across town, dated tonight, tucked in the door frame — and the cloakroom check belongs to Jason Adler.",
+    "X": 1150,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_h1",
+    "Name": "Marked Bills",
+    "Detail": "Two bills from the house float — the marked ones — turned up in Kim Callahan's coat pocket at the cloakroom.",
+    "X": 730,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_f0",
+    "Name": "Scratched Lock",
+    "Detail": "The back-door lock shows fresh scratches. Forced recently — or opened with a key and made to look forced.",
+    "X": 1150,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c207_f1",
+    "Name": "Mud Print",
+    "Detail": "A half footprint in storeroom mud, size eight. Everyone still in the building swears they never left the front room.",
+    "X": 1120,
+    "Y": 655,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c207_side0",
+    "Name": "Service Door Log",
+    "Detail": "Tony Fine signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_side1",
+    "Name": "Service Door Log",
+    "Detail": "Nicole Crane signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_back1",
+    "Name": "Boathouse Logbook",
+    "Detail": "Found in the boathouse, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c207_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ },
+ {
+  "Number": 208,
+  "Title": "ROBBERY DETAIL #208: RAINES STABLES",
+  "Crime": "heist",
+  "Place": "RAINES STABLES",
+  "Victim": "Steve Briggs",
+  "Time": "11:23 PM",
+  "Weapon": "the combination",
+  "Brief": {
+   "title": "ROBBERY DETAIL #208: RAINES STABLES",
+   "body": [
+    "Victim: STEVE BRIGGS — racehorse trainer. The office safe was cleaned out at 11:23 PM: $10,000.",
+    "How: the safe dialed open — first try, by the look of it. No sign of a break-in from outside.",
+    "Nobody has left since closing. The thief is still in the stables — and so is the money, somewhere.",
+    "",
+    "OBJECTIVES",
+    "  • Search the scene  • Interview all 10 suspects  • Challenge lies with evidence",
+    "  • File: who took it, what proves motive, what proves the method"
+   ]
+  },
+  "Difficulty": "detective",
+  "Solution": {
+   "Killer": "s0",
+   "Motive": "c208_motive",
+   "Means": "c208_means",
+   "Alibi": "c208_alibi",
+   "RequiredBreaks": 3
+  },
+  "Suspects": [
+   {
+    "Id": "s0",
+    "Name": "Dana Farrell",
+    "Role": "Jockey",
+    "X": 500,
+    "Y": 475,
+    "Intro": "I've got nothing to hide, detective. Turn out my pockets if you want.",
+    "Statements": [
+     {
+      "Text": "Steve Briggs and I had no quarrel. Money between us? Never. Steve Briggs was careful about that with everyone.",
+      "Truth": false,
+      "Evidence": [
+       "c208_motive",
+       "c208_back1"
+      ],
+      "OnBreak": "I owed him $500. He was calling the loan Friday, and I'd have lost everything I own. I asked for more time."
+     },
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": false,
+      "Evidence": [
+       "c208_means"
+      ],
+      "OnBreak": "I watched Steve Briggs work the dial for a month. Four numbers. I texted them to myself so I wouldn't lose my nerve."
+     },
+     {
+      "Text": "I was restocking in the back when it happened. The workout sheet will bear me out.",
+      "Truth": false,
+      "Evidence": [
+       "c208_alibi"
+      ],
+      "OnBreak": "Alright, alright — I wasn't restocking in the back. I owed him $500. He was calling the loan Friday, and I'd have lost everything I own. I asked for more time."
+     }
+    ]
+   },
+   {
+    "Id": "s1",
+    "Name": "Eddie Malone",
+    "Role": "Stable Owner",
+    "X": 800,
+    "Y": 475,
+    "Intro": "I've got nothing to hide, detective. Turn out my pockets if you want.",
+    "Statements": [
+     {
+      "Text": "Steve Briggs and I had no quarrel. Money between us? Never. Steve Briggs was careful about that with everyone.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Nobody came through that door all night except staff. Nobody.",
+      "Truth": false,
+      "Evidence": [
+       "c208_h0"
+      ],
+      "OnBreak": "I had a visitor. Someone I shouldn't have been seen with. That's all I'll say without my lawyer."
+     }
+    ]
+   },
+   {
+    "Id": "s2",
+    "Name": "Brittany Whitlock",
+    "Role": "Groom",
+    "X": 1125,
+    "Y": 475,
+    "Intro": "Terrible thing, a robbery here. Ask me anything you like.",
+    "Statements": [
+     {
+      "Text": "I couldn't open that safe if you handed me the numbers.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "Steve Briggs and I had no quarrel. Money between us? Never. Steve Briggs was careful about that with everyone.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I don't drink. Never touched a drop.",
+      "Truth": false,
+      "Evidence": [
+       "c208_h1"
+      ],
+      "OnBreak": "So I drink. Four whiskeys and a bad memory of the evening. Ask anyone at the end of the bar."
+     }
+    ]
+   },
+   {
+    "Id": "s3",
+    "Name": "Jason Adler",
+    "Role": "Bookmaker",
+    "X": 225,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c208_side0"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s4",
+    "Name": "Tanya Calloway",
+    "Role": "Trainer",
+    "X": 625,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I never left the front room after closing.",
+      "Truth": false,
+      "Evidence": [
+       "c208_side1"
+      ],
+      "OnBreak": "I stepped out to pick up supplies. I had no reason to tell anyone, and it had nothing to do with the crime."
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s5",
+    "Name": "Kim Callahan",
+    "Role": "Contractor",
+    "X": 1025,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s6",
+    "Name": "Mike Doyle",
+    "Role": "Regular Customer",
+    "X": 1150,
+    "Y": 175,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s7",
+    "Name": "Jessica Winters",
+    "Role": "Security Guard",
+    "X": 225,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s8",
+    "Name": "Nicole Crane",
+    "Role": "Courier",
+    "X": 625,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   },
+   {
+    "Id": "s9",
+    "Name": "Amber Devereaux",
+    "Role": "Assistant Manager",
+    "X": 1025,
+    "Y": 375,
+    "Intro": "I have already told the patrolman what I know. I will answer your questions too.",
+    "Statements": [
+     {
+      "Text": "I stayed out of the victim’s business. We never had a quarrel.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I was at work here through the important part of the evening.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     },
+     {
+      "Text": "I never handled anything that could have hurt the victim.",
+      "Truth": true,
+      "Evidence": [],
+      "OnBreak": ""
+     }
+    ]
+   }
+  ],
+  "Clues": [
+   {
+    "Id": "c208_motive",
+    "Name": "Pawn Ticket",
+    "Detail": "A pawn ticket in Steve Briggs's name, pawned by Dana Farrell — a $500 loan Steve Briggs cosigned. It comes due Friday.",
+    "X": 1150,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_means",
+    "Name": "Combination Scrap",
+    "Detail": "A saved text message on a phone left at the medicine chest: four numbers, sent to nobody. They open the safe. Every one of them. One more thing: a night man mentions seeing faces slip toward the back of the pawnshop after dark.",
+    "X": 80,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_alibi",
+    "Name": "Workout Sheet",
+    "Detail": "The workout sheet has an entry timed 11:23 PM that puts one witness somewhere they shouldn't have been. The name is smudged — but the entry is in a hand the desk man doesn't recognize.",
+    "X": 600,
+    "Y": 80,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_h0",
+    "Name": "Foreign Ticket Stub",
+    "Detail": "A ticket stub from across town, dated tonight, tucked in the door frame — and the cloakroom check belongs to Eddie Malone.",
+    "X": 1120,
+    "Y": 650,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_h1",
+    "Name": "Bar Tab",
+    "Detail": "Brittany Whitlock's tab from that night: four whiskeys, put on a credit card at closing.",
+    "X": 600,
+    "Y": 655,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_f0",
+    "Name": "Cold Coffee",
+    "Detail": "Two cups of coffee, both cold and full. Whoever was meeting Steve Briggs here left in a hurry — or never meant to drink at all.",
+    "X": 80,
+    "Y": 195,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c208_f1",
+    "Name": "Second Glass",
+    "Detail": "A second glass, rinsed and turned upside-down. Someone had a drink with Steve Briggs shortly before the end — someone who cleaned up after.",
+    "X": 990,
+    "Y": 310,
+    "Area": "main",
+    "Flavor": true
+   },
+   {
+    "Id": "c208_side0",
+    "Name": "Service Door Log",
+    "Detail": "Jason Adler signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 150,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_side1",
+    "Name": "Service Door Log",
+    "Detail": "Tanya Calloway signed out to retrieve supplies during the evening. The detour contradicts their account, but the errand was unrelated to the crime.",
+    "X": 1140,
+    "Y": 250,
+    "Area": "main",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_back1",
+    "Name": "Saddle Soap Tin",
+    "Detail": "Found in the tack room & feed store, out of sight of the main room. It doesn't fit the story somebody told about tonight. The lab can say whose it is.",
+    "X": 1080,
+    "Y": 230,
+    "Area": "back",
+    "Flavor": false
+   },
+   {
+    "Id": "c208_back2",
+    "Name": "Crumpled Delivery Slip",
+    "Detail": "A delivery slip from last week, balled up behind the shelves. Probably nothing.",
+    "X": 520,
+    "Y": 640,
+    "Area": "back",
+    "Flavor": true
+   }
+  ]
+ }
+]
