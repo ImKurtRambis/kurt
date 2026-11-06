@@ -9,6 +9,7 @@
 #include "HUCruiser.h"
 #include "HUOfficer.h"
 #include "HUPoliceVan.h"
+#include "HUSecurityDesk.h"
 #include "HUInteractComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
@@ -517,6 +518,7 @@ void AHUCrimeScene::Build()
 		}
 	}
 
+	TArray<FVector> SusAt; TArray<FLinearColor> SusCoat; TArray<FString> SusId; // for the security tapes
 	// ---- the suspects, spread through the lit rooms, each facing the middle of their room ----
 	const FLinearColor Coats[] = { {0.25f, 0.18f, 0.1f}, {0.1f, 0.12f, 0.2f}, {0.3f, 0.05f, 0.05f}, {0.12f, 0.2f, 0.12f}, {0.35f, 0.3f, 0.2f}, {0.05f, 0.05f, 0.05f} };
 	for (int32 i = 0; i < C.Suspects.Num(); i++)
@@ -529,6 +531,7 @@ void AHUCrimeScene::Build()
 		AHUSuspectActor* Su = SpawnNamed<AHUSuspectActor>(ST * GetActorTransform());
 		if (!Su) continue;
 		Su->SuspectId = C.Suspects[i].Id; Su->Coat = Coats[i % UE_ARRAY_COUNT(Coats)];
+		SusAt.Add(At); SusCoat.Add(Su->Coat); SusId.Add(C.Suspects[i].Id);
 		Su->FinishSpawning(ST * GetActorTransform());
 	}
 
@@ -630,6 +633,84 @@ void AHUCrimeScene::Build()
 		Cases->InScene.Add(Id);
 	}
 
+	// ---- SECURITY CAMERAS and the desk where the tapes are reviewed ----
+	{
+		FRandomStream Cr(C.MapSeed ^ 0x5EC);
+		auto RoomOf = [&](const FVector& P) -> int32 { for (int32 i = 0; i < Rooms.Num(); i++) if (Rooms[i].Contains(P.X, P.Y)) return i; return 0; };
+		// cameras: high in a corner of the entrance room, the victim's room (half the time - otherwise it's too easy), and one more
+		TArray<int32> CamRooms;
+		CamRooms.Add(RoomOf(PlayerStart.X < Plan.X0 ? FVector(Plan.X0 + 150, EntY, 0) : PlayerStart));
+		const int32 VictimRoom = RoomOf(VictimAt);
+		if (Cr.FRand() < 0.5f) CamRooms.AddUnique(VictimRoom);
+		for (int32 Try = 0; Try < 6 && CamRooms.Num() < 3; Try++) CamRooms.AddUnique(Cr.RandRange(0, Rooms.Num() - 1));
+		TArray<FTransform> Cams; TArray<FString> CamNames;
+		for (int32 n = 0; n < CamRooms.Num(); n++)
+		{
+			const FR& Rm = Rooms[CamRooms[n]];
+			const float CX = Cr.FRand() < 0.5f ? Rm.X0 + 30 : Rm.X1 - 30, CY = Cr.FRand() < 0.5f ? Rm.Y0 + 30 : Rm.Y1 - 30;
+			const FVector At(CX, CY, H - 45);
+			const FVector Look = FVector(Rm.CX(), Rm.CY(), 60) - At;
+			// the camera on the wall: a box, a lens, a red light
+			const FRotator R = Look.Rotation();
+			HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cube, At, FVector(26, 12, 12), FLinearColor(0.75f, 0.75f, 0.72f), R, false);
+			HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cylinder, At + R.Vector() * 14, FVector(8, 8, 4), FLinearColor(0.02f, 0.02f, 0.02f), R + FRotator(90, 0, 0), false);
+			HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cube, At + FVector(0, 0, 8), FVector(3, 3, 3), FLinearColor(3.f, 0.05f, 0.05f), FRotator::ZeroRotator, false);
+			Cams.Add(FTransform(R, At) * GetActorTransform());
+			CamNames.Add(FString::Printf(TEXT("CAM %d  ·  %s"), n + 1, CamRooms[n] == VictimRoom ? TEXT("WHERE IT HAPPENED") : n == 0 ? TEXT("FRONT") : TEXT("BACK ROOMS")));
+		}
+
+		// the night on tape: a handful of moments around the crime
+		int32 Hr = 10, Mn = 0; { FString Hs, Ms; if (C.Time.Split(TEXT(":"), &Hs, &Ms)) { Hr = FCString::Atoi(*Hs); Mn = FCString::Atoi(*Ms.Left(2)); } }
+		auto Clock = [&](int32 Off) { int32 Mins = Hr * 60 + Mn + Off; Mins = (Mins + 24 * 60) % (24 * 60); const int32 H12 = (Mins / 60) % 12 == 0 ? 12 : (Mins / 60) % 12; return FString::Printf(TEXT("%d:%02d PM"), H12, Mins % 60); };
+		const int32 Offsets[] = { -25, -12, -4, -1, 2, 9 };
+		const int32 Killer = SusId.IndexOfByKey(C.Solution.Killer);
+		const EHUProfile Prof = (EHUProfile)C.Profile;
+		const bool bCut = Prof == EHUProfile::ContractKiller || Prof == EHUProfile::Enforcer || Prof == EHUProfile::ConArtist || Cr.FRand() < 0.25f;
+		TArray<FVector> Early; // where everyone was earlier in the night
+		for (int32 i = 0; i < SusAt.Num(); i++)
+		{
+			const FR& Rm = Rooms[Cr.RandRange(0, Rooms.Num() - 1)];
+			Early.Add(FVector(Cr.FRandRange(Rm.X0 + 80, Rm.X1 - 80), Cr.FRandRange(Rm.Y0 + 80, Rm.Y1 - 80), 0));
+		}
+		TArray<FHUFootageFrame> Frames;
+		for (int32 k = 0; k < UE_ARRAY_COUNT(Offsets); k++)
+		{
+			FHUFootageFrame F;
+			const int32 Off = Offsets[k];
+			F.Clock = Clock(Off);
+			F.bAfter = Off >= 0;
+			F.bLost = bCut && (Off == -1 || Off == 2);
+			const float Drift = FMath::Clamp((Off + 25) / 34.f, 0.f, 1.f); // drifting from where they were to where patrol found them
+			for (int32 i = 0; i < SusAt.Num(); i++)
+			{
+				FVector P = FMath::Lerp(Early[i], SusAt[i], Drift);
+				if (i == Killer)
+				{
+					// the one who did it: heading for the victim, with them at the moment, then walking away
+					if (Off == -4) P = FMath::Lerp(Early[i], VictimAt, 0.7f);
+					if (Off == -1) P = VictimAt + FVector(70, 40, 0);
+					if (Off == 2) P = FMath::Lerp(VictimAt, SusAt[i], 0.5f);
+				}
+				F.People.Add(GetActorTransform().TransformPosition(P));
+			}
+			// the victim, standing, until it happened
+			F.People.Add(Off < 0 && C.Crime == TEXT("homicide") ? GetActorTransform().TransformPosition(VictimAt) : FVector::ZeroVector);
+			Frames.Add(F);
+		}
+
+		// the desk itself, somewhere on the floor
+		FVector DeskAt;
+		if (OpenSpot(180.f, Cr, DeskAt))
+		{
+			Taken.Add(DeskAt);
+			const FTransform DT(FRotator(0, Cr.FRandRange(0.f, 360.f), 0), DeskAt);
+			if (AHUSecurityDesk* Desk = SpawnNamed<AHUSecurityDesk>(DT * GetActorTransform()))
+			{
+				Desk->Cameras = Cams; Desk->CameraNames = CamNames; Desk->Frames = Frames; Desk->Coats = SusCoat; Desk->VictimActor = Victim;
+				Desk->FinishSpawning(DT * GetActorTransform());
+			}
+		}
+	}
 	Arrival = FString::Printf(TEXT("%s — %s, %d rooms. %d pieces of evidence here, %d of them prove a lie. You need %d lies on the record. Your car's at the curb when the squad's ready to leave."),
 		*C.Place, *LayoutName, Rooms.Num(), Cases->InScene.Num(), Key2.Num(), LiesNeeded);
 }

@@ -12,6 +12,9 @@ class HOMICIDEUNIT_API UHUPromptWidget : public UUserWidget
 public:
 	UPROPERTY() class UHUInteractComponent* Owner = nullptr;
 
+private:
+	mutable FSlateBrush FeedBrush; // the security tape on screen
+
 protected:
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;

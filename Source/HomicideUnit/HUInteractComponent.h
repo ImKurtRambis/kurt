@@ -64,6 +64,9 @@ public:
 	void PlayReach() { ReachT = 0.f; }
 	bool IsGrabbing() const { return Grabbed.IsValid(); }
 
+	// the security desk you're watching the tapes at (the HUD shows the feed)
+	TWeakObjectPtr<class AHUSecurityDesk> Watching;
+
 	// pop-up cards in the corner (evidence bagged, kit bought...)
 	struct FNote { FString Title; FString Body; FLinearColor Color; float Born = 0.f; };
 	TArray<FNote> Notes;

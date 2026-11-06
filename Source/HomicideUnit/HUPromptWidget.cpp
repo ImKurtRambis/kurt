@@ -2,6 +2,8 @@
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
 #include "HUDraw.h"
+#include "HUSecurityDesk.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 
@@ -32,6 +34,55 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 	const int32 Ly = LayerId + 1;
 	const float Now = Owner->GetWorld()->GetRealTimeSeconds();
 	const UHUCaseSubsystem* Cases = Owner->GetWorld()->GetGameInstance() ? Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	// ---- watching the security tapes: the feed fills the screen ----
+	if (const AHUSecurityDesk* Desk = Owner->Watching.Get())
+	{
+		const float VH = L.Y * 0.78f, VW = VH * 4.f / 3.f;
+		const FVector2D P((L.X - VW) * 0.5f, (L.Y - VH) * 0.42f);
+		Box(Out, Ly, G, FVector2D(0, 0), L, FLinearColor(0, 0, 0, 0.92f), 0.f);
+		Box(Out, Ly + 1, G, P - FVector2D(10, 10), FVector2D(VW + 20, VH + 20), FLinearColor(0.12f, 0.12f, 0.11f), 14.f); // the monitor's bezel
+		if (Desk->FrameLost())
+		{
+			// the recorder was off: snow and a message
+			Box(Out, Ly + 2, G, P, FVector2D(VW, VH), FLinearColor(0.06f, 0.06f, 0.06f), 4.f);
+			FRandomStream Snow(FMath::FloorToInt(Now * 20.f));
+			for (int32 s = 0; s < 260; s++) Box(Out, Ly + 3, G, P + FVector2D(Snow.FRand() * (VW - 4), Snow.FRand() * (VH - 3)), FVector2D(Snow.FRandRange(2.f, 9.f), 2.f), FLinearColor(1, 1, 1, Snow.FRandRange(0.1f, 0.5f)), 0.f);
+			TextCentered(Out, Ly + 4, G, TEXT("SIGNAL LOST"), Heading(26), P + FVector2D(VW, VH) * 0.5f - FVector2D(0, 16), Ink);
+			TextCentered(Out, Ly + 4, G, TEXT("The recorder was switched off around here. Somebody didn't want this on tape."), Font("Regular", 12), P + FVector2D(VW, VH) * 0.5f + FVector2D(0, 22), Dim);
+		}
+		else if (Desk->Feed)
+		{
+			FeedBrush.SetResourceObject(Desk->Feed);
+			FeedBrush.ImageSize = FVector2D(640, 480);
+			FeedBrush.DrawAs = ESlateBrushDrawType::Image;
+			FSlateDrawElement::MakeBox(Out, Ly + 2, G.ToPaintGeometry(FVector2D(VW, VH), FSlateLayoutTransform(P)), &FeedBrush, ESlateDrawEffect::None, FLinearColor(0.95f, 1.f, 0.95f));
+			// scanlines
+			for (float Y = 0; Y < VH; Y += 4.f) Box(Out, Ly + 3, G, P + FVector2D(0, Y), FVector2D(VW, 1.f), FLinearColor(0, 0, 0, 0.18f), 0.f);
+		}
+		// the tape's own overlay: REC, camera, time
+		const FSlateFontInfo Mono = Font("Bold", 14, 60);
+		if (FMath::Fmod(Now, 1.f) < 0.6f) { Box(Out, Ly + 4, G, P + FVector2D(18, 20), FVector2D(12, 12), Red, 6.f); }
+		Text(Out, Ly + 4, G, TEXT("REC"), Mono, P + FVector2D(36, 15), FLinearColor(1, 1, 1, 0.9f));
+		Text(Out, Ly + 4, G, Desk->CamLabel(), Mono, P + FVector2D(18, 42), FLinearColor(1, 1, 1, 0.85f));
+		if (Desk->Frames.IsValidIndex(Desk->Frame))
+		{
+			const FString Clock = Desk->Frames[Desk->Frame].Clock;
+			Text(Out, Ly + 4, G, Clock, Font("Bold", 22, 80), P + FVector2D(VW - Measure(Clock, Font("Bold", 22, 80)).X - 22, VH - 46), FLinearColor(1, 1, 1, 0.92f));
+			Text(Out, Ly + 4, G, FString::Printf(TEXT("TAPE  %d / %d"), Desk->Frame + 1, Desk->Frames.Num()), Font("Bold", 11, 80), P + FVector2D(18, VH - 34), FLinearColor(1, 1, 1, 0.7f));
+			// the tape's timeline: a tick for each moment, the current one lit
+			const float TW = 220.f; const FVector2D TP(P.X + (VW - TW) * 0.5f, P.Y + VH + 26);
+			for (int32 k = 0; k < Desk->Frames.Num(); k++)
+			{
+				const float X = TP.X + TW * k / FMath::Max(1, Desk->Frames.Num() - 1);
+				Box(Out, Ly + 4, G, FVector2D(X - 5, TP.Y - 5), FVector2D(10, 10), k == Desk->Frame ? Gold : FLinearColor(1, 1, 1, Desk->Frames[k].bLost ? 0.1f : 0.3f), 5.f);
+			}
+		}
+		const FString Keys = TEXT("[A] [D] camera     [W] [S] earlier / later     [Q] step away");
+		const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
+		Prompt(Out, Ly + 4, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 46), Dim, 1.f, true);
+		return Ly + 6;
+	}
+
 	const FString PromptText = Owner->Prompt.ToString();
 	const float In = FMath::Clamp(Owner->PromptAge * 5.f, 0.f, 1.f), Ease = 1.f - FMath::Square(1.f - In);
 
