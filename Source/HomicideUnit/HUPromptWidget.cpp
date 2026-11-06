@@ -315,7 +315,7 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			TextCentered(Out, Ly + 2, G, HUBelt::Name(i), Font(bSel ? "Bold" : "Regular", 11), P + FVector2D(BW * 0.5f, BH * 0.36f), Col);
 			TextCentered(Out, Ly + 2, G, Wait > 0.f ? FString::Printf(TEXT("%d s"), FMath::CeilToInt(Wait)) : FString(TEXT("ready")), Font("Regular", 9), P + FVector2D(BW * 0.5f, BH * 0.72f), Col * FLinearColor(1, 1, 1, 0.75f));
 		}
-		const FString Hint = FString::Printf(TEXT("UTILITY BELT  ·  %s: %s  ·  [LEFT CLICK] use  ·  move the mouse or scroll to pick"), HUBelt::Name(Owner->BeltSel), HUBelt::Hint(Owner->BeltSel));
+		const FString Hint = FString::Printf(TEXT("UTILITY BELT  ·  %s: %s  ·  [LEFT CLICK] use  ·  look at a pouch or scroll to pick"), HUBelt::Name(Owner->BeltSel), HUBelt::Hint(Owner->BeltSel));
 		TextCentered(Out, Ly + 2, G, Hint, Font("Regular", 10), FVector2D(L.X * 0.5f, BY - 16.f), Ink);
 	}
 	// ---- coffee: how long it lasts, beside the hotbar ----

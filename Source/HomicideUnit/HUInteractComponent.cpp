@@ -340,18 +340,35 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	if (bWant != bBeltOpen)
 	{
 		bBeltOpen = bWant;
-		if (bBeltOpen) SetBeltSel(BeltSel, Look.Yaw); // start on the pouch you used last
+		// the body (and the belt on it) holds still while you look it over; only your view moves
+		Pawn->bUseControllerRotationYaw = !bBeltOpen;
 		BuildBelt();
 	}
-	if (bBeltOpen)
+	if (bBeltOpen && Belt)
 	{
-		// each pouch is 14 degrees of turn; turning past the ends just stays on the end pouch
-		float Off = FRotator::NormalizeAxis(Look.Yaw - BeltYaw);
-		if (Off < -28.f) { BeltYaw = Look.Yaw + 28.f; Off = -28.f; }
-		if (Off > 28.f) { BeltYaw = Look.Yaw - 28.f; Off = 28.f; }
-		const int32 Sel = FMath::Clamp(FMath::FloorToInt((Off + 28.f) / 14.f), 0, HUBelt::Count - 1);
-		if (Sel != BeltSel) { BeltSel = Sel; BuildBelt(); }
+		// pick the pouch the crosshair is on: where your line of sight crosses the belt's height
+		const FVector Dir = Look.Vector();
+		const float BeltZ = Belt->GetComponentLocation().Z;
+		if (Dir.Z < -0.05f)
+		{
+			const FVector OnBelt = Eye + Dir * ((BeltZ - Eye.Z) / Dir.Z);
+			int32 Best = -1; float BestD = 18.f;
+			for (int32 i = 0; i < HUBelt::Count; i++)
+			{
+				const float D = FVector::Dist2D(OnBelt, Belt->GetComponentTransform().TransformPosition(PouchSpot(i)));
+				if (D < BestD) { BestD = D; Best = i; }
+			}
+			if (Best >= 0 && Best != BeltSel) { BeltSel = Best; BuildBelt(); }
+		}
 	}
+}
+
+// where each pouch sits on the belt (belt space): round the hips, the belt sitting back on the body
+FVector UHUInteractComponent::PouchSpot(int32 i)
+{
+	static const float Ang[] = { -58.f, -26.f, 26.f, 58.f };
+	const float A = FMath::DegreesToRadians(Ang[FMath::Clamp(i, 0, 3)]);
+	return FVector(FMath::Cos(A) * 25.f - 10.f, FMath::Sin(A) * 25.f, 0.f);
 }
 
 // ---------- the utility belt ----------
@@ -370,9 +387,6 @@ static FString DirWords(const APawn* From, const FVector& Where)
 void UHUInteractComponent::SetBeltSel(int32 Sel, float LookYaw)
 {
 	BeltSel = FMath::Clamp(Sel, 0, HUBelt::Count - 1);
-	// line the mouse up so the picked pouch is in the middle of its 14 degrees
-	BeltYaw = LookYaw - (-21.f + 14.f * BeltSel);
-	if (APawn* Pawn = Cast<APawn>(GetOwner())) BeltYaw = Pawn->GetControlRotation().Yaw - (-21.f + 14.f * BeltSel);
 	BuildBelt();
 }
 
@@ -399,16 +413,15 @@ void UHUInteractComponent::BuildBelt()
 	for (int32 i = -3; i <= 3; i++)
 	{
 		const float A = FMath::DegreesToRadians(i * 22.f);
-		P(EShape::Cube, FVector(FMath::Cos(A) * 24.f, FMath::Sin(A) * 24.f, 0), FVector(3, 10, 5), Leather, FRotator(0, i * 22.f, 0));
+		P(EShape::Cube, FVector(FMath::Cos(A) * 22.f - 10.f, FMath::Sin(A) * 22.f, 0), FVector(3, 10, 5), Leather, FRotator(0, i * 22.f, 0));
 	}
-	P(EShape::Cube, FVector(25.5f, 0, 0), FVector(1, 6, 5), Buckle);
+	P(EShape::Cube, FVector(13.5f, 0, 0), FVector(1, 6, 5), Buckle);
 	// the four pouches; the picked one rides up while you're looking at the belt
-	const float Ang[] = { -52.f, -24.f, 24.f, 52.f };
+	const float Ang[] = { -58.f, -26.f, 26.f, 58.f };
 	for (int32 i = 0; i < HUBelt::Count; i++)
 	{
-		const float A = FMath::DegreesToRadians(Ang[i]);
 		const bool bPick = bBeltOpen && i == BeltSel;
-		const FVector At(FMath::Cos(A) * 27.f, FMath::Sin(A) * 27.f, bPick ? 4.f : -2.f);
+		const FVector At = PouchSpot(i) + FVector(0, 0, bPick ? 4.f : -2.f);
 		const FRotator R(0, Ang[i], 0);
 		P(EShape::Cube, At, FVector(5, 7, 9), Leather, R); // the pouch
 		switch (i)
@@ -444,7 +457,7 @@ void UHUInteractComponent::UseBelt()
 	}
 	// you're looking at your belt, so "in front of you" is the way your body faces
 	const FVector From = Pawn->GetActorLocation();
-	const FVector Fwd = FRotator(0.f, Pawn->GetControlRotation().Yaw, 0.f).Vector();
+	const FVector Fwd = FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f).Vector(); // the body holds still while the belt is open
 	auto InFront = [&](AHUSuspectActor* S, float Range, float Cone)
 	{
 		if (!S || S->bCuffed || S->IsHidden()) return false;

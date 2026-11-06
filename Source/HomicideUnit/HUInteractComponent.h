@@ -2,7 +2,7 @@
 // and carries the HOTBAR - what's in your hand:
 //   1 hands  ·  2 flashlight  ·  3 UV light  ·  4 print kit  ·  5 crowbar  ·  6 scanner   (mouse wheel cycles)
 // and the UTILITY BELT - look down (with nothing to pick up there): cuffs, pepper spray, taser, radio.
-//   Move the mouse left/right or scroll to pick a pouch, LEFT CLICK uses it. Your hand keeps what it's holding.
+//   Your body holds still while you look it over: put the crosshair on a pouch (or scroll), LEFT CLICK uses it. Your hand keeps what it's holding.
 //   LEFT CLICK uses what you're holding: lights switch on/off, the scanner pings, the print kit and crowbar work
 //   on the evidence you're looking at. F / V / R grab the flashlight / UV light / scanner and use it in one go.
 // Tools only work in your hand: prints need the print kit held, strongboxes need the crowbar held.
@@ -146,6 +146,7 @@ private:
 	float BeltYaw = 0.f;
 	double BeltUsed[HUBelt::Count] = { -100.0, -100.0, -100.0, -100.0 };
 	void BuildBelt();
+	static FVector PouchSpot(int32 i);
 	void SetBeltSel(int32 Sel, float LookYaw);
 	void SendBelt(uint8 Item, const FString& TargetPath);
 	void WheelUp(); void WheelDown();
