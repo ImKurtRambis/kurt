@@ -188,7 +188,23 @@ TArray<FHUSlide> UHUCaseSubsystem::BuildBriefingSlides(const FString& Who) const
 			FString::Printf(TEXT("\"Patrol's holding %d people. Every name on that list was in the building tonight. One of them is why we're here.\""), C.Suspects.Num()));
 	}
 	Add(TEXT("THE JOB"), FString::Printf(TEXT("%d LIES ON THE RECORD"), C.Solution.RequiredBreaks), { TEXT("CATCH THEM LYING WITH EVIDENCE"), TEXT("PROFILE: UNKNOWN — LET THE EVIDENCE TELL YOU"), TEXT("RUN EVERY RECORD THAT FITS") },
-		FString::Printf(TEXT("\"No hunches. %d lies on the record before you name anybody. Your car's in the motor pool. Dismissed.\""), C.Solution.RequiredBreaks));
+		FString::Printf(TEXT("\"No hunches. %d lies on the record before you name anybody.\""), C.Solution.RequiredBreaks));
+	// the last slide: the whole case at a glance, before you roll
+	{
+		const FHUCase& K = Current;
+		FString Caller = TEXT("someone at the scene");
+		if (K.Suspects.Num() > 0) Caller = K.Suspects[FMath::Abs(K.Number) % K.Suspects.Num()].Name;
+		const FString What = K.Crime == TEXT("homicide") ? TEXT("HOMICIDE") : K.Crime == TEXT("assault") ? TEXT("ASSAULT") : K.Crime == TEXT("robbery") ? TEXT("ROBBERY")
+			: K.Crime == TEXT("missing") ? TEXT("MISSING PERSON") : K.Crime == TEXT("arson") ? TEXT("ARSON") : K.Crime.ToUpper();
+		Add(TEXT("SUMMARY — THE CASE AT A GLANCE"), What + TEXT(": ") + K.Victim, {
+			FString::Printf(TEXT("WHERE / WHEN:  %s, around %s"), *K.Place, *K.Time),
+			K.Crime == TEXT("homicide") || K.Crime == TEXT("assault") ? FString::Printf(TEXT("CAUSE:  %s"), *K.Weapon.ToUpper()) : FString(TEXT("CAUSE:  SEE THE SCENE")),
+			FString::Printf(TEXT("HELD AT THE SCENE:  %d  ·  CALLED IN BY:  %s"), K.Suspects.Num(), *Caller.ToUpper()),
+			TEXT("WHO DID IT:  UNKNOWN — WATCH WHAT THE EVIDENCE SAYS ABOUT THEM"),
+			FString::Printf(TEXT("TO CLOSE IT:  %d LIES ON THE RECORD, ARREST, BOOK, SUBMIT"), K.Solution.RequiredBreaks),
+		}, FString::Printf(TEXT("\"So. %s at %s, around %s. %d people held, and %s made the call. Bag everything, catch the lies, bring the right one back in the van and book them. Go.\""),
+			*K.Victim, *K.Place, *K.Time, K.Suspects.Num(), *Caller));
+	}
 	return Out;
 }
 
