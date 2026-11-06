@@ -3,6 +3,9 @@
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUBrainSubsystem.h"
+#include "HUVoiceSubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
 #include "HUInterrogation.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -227,6 +230,7 @@ void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FS
 	if (User && User->IsLocallyControlled()) LastReply = Answer;
 	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
 		I->Say(FString::Printf(TEXT("\"%s\"   %s:  %s"), *Question, *S.Name.ToUpper(), *Answer));
+	Speak(Answer);
 }
 
 void AHUSuspectActor::StmtUp() { FHUSuspect S; if (bInterviewing &&GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()->GetSuspect(SuspectId, S)) StatementSel = (StatementSel + S.Statements.Num() - 1) % FMath::Max(1, S.Statements.Num()); }
@@ -255,6 +259,7 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 	if (!I) return;
 	if (User->IsLocallyControlled()) LastReply = Reply;
 	I->Say(FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Reply));
+	Speak(Reply);
 	if (C->Breaks > BreaksBefore) I->Notify(TEXT("LIE ON THE RECORD"), FString::Printf(TEXT("%s — %d of %d lies"), *S.Name, C->Breaks, C->Current.Solution.RequiredBreaks), FLinearColor(0.95f, 0.35f, 0.3f));
 	if (!bConfessedBefore && !C->Confessed.IsEmpty()) I->Notify(TEXT("CONFESSION"), FString::Printf(TEXT("%s confessed. Cuff them, van, book, submit."), *S.Name), FLinearColor(0.95f, 0.76f, 0.32f));
 }
@@ -287,4 +292,23 @@ void AHUSuspectActor::LoadIntoVan()
 	SetActorHiddenInGame(true);
 	SetActorEnableCollision(false);
 	SetActorTickEnabled(false);
+}
+
+// say it out loud, here in the room: every player''s PC voices it locally (free). Nerves speed them up, breaking slows them.
+void AHUSuspectActor::Speak(const FString& Said)
+{
+	UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!V || !C || !V->HasNeuralVoice() || GetNetMode() == NM_DedicatedServer) return;
+	const EHUSuspectMood M = C->MoodOf(SuspectId);
+	const float Speed = M == EHUSuspectMood::Rattled ? 1.1f : M == EHUSuspectMood::Cracking ? 1.2f : M == EHUSuspectMood::Broken ? 0.85f : M == EHUSuspectMood::Defensive ? 1.05f : 1.f;
+	// a voice per suspect (the 911 caller and the captain use others)
+	const int32 VoiceNum = 1 + (int32)(GetTypeHash(SuspectId) % 10);
+	TWeakObjectPtr<AHUSuspectActor> Self(this);
+	V->Synthesize(Said, VoiceNum, FString(), false, FHUVoiceReady::CreateLambda([Self](USoundWave* S, float)
+	{
+		if (!Self.IsValid() || !S) return;
+		if (Self->VoiceAudio.IsValid()) Self->VoiceAudio->Stop();
+		Self->VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(Self.Get(), S, Self->GetActorLocation() + FVector(0, 0, 170));
+	}), Speed);
 }

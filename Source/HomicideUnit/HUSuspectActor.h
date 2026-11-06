@@ -64,5 +64,7 @@ private:
 	void SendMove(uint8 Action);
 	void StmtUp(); void StmtDown(); void EvLeft(); void EvRight(); void RecordKey();
 	void TypeKey(FKey Key);
+	void Speak(const FString& Said);
+	TWeakObjectPtr<class UAudioComponent> VoiceAudio;
 	void AskTyped();
 };

@@ -11,6 +11,9 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/PlatformMisc.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/PlatformFileManager.h"
+#include "Async/Async.h"
 
 static const int32 Rate = 24000;
 // OpenAI voices, and ElevenLabs premade voices (Rachel, Adam, Antoni, Bella, Arnold, Josh, Elli, Sam)
@@ -45,11 +48,12 @@ EHUVoiceProvider UHUVoiceSubsystem::Provider() const
 
 bool UHUVoiceSubsystem::HasNeuralVoice() const
 {
-	return Provider() != EHUVoiceProvider::Windows && Key().Len() > 10;
+	return HasLocalVoice() || (Provider() != EHUVoiceProvider::Windows && Key().Len() > 10);
 }
 
-void UHUVoiceSubsystem::Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done)
+void UHUVoiceSubsystem::Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed)
 {
+	if (HasLocalVoice()) { SynthesizeLocal(Text, Voice, Speed, bPhone, Done); return; }
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	if (!HasNeuralVoice() || !C) { Done.ExecuteIfBound(nullptr, 0.f); return; }
 	const EHUVoiceProvider P = Provider();
@@ -138,4 +142,80 @@ USoundWave* UHUVoiceSubsystem::MakeSound(TArray<uint8>& Pcm16, bool bPhone, floa
 	if (Keep.Num() > 40) Keep.RemoveAt(0);
 	OutSeconds = W->Duration;
 	return W;
+}
+
+// ---------- the free offline voice: Kokoro (Apache-2.0) via sherpa-onnx (Apache-2.0) ----------
+static FString VoiceDir() { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI/voice")); }
+
+bool UHUVoiceSubsystem::HasLocalVoice() const
+{
+	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
+	return F.FileExists(*(VoiceDir() / TEXT("bin/sherpa-onnx-offline-tts.exe"))) && F.FileExists(*(VoiceDir() / TEXT("kokoro/model.onnx")));
+}
+
+// a .wav file -> 16-bit mono samples (Kokoro writes 24 kHz, the rate we play at)
+static bool WavToPcm16(const TArray<uint8>& Wav, TArray<uint8>& Out)
+{
+	if (Wav.Num() < 44 || FMemory::Memcmp(Wav.GetData(), "RIFF", 4) != 0) return false;
+	int32 Channels = 1, Bits = 16, Format = 1;
+	int32 P = 12;
+	while (P + 8 <= Wav.Num())
+	{
+		const int32 Size = *reinterpret_cast<const int32*>(Wav.GetData() + P + 4);
+		if (FMemory::Memcmp(Wav.GetData() + P, "fmt ", 4) == 0)
+		{
+			Format = *reinterpret_cast<const int16*>(Wav.GetData() + P + 8);
+			Channels = *reinterpret_cast<const int16*>(Wav.GetData() + P + 10);
+			Bits = *reinterpret_cast<const int16*>(Wav.GetData() + P + 22);
+		}
+		else if (FMemory::Memcmp(Wav.GetData() + P, "data", 4) == 0)
+		{
+			const int32 Len = FMath::Min(Size, Wav.Num() - P - 8);
+			const uint8* D = Wav.GetData() + P + 8;
+			const int32 Frames = Len / (Bits / 8) / FMath::Max(1, Channels);
+			Out.SetNumUninitialized(Frames * 2);
+			int16* O = reinterpret_cast<int16*>(Out.GetData());
+			for (int32 i = 0; i < Frames; i++)
+			{
+				const int32 Idx = i * Channels;
+				O[i] = (Format == 3 && Bits == 32) ? (int16)FMath::Clamp(reinterpret_cast<const float*>(D)[Idx] * 32767.f, -32768.f, 32767.f)
+					: reinterpret_cast<const int16*>(D)[Idx];
+			}
+			return Frames > 0;
+		}
+		P += 8 + Size + (Size & 1);
+	}
+	return false;
+}
+
+void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, float Speed, bool bPhone, FHUVoiceReady Done)
+{
+	// Kokoro v0.19's 11 speakers: 0 af, 1 af_bella, 2 af_nicole, 3 af_sarah, 4 af_sky, 5 am_adam, 6 am_michael,
+	// 7 bf_emma, 8 bf_isabella, 9 bm_george, 10 bm_lewis
+	const int32 Sid = FMath::Abs(Voice) % 11;
+	FString Clean = Text.Replace(TEXT("\""), TEXT("")).Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
+	Clean.TrimStartAndEndInline();
+	if (Clean.IsEmpty()) { Done.ExecuteIfBound(nullptr, 0.f); return; }
+	const FString Dir = VoiceDir();
+	const FString OutWav = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / FString::Printf(TEXT("Voice/line_%d.wav"), LineCounter++ % 16));
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(OutWav), true);
+	const FString Exe = Dir / TEXT("bin/sherpa-onnx-offline-tts.exe");
+	const FString Args = FString::Printf(TEXT("--kokoro-model=\"%s/kokoro/model.onnx\" --kokoro-voices=\"%s/kokoro/voices.bin\" --kokoro-tokens=\"%s/kokoro/tokens.txt\" --kokoro-data-dir=\"%s/kokoro/espeak-ng-data\" --kokoro-length-scale=%.2f --num-threads=2 --sid=%d --output-filename=\"%s\" \"%s\""),
+		*Dir, *Dir, *Dir, *Dir, 1.f / FMath::Clamp(Speed, 0.6f, 1.6f), Sid, *OutWav, *Clean);
+	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
+	Async(EAsyncExecution::Thread, [Self, Exe, Args, OutWav, bPhone, Done]()
+	{
+		int32 Code = -1; FString StdOut, StdErr;
+		FPlatformProcess::ExecProcess(*Exe, *Args, &Code, &StdOut, &StdErr, *FPaths::GetPath(Exe));
+		TArray<uint8> Wav, Pcm;
+		const bool bOk = Code == 0 && FFileHelper::LoadFileToArray(Wav, *OutWav) && WavToPcm16(Wav, Pcm);
+		if (!bOk) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: local Kokoro failed (%d) %s"), Code, *StdErr.Right(200));
+		AsyncTask(ENamedThreads::GameThread, [Self, Pcm = MoveTemp(Pcm), bOk, bPhone, Done]() mutable
+		{
+			if (!Self.IsValid() || !bOk) { Done.ExecuteIfBound(nullptr, 0.f); return; }
+			float Seconds = 0.f;
+			USoundWave* S = Self->MakeSound(Pcm, bPhone, Seconds);
+			Done.ExecuteIfBound(S, Seconds);
+		});
+	});
 }
