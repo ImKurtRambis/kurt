@@ -17,3 +17,5 @@ AI/voice/
 AI/chatterbox/
 AI/chatterbox-dl/
 AI/chatterbox-install.log
+AI/*.err
+AI/*.out
