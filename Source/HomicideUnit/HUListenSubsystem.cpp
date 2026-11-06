@@ -110,8 +110,15 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 		FPlatformProcess::ExecProcess(*Exe, *Args, &Code, &StdOut, &StdErr, *FPaths::GetPath(Exe));
 		// the result line looks like {"lang": "", ..., "text": " where were you", ...}
 		FString Text;
-		FRegexMatcher M(FRegexPattern(TEXT("\"text\"\\s*:\\s*\"([^\"]*)\"")), StdOut + TEXT("\n") + StdErr);
-		if (M.FindNext()) Text = M.GetCaptureGroup(1).TrimStartAndEnd();
+		FRegexMatcher M(FRegexPattern(TEXT("\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")), StdOut + TEXT("\n") + StdErr);
+		if (M.FindNext())
+		{
+			// unescape, then drop stray quote marks the model sometimes adds around the sentence
+			Text = M.GetCaptureGroup(1).Replace(TEXT("\\\""), TEXT("\"")).Replace(TEXT("\\\\"), TEXT("\\"));
+			Text = Text.Replace(TEXT("\""), TEXT("")).TrimStartAndEnd();
+			Text.TrimCharInline('\'', nullptr);
+			Text.TrimStartAndEndInline();
+		}
 		if (Code != 0) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: speech-to-text failed (%d) %s"), Code, *StdErr.Right(200));
 		AsyncTask(ENamedThreads::GameThread, [Self, Text, Done]()
 		{
