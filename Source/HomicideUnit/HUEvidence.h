@@ -1,6 +1,7 @@
 // A piece of evidence. No bright markers: it's small and easy to walk past, and how it's concealed decides
 // what you need to find or collect it (see EHUConceal): a flashlight for the dark, UV light for traces,
 // the print kit for fingerprints, the crowbar for strongboxes. E examines and bags it.
+// Dark and trace pieces are only there while a beam is on them: one detective holds the light, another bags it.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -26,6 +27,8 @@ public:
 	// under furniture: invisible and untouchable until the furniture's moved
 	UFUNCTION(BlueprintCallable, Category = "Clue") void Hide();
 	UFUNCTION(BlueprintCallable, Category = "Clue") void Reveal();
+	// whose light is on it right now (dark / trace only), or null
+	APawn* LitByPawn() const;
 
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
@@ -41,7 +44,10 @@ private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	UPROPERTY() UStaticMeshComponent* Lid = nullptr;
 	bool bCovered = false;  // under furniture
-	bool bSpotted = false;  // dark / trace evidence caught in a beam (stays found)
+	// dark / trace evidence only shows WHILE a light is on it (anyone's - you can see a partner's beam).
+	// Bagging it with the light in your own other hand is slow; with a partner holding the light it's quick.
+	TWeakObjectPtr<APawn> LitBy;
+	float LitUntil = -1.f;
 	bool bOpened = false;   // strongbox pried open
 	void Show(bool bVisible);
 	class UHUCaseSubsystem* Cases() const;

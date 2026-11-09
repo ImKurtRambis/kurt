@@ -59,6 +59,17 @@ public:
 	UFUNCTION(Server, Reliable) void ServerBelt(uint8 Item, const FString& TargetPath);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBelt(uint8 Item, const FString& TargetPath);
 
+	// ---- squad markers: G drops one where you're looking (evidence, a suspect, or just "here"), for everyone ----
+	struct FMarker { TWeakObjectPtr<APawn> By; FString Who; FVector At; uint8 Kind = 0; TWeakObjectPtr<AActor> Target; bool bHadTarget = false; float Born = 0.f; };
+	enum : uint8 { MarkPlace, MarkEvidence, MarkSuspect };
+	TArray<FMarker> Markers; // on the local player's component: every marker on the map, one per detective
+	void Ping();
+	UFUNCTION(Server, Reliable) void ServerPing(FVector At, uint8 Kind, const FString& TargetPath);
+	UFUNCTION(NetMulticast, Reliable) void MulticastPing(FVector At, uint8 Kind, const FString& TargetPath);
+	// your light on / off, so partners see your beam and what it lights up
+	UFUNCTION(Server, Reliable) void ServerLights(bool bF, bool bUV);
+	UFUNCTION(NetMulticast, Reliable) void MulticastLights(bool bF, bool bUV);
+
 	// lights: on only while held
 	UPROPERTY(BlueprintReadOnly, Category = "Kit") bool bLightOn = false;
 	UPROPERTY(BlueprintReadOnly, Category = "Kit") bool bFlashlightOn = false;
@@ -147,6 +158,7 @@ private:
 	double BeltUsed[HUBelt::Count] = { -100.0, -100.0, -100.0, -100.0, -100.0 };
 	TArray<FString> PagerLog; // every card that's popped up, oldest first
 	int32 PagerRead = 0;
+	void TickMarkers();
 	void BuildBelt();
 	static FVector PouchSpot(int32 i);
 	void SetBeltSel(int32 Sel, float LookYaw);

@@ -7,6 +7,8 @@
 #include "HUCharacter.h"
 #include "HUSuspectActor.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 
@@ -298,6 +300,37 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		TextCentered(Out, Ly + 2, G, bHave ? Name : FString(TEXT("—")), Font(bHeld ? "Bold" : "Regular", 10), P + FVector2D(SlotW * 0.5f, SlotH * 0.58f), Col);
 		const bool bOn = (i == (int32)EHUTool::Flashlight + 1 && Owner->bFlashlightOn) || (i == (int32)EHUTool::UVLight + 1 && Owner->bUVOn);
 		if (bOn) Box(Out, Ly + 2, G, P + FVector2D(SlotW - 14, 7), FVector2D(7, 7), Green, 4.f);
+	}
+	// ---- squad markers: a tag over each spot someone marked (G), pinned to the screen edge when it's off-screen ----
+	if (APlayerController* PC = Owner->GetWorld()->GetFirstPlayerController())
+	{
+		FVector Eye; FRotator Look;
+		PC->GetPlayerViewPoint(Eye, Look);
+		for (const UHUInteractComponent::FMarker& M : Owner->Markers)
+		{
+			const FVector Above = M.At + FVector(0, 0, 40);
+			FVector2D S(0, 0);
+			const bool bAhead = FVector::DotProduct(Above - Eye, Look.Vector()) > 0.f;
+			const bool bOn = bAhead && UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, Above, S, false);
+			if (!bOn || S.X < 30 || S.X > L.X - 30 || S.Y < 30 || S.Y > L.Y - 30)
+			{
+				// off-screen: push it to the edge, on the side it's on
+				const FVector Loc = Look.UnrotateVector(Above - Eye);
+				FVector2D D(Loc.Y, -Loc.Z); if (Loc.X < 0) D.Y = FMath::Abs(D.Y) + 1.f; // behind you: bottom edge
+				D = D.IsNearlyZero() ? FVector2D(0, 1) : D.GetSafeNormal();
+				const FVector2D Mid = L * 0.5f;
+				const float Sc = FMath::Min(D.X != 0 ? (Mid.X - 40) / FMath::Abs(D.X) : 1e6f, D.Y != 0 ? (Mid.Y - 40) / FMath::Abs(D.Y) : 1e6f);
+				S = Mid + D * Sc;
+			}
+			const FLinearColor Col = M.Kind == UHUInteractComponent::MarkEvidence ? Gold : M.Kind == UHUInteractComponent::MarkSuspect ? Red : Blue;
+			const float Age = Now - M.Born, A = FMath::Clamp((45.f - Age) / 5.f, 0.f, 1.f);
+			const float Pulse = 1.f + 0.25f * FMath::Max(0.f, 1.f - Age) * FMath::Sin(Age * 20.f);
+			Box(Out, Ly, G, S - FVector2D(7, 7) * Pulse, FVector2D(14, 14) * Pulse, Col * FLinearColor(1, 1, 1, A), 7.f);
+			const TCHAR* What = M.Kind == UHUInteractComponent::MarkEvidence ? TEXT("EVIDENCE") : M.Kind == UHUInteractComponent::MarkSuspect ? TEXT("SUSPECT") : TEXT("HERE");
+			const int32 Dist = FMath::RoundToInt(FVector::Dist(Eye, M.At) / 100.f);
+			TextCentered(Out, Ly + 1, G, FString::Printf(TEXT("%s  %d m"), What, Dist), Font("Bold", 9, 100), S + FVector2D(0, -18), Col * FLinearColor(1, 1, 1, A));
+			TextCentered(Out, Ly + 1, G, M.Who, Font("Regular", 9), S + FVector2D(0, 20), Ink * FLinearColor(1, 1, 1, 0.8f * A));
+		}
 	}
 	// ---- the utility belt, while you're looking down at it ----
 	if (Owner->bBeltOpen)

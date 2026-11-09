@@ -7,6 +7,8 @@
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerState.h"
+#include "EngineUtils.h"
 
 AHUEvidence::AHUEvidence()
 {
@@ -79,22 +81,25 @@ void AHUEvidence::Hide() { bCovered = true; Show(false); }
 void AHUEvidence::Reveal()
 {
 	bCovered = false;
-	if ((Conceal != EHUConceal::Dark && Conceal != EHUConceal::Trace) || bSpotted) Show(true);
+	if (Conceal != EHUConceal::Dark && Conceal != EHUConceal::Trace) Show(true); // dark / trace: Tick shows it when lit
 }
 
 void AHUEvidence::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (bSpotted || bCovered || (Conceal != EHUConceal::Dark && Conceal != EHUConceal::Trace)) return;
-	APawn* P = UGameplayStatics::GetPlayerPawn(this, 0);
-	const UHUInteractComponent* I = P ? P->FindComponentByClass<UHUInteractComponent>() : nullptr;
-	if (I && I->InBeam(GetActorLocation(), Conceal == EHUConceal::Trace))
-	{
-		bSpotted = true;
-		Show(true);
-		SetActorTickEnabled(false);
-	}
+	if (bCovered || (Conceal != EHUConceal::Dark && Conceal != EHUConceal::Trace)) return;
+	// any detective's beam (yours, or a partner's you can see) - a moment's grace so a wobbling beam doesn't flicker it
+	const float Now = GetWorld()->GetTimeSeconds();
+	APawn* Lit = nullptr;
+	for (TActorIterator<APawn> It(GetWorld()); It && !Lit; ++It)
+		if (const UHUInteractComponent* I = It->FindComponentByClass<UHUInteractComponent>())
+			if (I->InBeam(GetActorLocation(), Conceal == EHUConceal::Trace)) Lit = *It;
+	if (Lit) { LitBy = Lit; LitUntil = Now + 0.6f; }
+	const bool bShow = Now < LitUntil;
+	if (bShow != !IsHidden()) Show(bShow);
 }
+
+APawn* AHUEvidence::LitByPawn() const { return GetWorld() && GetWorld()->GetTimeSeconds() < LitUntil ? LitBy.Get() : nullptr; }
 
 FText AHUEvidence::GetPrompt_Implementation(APawn* User) const
 {
@@ -110,8 +115,16 @@ FText AHUEvidence::GetPrompt_Implementation(APawn* User) const
 	if (Conceal == EHUConceal::Prints && !(I && I->IsHolding(EHUTool::PrintKit)))
 		return FText::FromString(S->HasTool(EHUTool::PrintKit) ? TEXT("Smudged fingerprints — take out your print kit (4)") : TEXT("Smudged fingerprints — you need a print kit to lift them"));
 	if (Conceal == EHUConceal::Prints) return FText::FromString(TEXT("[E] Dust and lift the prints — ") + C.Name.ToUpper());
-	if (Conceal == EHUConceal::Trace) return FText::FromString(TEXT("[E] Swab the trace — ") + C.Name.ToUpper());
-	return FText::FromString(TEXT("[E] Examine — ") + C.Name.ToUpper());
+	// dark / trace: whose light is on it
+	FString Help;
+	if (Conceal == EHUConceal::Dark || Conceal == EHUConceal::Trace)
+	{
+		const APawn* L = LitByPawn();
+		if (L && L != User) Help = FString::Printf(TEXT("   (%s's light — quick)"), L->GetPlayerState() ? *L->GetPlayerState()->GetPlayerName() : TEXT("your partner"));
+		else Help = TEXT("   (one hand on the light — slow. A partner holding it is faster)");
+	}
+	if (Conceal == EHUConceal::Trace) return FText::FromString(TEXT("[E] Swab the trace — ") + C.Name.ToUpper() + Help);
+	return FText::FromString(TEXT("[E] Examine — ") + C.Name.ToUpper() + Help);
 }
 
 void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
@@ -159,7 +172,8 @@ float AHUEvidence::UseTime(APawn* User, bool bSecondary) const
 	{
 	case EHUConceal::Locked: return !bOpened ? (I && I->IsHolding(EHUTool::Crowbar) ? 3.f : 0.f) : 0.8f;
 	case EHUConceal::Prints: return I && I->IsHolding(EHUTool::PrintKit) ? 2.5f : 0.f;
-	case EHUConceal::Trace:  return 2.f;
+	case EHUConceal::Trace:  { const APawn* L = LitByPawn(); return L && L != User ? 2.f : 5.f; }
+	case EHUConceal::Dark:   { const APawn* L = LitByPawn(); return L && L != User ? 0.8f : 2.f; }
 	default:                 return 0.8f;
 	}
 }

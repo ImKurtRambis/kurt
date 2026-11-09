@@ -7,7 +7,7 @@ $Project = Join-Path (Split-Path $PSScriptRoot -Parent) "HomicideUnit.uproject"
 $HostLog = Join-Path $env:TEMP "HomicideUnit_host.log"
 $ClientLog = Join-Path $env:TEMP "HomicideUnit_client.log"
 
-$h = Start-Process -FilePath $Exe -PassThru -ArgumentList "`"$Project`" /Game/Maps/$Map?listen -game -nullrhi -unattended -nosound -nosplash -nosteam -abslog=`"$HostLog`""
+$h = Start-Process -FilePath $Exe -PassThru -ArgumentList "`"$Project`" /Game/Maps/${Map}?listen -game -nullrhi -unattended -nosound -nosplash -nosteam -abslog=`"$HostLog`""
 Start-Sleep -Seconds 20
 $c = Start-Process -FilePath $Exe -PassThru -ArgumentList "`"$Project`" 127.0.0.1 -game -nullrhi -unattended -nosound -nosplash -nosteam -abslog=`"$ClientLog`""
 Start-Sleep -Seconds 40

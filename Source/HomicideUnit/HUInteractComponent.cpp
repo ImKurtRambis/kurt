@@ -52,6 +52,7 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Keys->BindKey(EKeys::Four, IE_Pressed, this, &UHUInteractComponent::Slot4);
 	Keys->BindKey(EKeys::Five, IE_Pressed, this, &UHUInteractComponent::Slot5);
 	Keys->BindKey(EKeys::Six, IE_Pressed, this, &UHUInteractComponent::Slot6);
+	Keys->BindKey(EKeys::G, IE_Pressed, this, &UHUInteractComponent::Ping);
 	Keys->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &UHUInteractComponent::WheelUp);
 	Keys->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &UHUInteractComponent::WheelDown);
 	Keys->RegisterComponent();
@@ -148,8 +149,14 @@ void UHUInteractComponent::ToggleUV()
 
 void UHUInteractComponent::UpdateBeam()
 {
+	const bool bWasF = bFlashlightOn, bWasUV = bUVOn;
 	bFlashlightOn = bLightOn && IsHolding(EHUTool::Flashlight);
 	bUVOn = bLightOn && IsHolding(EHUTool::UVLight);
+	// tell the squad, so they see your beam and what it lights up
+	if ((bWasF != bFlashlightOn || bWasUV != bUVOn) && GetWorld() && GetWorld()->GetNetMode() != NM_Standalone)
+	{
+		if (GetOwner()->HasAuthority()) MulticastLights(bFlashlightOn, bUVOn); else ServerLights(bFlashlightOn, bUVOn);
+	}
 	if (Beam)
 	{
 		Beam->SetVisibility(bFlashlightOn || bUVOn);
@@ -225,11 +232,12 @@ void UHUInteractComponent::BuildHand()
 bool UHUInteractComponent::InBeam(FVector Point, bool bUV) const
 {
 	if (bUV ? !bUVOn : !bFlashlightOn) return false;
+	// works for a partner's copy too (no controller here): their eyes and where they're aiming, as replicated
 	const APawn* Pawn = Cast<APawn>(GetOwner());
-	const APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-	if (!PC) return false;
+	if (!Pawn) return false;
 	FVector Eye; FRotator Look;
-	PC->GetPlayerViewPoint(Eye, Look);
+	if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()); PC && PC->IsLocalController()) PC->GetPlayerViewPoint(Eye, Look);
+	else { Eye = Pawn->GetPawnViewLocation(); Look = Pawn->GetBaseAimRotation(); }
 	const FVector To = Point - Eye;
 	const float Dist = To.Size();
 	if (Dist > BeamRange || Dist < 1.f) return false;
@@ -276,7 +284,13 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	Prompt = FText::GetEmpty();
 	APawn* Pawn = Cast<APawn>(GetOwner());
 	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-	if (!PC || !PC->IsLocalController()) return; // only the player at this screen
+	if (!PC || !PC->IsLocalController())
+	{
+		// a partner's copy on this screen: just their light, aimed where they aim
+		if (Beam && Pawn) { Beam->SetWorldLocationAndRotation(Pawn->GetPawnViewLocation(), Pawn->GetBaseAimRotation()); }
+		return;
+	}
+	TickMarkers();
 	if (!Keys) Setup(PC);
 
 	// the hand sways a little as you walk
@@ -369,6 +383,85 @@ FVector UHUInteractComponent::PouchSpot(int32 i)
 	static const float Ang[] = { -70.f, -42.f, 26.f, 52.f, 78.f };
 	const float A = FMath::DegreesToRadians(Ang[FMath::Clamp(i, 0, HUBelt::Count - 1)]);
 	return FVector(FMath::Cos(A) * 25.f - 10.f, FMath::Sin(A) * 25.f, 0.f);
+}
+
+static FString DirWords(const APawn* From, const FVector& Where);
+
+// ---------- squad markers ----------
+void UHUInteractComponent::Ping()
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (!PC || Interviewing.IsValid() || Watching.IsValid()) return;
+	FVector Eye; FRotator Look;
+	PC->GetPlayerViewPoint(Eye, Look);
+	FHitResult Hit;
+	FCollisionQueryParams Params(TEXT("HUPing"), false, Pawn);
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + Look.Vector() * 4000.f, ECC_Visibility, Params)) { Say(TEXT("Nothing there to mark.")); return; }
+	AActor* A = Hit.GetActor();
+	const uint8 Kind = Cast<AHUEvidence>(A) ? MarkEvidence : Cast<AHUSuspectActor>(A) ? MarkSuspect : MarkPlace;
+	const FString Path = Kind != MarkPlace ? A->GetPathName() : FString();
+	const FVector At = Kind != MarkPlace ? A->GetActorLocation() : Hit.ImpactPoint;
+	if (GetWorld()->GetNetMode() == NM_Standalone) MulticastPing_Implementation(At, Kind, Path);
+	else if (GetOwner()->HasAuthority()) MulticastPing(At, Kind, Path);
+	else ServerPing(At, Kind, Path);
+}
+
+void UHUInteractComponent::ServerPing_Implementation(FVector At, uint8 Kind, const FString& TargetPath) { MulticastPing(At, Kind, TargetPath); }
+
+void UHUInteractComponent::MulticastPing_Implementation(FVector At, uint8 Kind, const FString& TargetPath)
+{
+	APawn* User = Cast<APawn>(GetOwner());
+	APlayerController* Local = GetWorld()->GetFirstPlayerController();
+	APawn* Me = Local ? Local->GetPawn() : nullptr;
+	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!Mine || !User) return;
+	FMarker M;
+	M.By = User; M.At = At; M.Kind = Kind; M.Born = GetWorld()->GetRealTimeSeconds();
+	M.Who = User == Me ? FString(TEXT("You")) : User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName() : FString(TEXT("Partner"));
+	if (!TargetPath.IsEmpty()) { M.Target = FindObject<AActor>(nullptr, *TargetPath); M.bHadTarget = M.Target.IsValid(); if (M.Target.IsValid()) M.At = M.Target->GetActorLocation(); }
+	// one marker each: a new one replaces your old one
+	Mine->Markers.RemoveAll([User](const FMarker& O) { return O.By.Get() == User; });
+	Mine->Markers.Add(M);
+	if (User != Me)
+	{
+		const TCHAR* What = Kind == MarkEvidence ? TEXT("evidence here") : Kind == MarkSuspect ? TEXT("watch this one") : TEXT("check here");
+		Mine->Notify(TEXT("MARKED"), FString::Printf(TEXT("%s: %s  —  %d m %s"), *M.Who, What,
+			FMath::RoundToInt(FVector::Dist(M.At, Me->GetActorLocation()) / 100.f), *DirWords(Me, M.At)), FLinearColor(1.f, 0.75f, 0.3f));
+	}
+}
+
+void UHUInteractComponent::TickMarkers()
+{
+	const float Now = GetWorld()->GetRealTimeSeconds();
+	// gone after 45 s, or once the evidence is bagged / the suspect's taken away
+	Markers.RemoveAll([Now](const FMarker& M) { return Now - M.Born > 45.f || (M.bHadTarget && (!M.Target.IsValid() || (M.Target->IsHidden() && !Cast<AHUEvidence>(M.Target.Get())))); });
+	for (FMarker& M : Markers) if (M.Target.IsValid()) M.At = M.Target->GetActorLocation();
+}
+
+void UHUInteractComponent::ServerLights_Implementation(bool bF, bool bUV) { MulticastLights(bF, bUV); }
+
+void UHUInteractComponent::MulticastLights_Implementation(bool bF, bool bUV)
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	if (!Pawn || Pawn->IsLocallyControlled()) return; // your own light is already right
+	bFlashlightOn = bF; bUVOn = bUV;
+	if (!Beam)
+	{
+		// a partner's light on this screen
+		Beam = NewObject<USpotLightComponent>(GetOwner(), TEXT("HUBeam"));
+		Beam->SetupAttachment(GetOwner()->GetRootComponent());
+		Beam->SetUsingAbsoluteLocation(true);
+		Beam->SetUsingAbsoluteRotation(true);
+		Beam->SetAttenuationRadius(BeamRange);
+		Beam->SetInnerConeAngle(BeamCone * 0.6f);
+		Beam->SetOuterConeAngle(BeamCone);
+		Beam->SetCastShadows(true);
+		Beam->RegisterComponent();
+	}
+	Beam->SetVisibility(bF || bUV);
+	if (bUV) { Beam->SetLightColor(FLinearColor(0.45f, 0.1f, 1.f)); Beam->SetIntensity(2500.f); }
+	else { Beam->SetLightColor(FLinearColor(1.f, 0.95f, 0.85f)); Beam->SetIntensity(9000.f); }
 }
 
 // ---------- the utility belt ----------
