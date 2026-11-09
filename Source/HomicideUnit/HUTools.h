@@ -29,7 +29,8 @@ enum class EHUConceal : uint8
 };
 
 // The utility belt: always on you, never on the hotbar. Look down at it (with nothing to pick up there),
-// pick a pouch with the mouse or the wheel, LEFT CLICK to use it. Whatever's in your hand stays there.
+// put the crosshair on a pouch, LEFT CLICK takes that item into your hand (click again to put it back);
+// then LEFT CLICK uses it. The pager stays clipped on: clicking it opens the menu.
 namespace HUBelt
 {
 	enum : uint8 { Cuffs, Pepper, Taser, Radio, Pager, Count };
@@ -46,7 +47,7 @@ namespace HUBelt
 	}
 	inline const TCHAR* Hint(int32 i)
 	{
-		static const TCHAR* H[] = { TEXT("arrest who's in front of you"), TEXT("a burst at whoever's close"), TEXT("drops one person, at range"), TEXT("call it in"), TEXT("read your messages, newest first") };
+		static const TCHAR* H[] = { TEXT("arrest who's in front of you"), TEXT("a burst at whoever's close"), TEXT("drops one person, at range"), TEXT("call it in"), TEXT("opens the menu: settings and your messages") };
 		return i >= 0 && i < Count ? H[i] : TEXT("");
 	}
 }

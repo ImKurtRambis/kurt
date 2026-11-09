@@ -9,6 +9,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "GameFramework/GameUserSettings.h"
+#include "HUVoiceSubsystem.h"
 #include "Components/InputComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -125,6 +127,7 @@ void UHUInteractComponent::WheelDown() { if (bBeltOpen) { SetBeltSel(BeltSel + 1
 void UHUInteractComponent::UseHeld()
 {
 	if (bBeltOpen) { UseBelt(); return; }
+	if (Held >= SlotCount) { BeltAction(Held - SlotCount); return; } // something off the belt
 	if (IsHolding(EHUTool::Flashlight) || IsHolding(EHUTool::UVLight)) { bLightOn = !bLightOn; UpdateBeam(); return; }
 	if (IsHolding(EHUTool::Scanner)) { Scan(); return; }
 	// hands, the print kit and the crowbar work on whatever you're looking at
@@ -223,6 +226,24 @@ void UHUInteractComponent::BuildHand()
 	case 5: // scanner, screen up
 		P(EShape::Cube, FVector(10, 0, 2), FVector(13, 7, 3), FLinearColor(0.15f, 0.16f, 0.17f), FRotator(-20, 0, 0));
 		P(EShape::Cube, FVector(10.5f, 0, 3.8f), FVector(7, 5, 0.3f), FLinearColor(0.2f, 2.f, 0.6f), FRotator(-20, 0, 0));
+		break;
+	// off the belt
+	case SlotCount + HUBelt::Cuffs: // two steel rings and the chain
+		for (float Sd : { -1.f, 1.f }) P(EShape::Cylinder, FVector(10, Sd * 4.5f, 2), FVector(7, 7, 1.2f), FLinearColor(0.7f, 0.72f, 0.75f), FRotator(0, 0, 90));
+		P(EShape::Cube, FVector(10, 0, 2), FVector(1.5f, 4, 1.5f), FLinearColor(0.6f, 0.62f, 0.65f));
+		break;
+	case SlotCount + HUBelt::Pepper: // the can upright, thumb on the button
+		P(EShape::Cylinder, FVector(8, 0, 4), FVector(4, 4, 12), FLinearColor(0.75f, 0.12f, 0.05f));
+		P(EShape::Cube, FVector(8, 0, 11), FVector(3, 2.5f, 2), Black);
+		break;
+	case SlotCount + HUBelt::Taser: // grip down, barrel forward
+		P(EShape::Cube, FVector(4, 0, -2), FVector(4, 3, 8), Black, FRotator(-15, 0, 0));
+		P(EShape::Cube, FVector(11, 0, 3), FVector(14, 3.5f, 4.5f), FLinearColor(0.85f, 0.7f, 0.05f));
+		P(EShape::Cube, FVector(18.2f, 0, 3), FVector(0.5f, 3, 3.5f), Black);
+		break;
+	case SlotCount + HUBelt::Radio: // held up, antenna high
+		P(EShape::Cube, FVector(8, 0, 5), FVector(4, 6, 12), FLinearColor(0.08f, 0.08f, 0.09f));
+		P(EShape::Cylinder, FVector(8, 2, 15), FVector(1, 1, 9), FLinearColor(0.08f, 0.08f, 0.09f));
 		break;
 	default: break; // empty hand
 	}
@@ -349,7 +370,7 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 
 	// the belt: look well down with nothing to pick up there. Opens past 55 degrees, closes back above 45.
 	const float Pitch = FRotator::NormalizeAxis(Look.Pitch);
-	const bool bFree = !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Grabbed.IsValid() && !bHolding;
+	const bool bFree = !bMenuOpen && !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Grabbed.IsValid() && !bHolding;
 	const bool bWant = bFree && Pitch < (bBeltOpen ? -45.f : -55.f);
 	if (bWant != bBeltOpen)
 	{
@@ -386,6 +407,97 @@ FVector UHUInteractComponent::PouchSpot(int32 i)
 }
 
 static FString DirWords(const APawn* From, const FVector& Where);
+
+// ---------- the menu: ESC, or the pager on your belt ----------
+// It doesn't pause the world (your squad keeps playing): it just takes your keys and stops you moving.
+void UHUInteractComponent::OpenMenu()
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (!PC || bMenuOpen) return;
+	bMenuOpen = true; MenuRow = 0;
+	if (!MenuKeys)
+	{
+		MenuKeys = NewObject<UInputComponent>(PC, TEXT("HUMenuKeys"));
+		MenuKeys->bBlockInput = true; // nothing underneath gets the keys while it's open
+		MenuKeys->Priority = 100;
+		for (FKey K : { EKeys::Up, EKeys::W }) MenuKeys->BindKey(K, IE_Pressed, this, &UHUInteractComponent::MenuUp);
+		for (FKey K : { EKeys::Down, EKeys::S }) MenuKeys->BindKey(K, IE_Pressed, this, &UHUInteractComponent::MenuDown);
+		for (FKey K : { EKeys::Left, EKeys::A }) MenuKeys->BindKey(K, IE_Pressed, this, &UHUInteractComponent::MenuLeft);
+		for (FKey K : { EKeys::Right, EKeys::D }) MenuKeys->BindKey(K, IE_Pressed, this, &UHUInteractComponent::MenuRight);
+		for (FKey K : { EKeys::Enter, EKeys::E, EKeys::SpaceBar, EKeys::LeftMouseButton }) MenuKeys->BindKey(K, IE_Pressed, this, &UHUInteractComponent::MenuEnter);
+		MenuKeys->BindKey(EKeys::Escape, IE_Pressed, this, &UHUInteractComponent::CloseMenu);
+		MenuKeys->RegisterComponent();
+	}
+	PC->PushInputComponent(MenuKeys);
+	PC->SetIgnoreLookInput(true);
+	PC->SetIgnoreMoveInput(true);
+	bBeltOpen = false; CancelHold();
+}
+
+void UHUInteractComponent::CloseMenu()
+{
+	if (!bMenuOpen) return;
+	bMenuOpen = false;
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	if (APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr)
+	{
+		PC->PopInputComponent(MenuKeys);
+		PC->ResetIgnoreLookInput();
+		PC->ResetIgnoreMoveInput();
+	}
+}
+
+void UHUInteractComponent::MenuUp() { MenuRow = (MenuRow + MenuRows - 1) % MenuRows; }
+void UHUInteractComponent::MenuDown() { MenuRow = (MenuRow + 1) % MenuRows; }
+void UHUInteractComponent::MenuLeft() { ChangeMenu(-1); }
+void UHUInteractComponent::MenuRight() { ChangeMenu(1); }
+void UHUInteractComponent::MenuEnter()
+{
+	if (MenuRow == 0) { CloseMenu(); return; }
+	if (MenuRow == MenuRows - 1) { CloseMenu(); if (AHUCharacter* Ch = Cast<AHUCharacter>(GetOwner())) Ch->BackToDesk(); return; }
+	ChangeMenu(1);
+}
+
+void UHUInteractComponent::ChangeMenu(int32 Dir)
+{
+	UHUCaseSubsystem* C = Cases();
+	UGameUserSettings* S = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	if (!C || !S) return;
+	switch (MenuRow)
+	{
+	case 1: C->MouseSensitivity = FMath::Clamp(FMath::RoundToFloat((C->MouseSensitivity + Dir * 0.1f) * 10.f) / 10.f, 0.2f, 3.f); C->SaveProgress(); break;
+	case 2:
+		C->FieldOfView = FMath::Clamp(C->FieldOfView + Dir * 5.f, 70.f, 110.f); C->SaveProgress();
+		if (const AHUCharacter* Ch = Cast<AHUCharacter>(GetOwner()); Ch && Ch->Eyes) Ch->Eyes->SetFieldOfView(C->FieldOfView);
+		break;
+	case 3: S->SetOverallScalabilityLevel((FMath::Max(0, S->GetOverallScalabilityLevel()) + Dir + 4) % 4); S->ApplySettings(false); S->SaveSettings(); break;
+	case 4: S->SetFullscreenMode((EWindowMode::Type)(((int32)S->GetFullscreenMode() + Dir + 3) % 3)); S->ApplySettings(false); S->SaveSettings(); break;
+	case 5: C->VoiceProvider = (uint8)((C->VoiceProvider + Dir + 3) % 3); C->SaveProgress(); break;
+	case 6: C->bVoiceQuestions = !C->bVoiceQuestions; C->SaveProgress(); break;
+	default: break;
+	}
+}
+
+FString UHUInteractComponent::MenuLine(int32 Row) const
+{
+	const UHUCaseSubsystem* C = Cases();
+	const UGameUserSettings* S = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	const TCHAR* Modes[] = { TEXT("Fullscreen"), TEXT("Windowed fullscreen"), TEXT("Windowed") };
+	const TCHAR* Quality[] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic") };
+	switch (Row)
+	{
+	case 0: return TEXT("Back to the case");
+	case 1: return FString::Printf(TEXT("Mouse sensitivity:  %.1f"), C ? C->MouseSensitivity : 1.f);
+	case 2: return FString::Printf(TEXT("Field of view:  %d°"), C ? FMath::RoundToInt(C->FieldOfView) : 90);
+	case 3: return FString::Printf(TEXT("Graphics:  %s"), S ? Quality[FMath::Clamp(S->GetOverallScalabilityLevel(), 0, 3)] : TEXT("?"));
+	case 4: return FString::Printf(TEXT("Window:  %s"), S ? Modes[FMath::Clamp((int32)S->GetFullscreenMode(), 0, 2)] : TEXT("?"));
+	case 5: return FString::Printf(TEXT("Voices:  %s"), C ? *UHUVoiceSubsystem::ProviderName((EHUVoiceProvider)C->VoiceProvider) : TEXT(""));
+	case 6: return FString::Printf(TEXT("Speak questions (mic):  %s"), C && C->bVoiceQuestions ? TEXT("On") : TEXT("Off"));
+	case 7: return TEXT("Leave the case — back to the desk");
+	default: return FString();
+	}
+}
 
 // ---------- squad markers ----------
 void UHUInteractComponent::Ping()
@@ -517,6 +629,7 @@ void UHUInteractComponent::BuildBelt()
 		const FVector At = PouchSpot(i) + FVector(0, 0, bPick ? 4.f : -2.f);
 		const FRotator R(0, Ang[i], 0);
 		P(EShape::Cube, At, FVector(5, 7, 9), Leather, R); // the pouch
+		if (Held != SlotCount + i) // (empty while it's in your hand)
 		switch (i)
 		{
 		case HUBelt::Cuffs:
@@ -542,19 +655,33 @@ void UHUInteractComponent::BuildBelt()
 	}
 }
 
+// clicking a pouch: take that item into your hand (or put it back). The pager opens the menu instead.
 void UHUInteractComponent::UseBelt()
+{
+	if (BeltSel == HUBelt::Pager) { OpenMenu(); return; }
+	if (Held == SlotCount + BeltSel) { Held = 0; Say(FString::Printf(TEXT("You put the %s back on your belt."), HUBelt::Name(BeltSel))); }
+	else { Held = SlotCount + BeltSel; PlayReach(); Say(FString::Printf(TEXT("%s in hand — LEFT CLICK to use it. 1-6 or the belt to put it away."), HUBelt::Name(BeltSel))); }
+	bLightOn = false;
+	UpdateBeam();
+	BuildHand();
+	BuildBelt();
+}
+
+// using the belt item in your hand (LEFT CLICK)
+void UHUInteractComponent::BeltAction(int32 Item)
 {
 	APawn* Pawn = Cast<APawn>(GetOwner());
 	if (!Pawn || !GetWorld()) return;
-	const int32 Item = BeltSel;
+	// the cuffs: on the suspect you're looking at, the same as E
+	if (Item == HUBelt::Cuffs && Cast<AHUSuspectActor>(Focus)) { BeginUse(false); return; }
 	if (const float Wait = BeltWait(Item); Wait > 0.f)
 	{
 		Say(FString::Printf(TEXT("%s: %s (%d s)"), HUBelt::Name(Item), Item == HUBelt::Taser ? TEXT("loading a new cartridge") : TEXT("not ready"), FMath::CeilToInt(Wait)));
 		return;
 	}
-	// you're looking at your belt, so "in front of you" is the way your body faces
+	// aimed the way you're looking
 	const FVector From = Pawn->GetActorLocation();
-	const FVector Fwd = FRotator(0.f, Pawn->GetActorRotation().Yaw, 0.f).Vector(); // the body holds still while the belt is open
+	const FVector Fwd = FRotator(0.f, Pawn->GetControlRotation().Yaw, 0.f).Vector();
 	auto InFront = [&](AHUSuspectActor* S, float Range, float Cone)
 	{
 		if (!S || S->bCuffed || S->IsHidden()) return false;

@@ -54,7 +54,22 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Belt") int32 BeltSel = 0;
 	// seconds until that pouch can be used again (0 = ready)
 	float BeltWait(int32 Item) const;
-	void UseBelt();
+	void UseBelt();          // click a pouch: take it in hand / put it back (the pager opens the menu)
+	void BeltAction(int32 Item); // use the belt item in your hand
+	// what's in your hand: 0..SlotCount-1 the hotbar, SlotCount + HUBelt item = something off the belt
+	int32 BeltInHand() const { return Held >= SlotCount ? Held - SlotCount : -1; }
+
+	// ---- the menu (ESC, or the pager on your belt): settings, your pager messages, leave the case ----
+	UPROPERTY(BlueprintReadOnly, Category = "Menu") bool bMenuOpen = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Menu") int32 MenuRow = 0;
+	static constexpr int32 MenuRows = 8;
+	void OpenMenu();
+	void CloseMenu();
+	void ToggleMenu() { if (bMenuOpen) CloseMenu(); else OpenMenu(); }
+	// a row's text, for the HUD
+	FString MenuLine(int32 Row) const;
+	// every card that's popped up this case, oldest first (shown on the pager in the menu)
+	const TArray<FString>& Pages() const { return PagerLog; }
 	// a belt use goes to the host and every player's game applies it (same as Use)
 	UFUNCTION(Server, Reliable) void ServerBelt(uint8 Item, const FString& TargetPath);
 	UFUNCTION(NetMulticast, Reliable) void MulticastBelt(uint8 Item, const FString& TargetPath);
@@ -159,6 +174,9 @@ private:
 	TArray<FString> PagerLog; // every card that's popped up, oldest first
 	int32 PagerRead = 0;
 	void TickMarkers();
+	UPROPERTY() class UInputComponent* MenuKeys = nullptr;
+	void MenuUp(); void MenuDown(); void MenuLeft(); void MenuRight(); void MenuEnter();
+	void ChangeMenu(int32 Dir);
 	void BuildBelt();
 	static FVector PouchSpot(int32 i);
 	void SetBeltSel(int32 Sel, float LookYaw);

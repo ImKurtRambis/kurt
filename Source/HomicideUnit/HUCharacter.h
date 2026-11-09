@@ -19,6 +19,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") float WalkSpeed = 330.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") float RunSpeed = 560.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") FName MenuLevel = TEXT("L_Menu");
+	// leave the case (and the squad) for the desk menu - from the ESC menu
+	void BackToDesk();
 
 	// ---- sitting: E on a chair sits you down facing the way it faces; WASD, SPACE or E again stands you up ----
 	UPROPERTY(BlueprintReadOnly, Category = "Detective") bool bSeated = false;
@@ -44,7 +46,7 @@ protected:
 
 private:
 	void ToggleCrouch();
-	void BackToDesk();
+	void OpenMenu();
 	FVector StandSpot;
 	double CoffeeUntil = -1.0;
 	void StartJump() { if (bSeated) StandUp(); else Jump(); }

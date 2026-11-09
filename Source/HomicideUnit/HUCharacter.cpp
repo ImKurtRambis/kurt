@@ -48,7 +48,14 @@ void AHUCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindKey(EKeys::SpaceBar, IE_Released, this, &AHUCharacter::EndJump);
 	Input->BindKey(EKeys::C, IE_Pressed, this, &AHUCharacter::ToggleCrouch);
 	Input->BindKey(EKeys::LeftControl, IE_Pressed, this, &AHUCharacter::ToggleCrouch);
-	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AHUCharacter::BackToDesk);
+	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AHUCharacter::OpenMenu);
+}
+
+// ESC: the menu (settings, pager, leave the case) - not straight back to the desk
+void AHUCharacter::OpenMenu()
+{
+	if (UHUInteractComponent* I = FindComponentByClass<UHUInteractComponent>()) I->OpenMenu();
+	else BackToDesk();
 }
 
 void AHUCharacter::Tick(float DeltaSeconds)
@@ -66,7 +73,7 @@ void AHUCharacter::Tick(float DeltaSeconds)
 	// seated: any move key gets you up
 	if (bSeated)
 	{
-		if (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::A) || PC->IsInputKeyDown(EKeys::S) || PC->IsInputKeyDown(EKeys::D)) StandUp();
+		if (!PC->IsMoveInputIgnored() && (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::A) || PC->IsInputKeyDown(EKeys::S) || PC->IsInputKeyDown(EKeys::D))) StandUp();
 		return;
 	}
 	// walk

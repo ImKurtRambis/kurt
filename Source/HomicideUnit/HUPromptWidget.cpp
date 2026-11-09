@@ -348,8 +348,48 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			TextCentered(Out, Ly + 2, G, HUBelt::Name(i), Font(bSel ? "Bold" : "Regular", 11), P + FVector2D(BW * 0.5f, BH * 0.36f), Col);
 			TextCentered(Out, Ly + 2, G, Wait > 0.f ? FString::Printf(TEXT("%d s"), FMath::CeilToInt(Wait)) : FString(TEXT("ready")), Font("Regular", 9), P + FVector2D(BW * 0.5f, BH * 0.72f), Col * FLinearColor(1, 1, 1, 0.75f));
 		}
-		const FString Hint = FString::Printf(TEXT("UTILITY BELT  ·  %s: %s  ·  [LEFT CLICK] use  ·  look at a pouch or scroll to pick"), HUBelt::Name(Owner->BeltSel), HUBelt::Hint(Owner->BeltSel));
+		const TCHAR* Click = Owner->BeltSel == HUBelt::Pager ? TEXT("open the menu") : Owner->BeltInHand() == Owner->BeltSel ? TEXT("put it back") : TEXT("take it");
+		const FString Hint = FString::Printf(TEXT("UTILITY BELT  ·  %s: %s  ·  [LEFT CLICK] %s  ·  look at a pouch or scroll to pick"), HUBelt::Name(Owner->BeltSel), HUBelt::Hint(Owner->BeltSel), Click);
 		TextCentered(Out, Ly + 2, G, Hint, Font("Regular", 10), FVector2D(L.X * 0.5f, BY - 16.f), Ink);
+	}
+	// ---- something off the belt in your hand: say so over the hotbar ----
+	if (const int32 B = Owner->BeltInHand(); B >= 0 && !Owner->bBeltOpen)
+	{
+		const float Wait = Owner->BeltWait(B);
+		const FString S = Wait > 0.f ? FString::Printf(TEXT("IN HAND:  %s   (%d s)"), HUBelt::Name(B), FMath::CeilToInt(Wait))
+			: FString::Printf(TEXT("IN HAND:  %s   ·   [LEFT CLICK] use"), HUBelt::Name(B));
+		TextCentered(Out, Ly + 2, G, S, Font("Bold", 10, 100), FVector2D(L.X * 0.5f, Y0 - 16.f), Gold);
+	}
+	// ---- the menu (ESC / the pager): settings on the left, your pager messages on the right ----
+	if (Owner->bMenuOpen)
+	{
+		Box(Out, Ly + 3, G, FVector2D(0, 0), L, FLinearColor(0, 0, 0, 0.55f), 0.f);
+		const float W = FMath::Min(1000.f, L.X - 60.f), H = 470.f;
+		const FVector2D P((L.X - W) * 0.5f, (L.Y - H) * 0.5f);
+		Panel(Out, Ly + 4, G, P, FVector2D(W, H), 1.f, Gold, 14.f);
+		Text(Out, Ly + 6, G, TEXT("MENU"), Heading(16), P + FVector2D(28, 22), Ink);
+		for (int32 r = 0; r < UHUInteractComponent::MenuRows; r++)
+		{
+			const FVector2D RP = P + FVector2D(28, 70 + r * 40);
+			const bool bSel = r == Owner->MenuRow;
+			if (bSel) Box(Out, Ly + 5, G, RP - FVector2D(10, 6), FVector2D(W * 0.5f - 30, 32), Gold * FLinearColor(1, 1, 1, 0.16f), 7.f);
+			const bool bLeave = r == UHUInteractComponent::MenuRows - 1;
+			Text(Out, Ly + 6, G, Owner->MenuLine(r), Font(bSel ? "Bold" : "Regular", 12), RP, bLeave ? Red : bSel ? Gold : Ink);
+		}
+		// the pager: your latest messages
+		const float PX = P.X + W * 0.54f;
+		Text(Out, Ly + 6, G, TEXT("PAGER"), Font("Bold", 10, 140), FVector2D(PX, P.Y + 30), Green);
+		const int32 NP = Owner->Pages().Num();
+		if (NP == 0) Text(Out, Ly + 6, G, TEXT("No messages."), Font("Regular", 11), FVector2D(PX, P.Y + 58), Dim);
+		float Yy = P.Y + 58;
+		for (int32 k = NP - 1; k >= 0 && Yy < P.Y + H - 70; k--)
+			for (const FString& Row : Wrap(Owner->Pages()[k], Font("Regular", 11), W * 0.42f))
+			{
+				if (Yy >= P.Y + H - 70) break;
+				Text(Out, Ly + 6, G, Row, Font("Regular", 11), FVector2D(PX, Yy), k == NP - 1 ? Ink : Dim);
+				Yy += 17;
+			}
+		TextCentered(Out, Ly + 6, G, TEXT("W / S choose   ·   A / D change   ·   ENTER select   ·   ESC back to the case   ·   the game keeps running"), Font("Regular", 10), FVector2D(L.X * 0.5f, P.Y + H - 26), Dim);
 	}
 	// ---- coffee: how long it lasts, beside the hotbar ----
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Owner->GetOwner()); Ch && Ch->IsCaffeinated())
