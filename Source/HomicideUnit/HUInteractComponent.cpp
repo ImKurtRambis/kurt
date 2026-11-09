@@ -366,8 +366,8 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 // where each pouch sits on the belt (belt space): round the hips, the belt sitting back on the body
 FVector UHUInteractComponent::PouchSpot(int32 i)
 {
-	static const float Ang[] = { -58.f, -26.f, 26.f, 58.f };
-	const float A = FMath::DegreesToRadians(Ang[FMath::Clamp(i, 0, 3)]);
+	static const float Ang[] = { -70.f, -42.f, 26.f, 52.f, 78.f };
+	const float A = FMath::DegreesToRadians(Ang[FMath::Clamp(i, 0, HUBelt::Count - 1)]);
 	return FVector(FMath::Cos(A) * 25.f - 10.f, FMath::Sin(A) * 25.f, 0.f);
 }
 
@@ -417,7 +417,7 @@ void UHUInteractComponent::BuildBelt()
 	}
 	P(EShape::Cube, FVector(13.5f, 0, 0), FVector(1, 6, 5), Buckle);
 	// the four pouches; the picked one rides up while you're looking at the belt
-	const float Ang[] = { -58.f, -26.f, 26.f, 58.f };
+	const float Ang[] = { -70.f, -42.f, 26.f, 52.f, 78.f };
 	for (int32 i = 0; i < HUBelt::Count; i++)
 	{
 		const bool bPick = bBeltOpen && i == BeltSel;
@@ -439,6 +439,10 @@ void UHUInteractComponent::BuildBelt()
 		case HUBelt::Radio:
 			P(EShape::Cube, At + FVector(0, 0, 6.5f), FVector(3.5f, 5, 9), FLinearColor(0.08f, 0.08f, 0.09f), R);
 			P(EShape::Cylinder, At + R.RotateVector(FVector(0, 1.5f, 14)), FVector(0.8f, 0.8f, 7), FLinearColor(0.08f, 0.08f, 0.09f));
+			break;
+		case HUBelt::Pager: // clipped on: a small black box with a green screen
+			P(EShape::Cube, At + FVector(0, 0, 5.f), FVector(2.5f, 6, 4), FLinearColor(0.06f, 0.06f, 0.07f), R);
+			P(EShape::Cube, At + R.RotateVector(FVector(1.3f, 0, 5.8f)), FVector(0.3f, 4.2f, 1.8f), FLinearColor(0.2f, 1.2f, 0.4f), R);
 			break;
 		}
 		if (bPick) P(EShape::Cube, At + FVector(0, 0, -6.f), FVector(5.5f, 7.5f, 0.6f), FLinearColor(1.f, 0.75f, 0.3f), R); // a gold rim under it
@@ -519,6 +523,15 @@ void UHUInteractComponent::UseBelt()
 		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
 		SendBelt(Item, FString());
 		return;
+	case HUBelt::Pager:
+	{
+		// just yours: each click steps back one message (newest first), then wraps round
+		BeltUsed[Item] = GetWorld()->GetTimeSeconds();
+		if (PagerLog.IsEmpty()) { Say(TEXT("PAGER: no messages.")); return; }
+		const int32 Back = PagerRead++ % PagerLog.Num();
+		Say(FString::Printf(TEXT("PAGER  %d/%d:  %s"), Back + 1, PagerLog.Num(), *PagerLog[PagerLog.Num() - 1 - Back]));
+		return;
+	}
 	}
 }
 
@@ -668,6 +681,9 @@ void UHUInteractComponent::Notify(const FString& Title, const FString& Body, FLi
 {
 	FNote N; N.Title = Title; N.Body = Body; N.Color = Color; N.Born = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
 	Notes.Add(N);
+	// everything that pops up is kept on the pager (the newest 20)
+	PagerLog.Add(Body.IsEmpty() ? Title : Title + TEXT(" — ") + Body); PagerRead = 0;
+	if (PagerLog.Num() > 20) PagerLog.RemoveAt(0);
 	if (Notes.Num() > 4) Notes.RemoveAt(0);
 }
 

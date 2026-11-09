@@ -1,7 +1,7 @@
 // On the player: traces what you're looking at, shows its prompt and any subtitle on screen, sends E / Q to it,
 // and carries the HOTBAR - what's in your hand:
 //   1 hands  ·  2 flashlight  ·  3 UV light  ·  4 print kit  ·  5 crowbar  ·  6 scanner   (mouse wheel cycles)
-// and the UTILITY BELT - look down (with nothing to pick up there): cuffs, pepper spray, taser, radio.
+// and the UTILITY BELT - look down (with nothing to pick up there): cuffs, pepper spray, taser, radio, pager.
 //   Your body holds still while you look it over: put the crosshair on a pouch (or scroll), LEFT CLICK uses it. Your hand keeps what it's holding.
 //   LEFT CLICK uses what you're holding: lights switch on/off, the scanner pings, the print kit and crowbar work
 //   on the evidence you're looking at. F / V / R grab the flashlight / UV light / scanner and use it in one go.
@@ -144,7 +144,9 @@ private:
 	UPROPERTY() USceneComponent* Belt = nullptr;
 	UPROPERTY() TArray<UStaticMeshComponent*> BeltParts;
 	float BeltYaw = 0.f;
-	double BeltUsed[HUBelt::Count] = { -100.0, -100.0, -100.0, -100.0 };
+	double BeltUsed[HUBelt::Count] = { -100.0, -100.0, -100.0, -100.0, -100.0 };
+	TArray<FString> PagerLog; // every card that's popped up, oldest first
+	int32 PagerRead = 0;
 	void BuildBelt();
 	static FVector PouchSpot(int32 i);
 	void SetBeltSel(int32 Sel, float LookYaw);

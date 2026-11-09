@@ -32,21 +32,21 @@ enum class EHUConceal : uint8
 // pick a pouch with the mouse or the wheel, LEFT CLICK to use it. Whatever's in your hand stays there.
 namespace HUBelt
 {
-	enum : uint8 { Cuffs, Pepper, Taser, Radio, Count };
+	enum : uint8 { Cuffs, Pepper, Taser, Radio, Pager, Count };
 	inline const TCHAR* Name(int32 i)
 	{
-		static const TCHAR* N[] = { TEXT("Cuffs"), TEXT("Pepper Spray"), TEXT("Taser"), TEXT("Radio") };
+		static const TCHAR* N[] = { TEXT("Cuffs"), TEXT("Pepper Spray"), TEXT("Taser"), TEXT("Radio"), TEXT("Pager") };
 		return i >= 0 && i < Count ? N[i] : TEXT("?");
 	}
 	// seconds before it's ready again
 	inline float Cooldown(int32 i)
 	{
-		static const float C[] = { 1.f, 5.f, 12.f, 6.f };
+		static const float C[] = { 1.f, 5.f, 12.f, 6.f, 0.3f };
 		return i >= 0 && i < Count ? C[i] : 1.f;
 	}
 	inline const TCHAR* Hint(int32 i)
 	{
-		static const TCHAR* H[] = { TEXT("arrest who's in front of you"), TEXT("a burst at whoever's close"), TEXT("drops one person, at range"), TEXT("call it in") };
+		static const TCHAR* H[] = { TEXT("arrest who's in front of you"), TEXT("a burst at whoever's close"), TEXT("drops one person, at range"), TEXT("call it in"), TEXT("read your messages, newest first") };
 		return i >= 0 && i < Count ? H[i] : TEXT("");
 	}
 }
