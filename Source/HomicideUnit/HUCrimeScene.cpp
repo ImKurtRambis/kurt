@@ -591,6 +591,58 @@ void AHUCrimeScene::Build()
 		return false;
 	};
 
+	// a TUCKED spot in a floor area: where people don't look. Corners, hard against a wall, on the far side of
+	// furniture from the middle of the room, or wedged beside a built-in fixture - instead of the open floor.
+	auto TuckedSpot = [&](const FArea& A, FVector& Out) -> bool
+	{
+		const FR Room{ A.Rect.X0 - 80, A.Rect.Y0 - 80, A.Rect.X1 + 80, A.Rect.Y1 + 80 }; // the areas sit 80 cm in from the walls
+		const float Gap = 28.f; // from a wall: right up against it
+		TArray<FVector2D> Cand;
+		for (float X : { Room.X0 + Gap, Room.X1 - Gap }) for (float Y : { Room.Y0 + Gap, Room.Y1 - Gap }) Cand.Add(FVector2D(X, Y));
+		for (int32 k = 0; k < 8; k++)
+		{
+			const float U = Loot.FRandRange(0.1f, 0.9f);
+			switch (Loot.RandRange(0, 3))
+			{
+			case 0: Cand.Add(FVector2D(FMath::Lerp(Room.X0, Room.X1, U), Room.Y0 + Gap)); break;
+			case 1: Cand.Add(FVector2D(FMath::Lerp(Room.X0, Room.X1, U), Room.Y1 - Gap)); break;
+			case 2: Cand.Add(FVector2D(Room.X0 + Gap, FMath::Lerp(Room.Y0, Room.Y1, U))); break;
+			default: Cand.Add(FVector2D(Room.X1 - Gap, FMath::Lerp(Room.Y0, Room.Y1, U))); break;
+			}
+		}
+		for (AHUPushable* Pu : Pushables)
+		{
+			if (!Pu) continue;
+			const FVector L = GetActorTransform().InverseTransformPosition(Pu->GetActorLocation());
+			if (!Room.Contains(L.X, L.Y)) continue;
+			FVector2D Away(L.X - Room.CX(), L.Y - Room.CY());
+			Away = Away.IsNearlyZero() ? FVector2D(1, 0) : Away.GetSafeNormal();
+			const float Reach = FMath::Max(Pu->SizeCm.X, Pu->SizeCm.Y) * 0.5f + 30.f;
+			Cand.Add(FVector2D(L.X, L.Y) + Away * Reach);
+			Cand.Add(FVector2D(L.X, L.Y) + FVector2D(-Away.Y, Away.X) * Reach); // or round the side of it
+		}
+		for (const FR& S : Solid)
+		{
+			if (!Room.Contains(S.CX(), S.CY(), -100.f)) continue;
+			const float U = Loot.FRandRange(0.15f, 0.85f);
+			Cand.Add(FVector2D(FMath::Lerp(S.X0, S.X1, U), Loot.FRand() < 0.5f ? S.Y0 - 24.f : S.Y1 + 24.f));
+			Cand.Add(FVector2D(Loot.FRand() < 0.5f ? S.X0 - 24.f : S.X1 + 24.f, FMath::Lerp(S.Y0, S.Y1, U)));
+		}
+		for (int32 i = Cand.Num() - 1; i > 0; i--) Cand.Swap(i, Loot.RandRange(0, i));
+		for (const FVector2D& P : Cand)
+		{
+			if (!Room.Contains(P.X, P.Y, Gap - 1.f) || !FloorFree(P.X, P.Y, 12.f)) continue;
+			bool bClear = true;
+			for (const FVector& V : Taken) if (FMath::Abs(V.Z - A.Z) < 50.f && FVector::Dist2D(V, FVector(P.X, P.Y, 0)) < 70.f) { bClear = false; break; }
+			if (!bClear) continue;
+			Out = FVector(P.X, P.Y, A.Z);
+			return true;
+		}
+		return false;
+	};
+	// how often a floor piece is tucked away instead of lying in the open (dead ends half as often: the easy finds are decoys)
+	const float TuckChance = Cases->PlayDifficulty == TEXT("rookie") ? 0.5f : Cases->PlayDifficulty == TEXT("veteran") ? 0.95f : 0.8f;
+
 	const float PlainChance = Cases->PlayDifficulty == TEXT("rookie") ? 0.7f : Cases->PlayDifficulty == TEXT("veteran") ? 0.25f : 0.45f;
 	int32 FreeKeyLeft = LiesNeeded + 1; // always findable with no tools, so a case can be closed with an empty kit
 	for (const FString& Id : All) if (Under.Contains(Id) && Key2.Contains(Id)) FreeKeyLeft--;
@@ -618,7 +670,13 @@ void AHUCrimeScene::Build()
 		{
 			const bool bFree = Key2.Contains(Id) && FreeKeyLeft > 0;
 			EArea Kind = PickKind(bFree ? FreeW : Key2.Contains(Id) ? KeyW : DeadW);
-			if (!SpotOfKind(Kind, At)) { Kind = AOpen; if (!OpenSpot(90.f, Loot, At)) continue; }
+			bool bPlaced = false;
+			if ((Kind == AOpen || Kind == ADark) && Loot.FRand() < (Key2.Contains(Id) ? TuckChance : TuckChance * 0.5f))
+			{
+				TArray<int32> Of; for (int32 i = 0; i < Areas.Num(); i++) if (Areas[i].Kind == Kind) Of.Add(i);
+				for (int32 Try = 0; Try < 4 && Of.Num() && !bPlaced; Try++) bPlaced = TuckedSpot(Areas[Of[Loot.RandRange(0, Of.Num() - 1)]], At);
+			}
+			if (!bPlaced && !SpotOfKind(Kind, At)) { Kind = AOpen; if (!OpenSpot(90.f, Loot, At)) continue; }
 			Used[Kind]++;
 			if (bFree) FreeKeyLeft--;
 			else if (Kind == ABack || Kind == ADark) Conceal = EHUConceal::Dark;
