@@ -166,34 +166,39 @@ void AHUCrimeScene::Build()
 	EStyle Style = EStyle::Hall;
 	for (int32 i = 0; i < 4; i++) { Roll -= StyleW[i]; if (Roll <= 0) { Style = (EStyle)i; break; } }
 	LayoutName = StyleName(Style);
+	// HAND-BUILT MAPS: a fixed building (see further down) instead of a generated one. Only what's in it changes.
+	const bool bHotel = Key == TEXT("HOTEL");
 
 	// footprint and height
-	const float W = FMath::GridSnap(Rng.FRandRange(1900.f, 3100.f), 100.f), D = FMath::GridSnap(Rng.FRandRange(1500.f, 2300.f), 100.f);
+	const float W = bHotel ? 2800.f : FMath::GridSnap(Rng.FRandRange(1900.f, 3100.f), 100.f), D = bHotel ? 2000.f : FMath::GridSnap(Rng.FRandRange(1500.f, 2300.f), 100.f);
 	const FR Plan = { -W / 2, -D / 2, W / 2, D / 2 };
-	const float H = FMath::Clamp(T.Height + Rng.FRandRange(-60.f, 80.f), 420.f, 700.f);
+	const float H = bHotel ? 400.f : FMath::Clamp(T.Height + Rng.FRandRange(-60.f, 80.f), 420.f, 700.f);
 	const float LoftZ = FMath::Clamp(H - 230.f, 220.f, 360.f), HighZ = FMath::Clamp(H - 150.f, 260.f, 400.f);
 
 	// rooms
 	TArray<FR> Rooms; TArray<FSplit> Splits;
 	const int32 WantRooms = Style == EStyle::Hall ? Rng.RandRange(1, 2) : Style == EStyle::Rooms ? Rng.RandRange(4, 7) : Style == EStyle::Racks ? Rng.RandRange(2, 3) : Rng.RandRange(2, 3);
-	SplitRooms(Plan, WantRooms, Style == EStyle::Rooms ? 650.f : 900.f, Rng, Rooms, Splits);
+	if (!bHotel) SplitRooms(Plan, WantRooms, Style == EStyle::Rooms ? 650.f : 900.f, Rng, Rooms, Splits);
 
 	TArray<FR> Solid;  // things you can't stand in (for placing people, furniture and evidence)
 	TArray<FR> Keep;   // doorways and the like, kept clear of features
 	auto AddSolid = [&Solid](float X0, float Y0, float X1, float Y1) { Solid.Add({ FMath::Min(X0, X1), FMath::Min(Y0, Y1), FMath::Max(X0, X1), FMath::Max(Y0, Y1) }); };
 
 	// ---- floor, ceiling, outer walls (entrance on -X, crawlspace opening on +X) ----
-	Box(FVector(0, 0, -5), FVector(W, D, 10), T.Floor, FloorMaterial);
-	Box(FVector(0, 0, H + 5), FVector(W, D, 10), T.Wall * 0.5f, WallMaterial);
-	const float EntY = FMath::GridSnap(Rng.FRandRange(Plan.Y0 + 250.f, Plan.Y1 - 250.f), 50.f);
+	const float EntY = bHotel ? 0.f : FMath::GridSnap(Rng.FRandRange(Plan.Y0 + 250.f, Plan.Y1 - 250.f), 50.f);
 	const float TunY = FMath::GridSnap(Rng.FRandRange(Plan.Y0 + 300.f, Plan.Y1 - 300.f), 50.f);
-	WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X0 - 5, 0, H / 2), D, H, 10, EntY, 200, 260, T.Wall);
-	WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X1 + 5, 0, H / 2), D, H, 10, TunY, TunnelW, TunnelH, T.Wall);
-	for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 + 5), H / 2), FVector(W, 10, H), T.Wall, WallMaterial);
-	for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 - 2), 40), FVector(W, 4, 80), T.Trim, WoodMaterial, false);
+	if (!bHotel)
+	{
+		Box(FVector(0, 0, -5), FVector(W, D, 10), T.Floor, FloorMaterial);
+		Box(FVector(0, 0, H + 5), FVector(W, D, 10), T.Wall * 0.5f, WallMaterial);
+		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X0 - 5, 0, H / 2), D, H, 10, EntY, 200, 260, T.Wall);
+		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X1 + 5, 0, H / 2), D, H, 10, TunY, TunnelW, TunnelH, T.Wall);
+		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 + 5), H / 2), FVector(W, 10, H), T.Wall, WallMaterial);
+		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 - 2), 40), FVector(W, 4, 80), T.Trim, WoodMaterial, false);
+		Keep.Add({ Plan.X1 - 300, TunY - 200, Plan.X1, TunY + 200 });
+		Sign(C.Place.ToUpper(), FVector(Plan.X0 + 4, EntY, 300), 0, 30, Gold);
+	}
 	Keep.Add({ Plan.X0, EntY - 200, Plan.X0 + 300, EntY + 200 });
-	Keep.Add({ Plan.X1 - 300, TunY - 200, Plan.X1, TunY + 200 });
-	Sign(C.Place.ToUpper(), FVector(Plan.X0 + 4, EntY, 300), 0, 30, Gold);
 	Box(FVector(Plan.X0 + 30, EntY - 60, 100), FVector(3, 120, 6), FLinearColor(1, 0.8f, 0.02f), nullptr, false); // broken police tape
 	// ---- OUTSIDE: the street in front of the building - where you arrive, and how you leave ----
 	{
@@ -426,7 +431,9 @@ void AHUCrimeScene::Build()
 		if (Style != EStyle::Racks) for (int32 i : Order) if (BuildPassage(i)) break; // a second one if there's room
 	}
 
-	// ---- the CRAWLSPACE through the +X wall, and the dark back room beyond ----
+	// ---- the CRAWLSPACE through the +X wall, and the dark back room beyond (generated places only) ----
+	if (!bHotel)
+	{
 	const float TX0 = Plan.X1 + 10, TX1 = TX0 + TunnelLen, BackX = TX1 + BackW / 2;
 	Box(FVector((TX0 + TX1) / 2, TunY, -5), FVector(TunnelLen, TunnelW + 20, 10), T.Floor * 0.6f, FloorMaterial);
 	Box(FVector((TX0 + TX1) / 2, TunY, TunnelH + 5), FVector(TunnelLen, TunnelW + 20, 10), T.Wall * 0.4f);
@@ -448,6 +455,7 @@ void AHUCrimeScene::Build()
 	CrawlZone->RegisterComponent();
 	CrawlZone->OnComponentBeginOverlap.AddDynamic(this, &AHUCrimeScene::OnCrawlEnter);
 	CrawlZone->OnComponentEndOverlap.AddDynamic(this, &AHUCrimeScene::OnCrawlLeave);
+	}
 
 	// ---- lights: one per room, except a room whose bulb is out (evidence in there needs a flashlight) ----
 	auto Light = [this](FVector Pos, float I, float R, FLinearColor Col)
@@ -472,6 +480,208 @@ void AHUCrimeScene::Build()
 		Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, AOpen });
 	}
 	for (const FArea& A : Areas) if (A.Kind == ALoft) Light(FVector(A.Rect.CX(), A.Rect.CY(), A.Z + 180), 2500.f, 800.f, FLinearColor(1.f, 0.85f, 0.65f));
+
+	// =====================================================================================================
+	// THE HOTEL - a fixed building you get to know case by case (where things end up still changes).
+	// Offenders here: stalker, crime of passion, poisoner (HUProfiles::ForPlace).
+	//   GROUND (z 0): the LOBBY (front desk, the stairs up), the BAR, SERVICE (staff only - the stairs down)
+	//   BASEMENT (z -400): LAUNDRY & BOILER ROOM, no lights
+	//   2ND / 3RD FLOORS (z 400 / 800): a corridor, five guest rooms, the stair landing at the west end
+	//   OUTSIDE: the street out front, the ALLEY out back, the FIRE ESCAPE up the back wall, the ROOF (z 1200)
+	// =====================================================================================================
+	if (bHotel)
+	{
+		LayoutName = TEXT("the hotel - lobby and bar, two guest floors, a basement, the fire escape and the roof");
+		const float X0 = Plan.X0, X1 = Plan.X1, Y0 = Plan.Y0, Y1 = Plan.Y1, FH = 400.f, Th = 12.f;
+		const FLinearColor Carpet = T.Floor, Paper = T.Wall, Wood = T.Trim, Brick(0.28f, 0.14f, 0.1f), Concrete(0.22f, 0.22f, 0.21f), Steel(0.18f, 0.19f, 0.2f);
+		const FColor SignCol(232, 200, 106);
+		// a wall at X=At (bAtX) or Y=At, From..To, standing on Z0, with doorways (2.4 m high) centred on Doors
+		auto Wall = [&](bool bAtX, float At, float From, float To, float Z0, TArray<float> Doors, FLinearColor Col, float DoorW = 120.f)
+		{
+			Doors.Sort();
+			auto Seg = [&](float A, float B, float Za, float Zb)
+			{
+				if (B - A < 1.f) return;
+				const float M = (A + B) / 2;
+				if (bAtX) Box(FVector(At, M, Z0 + (Za + Zb) / 2), FVector(Th, B - A, Zb - Za), Col, WallMaterial);
+				else Box(FVector(M, At, Z0 + (Za + Zb) / 2), FVector(B - A, Th, Zb - Za), Col, WallMaterial);
+			};
+			float Cur = From;
+			for (float Dc : Doors)
+			{
+				Seg(Cur, Dc - DoorW / 2, 0, FH);
+				Seg(Dc - DoorW / 2, Dc + DoorW / 2, 240, FH);
+				Cur = Dc + DoorW / 2;
+				if (FMath::Abs(Z0) < 1.f) { if (bAtX) Keep.Add({ At - 160, Dc - 100, At + 160, Dc + 100 }); else Keep.Add({ Dc - 100, At - 160, Dc + 100, At + 160 }); }
+			}
+			Seg(Cur, To, 0, FH);
+			if (FMath::Abs(Z0) < 1.f) { if (bAtX) AddSolid(At - 10, From, At + 10, To); else AddSolid(From, At - 10, To, At + 10); }
+		};
+		// a floor slab whose top is at Z, with one stairwell hole (or none)
+		auto Slab = [&](float Z, FR Hole, FLinearColor Col)
+		{
+			auto Piece = [&](float A0, float B0, float A1, float B1) { if (A1 - A0 > 1.f && B1 - B0 > 1.f) Box(FVector((A0 + A1) / 2, (B0 + B1) / 2, Z - 10), FVector(A1 - A0, B1 - B0, 20), Col, FloorMaterial); };
+			if (Hole.W() <= 0.f) { Piece(X0, Y0, X1, Y1); return; }
+			Piece(X0, Y0, X1, Hole.Y0); Piece(X0, Hole.Y1, X1, Y1); Piece(X0, Hole.Y0, Hole.X0, Hole.Y1); Piece(Hole.X1, Hole.Y0, X1, Hole.Y1);
+		};
+		// a flight of 16 steps, 2 m wide, climbing one storey along X from XFrom (Dir +1 / -1)
+		auto Flight = [&](float XFrom, float Y, float Z0, float Dir)
+		{
+			for (int32 i = 0; i < 16; i++)
+			{
+				const float Top = (i + 1) * FH / 16.f;
+				Box(FVector(XFrom + Dir * 37.f * (i + 0.5f), Y, Z0 + Top / 2), FVector(37, 200, Top), Wood * 1.4f, WoodMaterial);
+			}
+			const float XA = FMath::Min(XFrom, XFrom + Dir * 592.f), XB = FMath::Max(XFrom, XFrom + Dir * 592.f);
+			if (Z0 < 1.f) AddSolid(XA, Y - 100, XB, Y + 100);
+		};
+		auto Lamp = [this](FVector Pos, float I, float R, FLinearColor Col)
+		{
+			UPointLightComponent* L = NewObject<UPointLightComponent>(this);
+			L->SetupAttachment(RootComponent); L->SetRelativeLocation(Pos); L->SetIntensity(I); L->SetAttenuationRadius(R); L->SetLightColor(Col); L->RegisterComponent();
+		};
+		const FLinearColor Warm(1.f, 0.85f, 0.65f);
+
+		// ---- the stairs: lobby -> 2nd (south wall), 2nd -> 3rd (doubling back), service -> basement ----
+		const FR HoleG2 = { -900, -1000, -308, -770 }, Hole23 = { -900, -745, -308, -515 }, HoleB = { 708, -1000, 1300, -770 };
+		Flight(-900, -880, 0, 1);     // lobby up to the 2nd floor landing
+		Flight(-308, -630, FH, -1);   // 2nd floor landing up to the 3rd
+		Flight(708, -880, -FH, 1);    // basement up to the service room
+
+		// ---- slabs: ground (hole for the basement stairs), 2nd, 3rd, the roof ----
+		Slab(0, HoleB, Carpet);
+		Slab(FH, HoleG2, Carpet * 0.9f);
+		Slab(2 * FH, Hole23, Carpet * 0.8f);
+		Slab(3 * FH, FR(), Concrete);
+		// the basement: under the service room
+		Box(FVector(800, -500, -FH - 10), FVector(1200, 1000, 20), Concrete, FloorMaterial);
+		Wall(true, 200, -1000, 0, -FH, {}, Concrete * 0.8f); Wall(true, 1400, -1000, 0, -FH, {}, Concrete * 0.8f);
+		Wall(false, -1000, 200, 1400, -FH, {}, Concrete * 0.8f); Wall(false, 0, 200, 1400, -FH, {}, Concrete * 0.8f);
+		Box(FVector(330, -200, -FH + 110), FVector(160, 160, 220), Steel); AddSolid(250, -280, 410, -120);                 // the boiler
+		for (int32 k = 0; k < 3; k++) { Box(FVector(560 + k * 110, -80, -FH + 50), FVector(90, 80, 100), FLinearColor(0.75f, 0.75f, 0.72f)); } // washers
+		AddSolid(510, -120, 840, -40);
+		Sign(TEXT("LAUNDRY"), FVector(800, -15, -120), 90, 18, SignCol);
+
+		// ---- outside walls, three storeys: the front door on the street, the back door to the alley ----
+		for (int32 F = 0; F < 3; F++)
+		{
+			const float Z = F * FH;
+			Wall(true, X0, Y0, Y1, Z, F == 0 ? TArray<float>{ 0.f } : TArray<float>{}, Paper * 0.9f, 220.f);
+			Wall(true, X1, Y0, Y1, Z, F == 0 ? TArray<float>{ 500.f } : TArray<float>{ 0.f }, Brick);
+			Wall(false, Y0, X0, X1, Z, {}, Brick); Wall(false, Y1, X0, X1, Z, {}, Brick);
+			// lit windows on the street side
+			if (F > 0) for (float Y : { -700.f, -250.f, 250.f, 700.f }) Box(FVector(X0 - 8, Y, Z + 200), FVector(4, 140, 160), FLinearColor(1.6f, 1.2f, 0.55f) * (FMath::Abs(Y) > 500.f ? 0.25f : 1.f), nullptr, false);
+		}
+		// the roof: a parapet all round, with a gap where the fire escape ladder comes up
+		{
+			const float RZ = 3 * FH;
+			Box(FVector(X0 + 6, 0, RZ + 50), FVector(12, Y1 - Y0, 100), Brick);
+			Box(FVector(0, Y0 + 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick);
+			Box(FVector(0, Y1 - 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick);
+			Box(FVector(X1 - 6, (Y0 + 240) / 2, RZ + 50), FVector(12, 240 - Y0, 100), Brick);
+			Box(FVector(X1 - 6, (360 + Y1) / 2, RZ + 50), FVector(12, Y1 - 360, 100), Brick);
+			Box(FVector(-600, 500, RZ + 120), FVector(240, 240, 240), Concrete * 1.2f);  // the water tank's housing
+			Box(FVector(500, -400, RZ + 60), FVector(300, 160, 120), Steel);             // air-con unit
+			Sign(C.Place.ToUpper(), FVector(X0 - 14, 0, RZ + 120), 180, 60, SignCol);    // the big sign over the street
+		}
+
+		// ---- GROUND: the lobby, the bar, the service room ----
+		Wall(true, 200, Y0, Y1, 0, { -500.f, 500.f }, Paper);
+		Wall(false, 0, 200, X1, 0, { 450.f }, Paper);
+		Box(FVector(-300, 600, 55), FVector(100, 500, 110), Wood * 1.3f, WoodMaterial); AddSolid(-350, 350, -250, 850);  // the front desk
+		Box(FVector(-200, 600, 160), FVector(10, 420, 200), Wood * 0.6f, WoodMaterial);                                    // key boxes behind it
+		Box(FVector(850, 680, 55), FVector(700, 80, 110), Wood * 1.2f, WoodMaterial); AddSolid(500, 640, 1200, 720);      // the bar
+		Box(FVector(850, 960, 120), FVector(700, 60, 240), Wood * 0.7f, WoodMaterial); AddSolid(500, 930, 1200, 990);     // bottles
+		Box(FVector(1100, -300, 45), FVector(260, 120, 90), Steel); AddSolid(970, -360, 1230, -240);                       // service: a steel worktable
+		Sign(TEXT("LOBBY"), FVector(-1380, 600, 300), 0, 20, SignCol);
+		Sign(TEXT("BAR"), FVector(206, 500, 300), 0, 20, SignCol);
+		Sign(TEXT("STAFF ONLY"), FVector(206, -500, 290), 0, 14, SignCol);
+		Sign(TEXT("FLOORS 2 - 3"), FVector(-920, -770, 230), 0, 14, SignCol);
+
+		// ---- GUEST FLOORS: corridor down the middle, three rooms north, two south-east, the stair landing ----
+		const FR North[] = { { X0, 150, -467, Y1 }, { -467, 150, 467, Y1 }, { 467, 150, X1, Y1 } };
+		const FR South[] = { { 0, Y0, 700, -150 }, { 700, Y0, X1, -150 } };
+		const int32 DarkGuest = Rng.RandRange(0, 9); // one guest room with the bulb out
+		int32 GuestN = 0;
+		for (int32 F = 1; F <= 2; F++)
+		{
+			const float Z = F * FH;
+			Wall(false, 150, X0, X1, Z, { -930.f, 0.f, 930.f }, Paper);
+			Wall(false, -150, 0, X1, Z, { 350.f, 1050.f }, Paper);
+			Wall(true, -467, 150, Y1, Z, {}, Paper); Wall(true, 467, 150, Y1, Z, {}, Paper);
+			Wall(true, 0, Y0, -150, Z, {}, Paper); Wall(true, 700, Y0, -150, Z, {}, Paper);
+			Sign(FString::Printf(TEXT("FLOOR %d"), F + 1), FVector(-1380, -500, Z + 280), 0, 20, SignCol);
+			// the corridor: a runner and lamps
+			Box(FVector(0, 0, Z + 1), FVector(2700, 160, 2), FLinearColor(0.3f, 0.05f, 0.05f), nullptr, false);
+			for (float X : { -900.f, 0.f, 900.f }) Lamp(FVector(X, 0, Z + FH - 50), 2200.f, 700.f, Warm);
+			Areas.Add({ { X0 + 30, -120, X1 - 30, 120 }, Z, ANarrow });
+			// the stair landing (west of the stairs)
+			Areas.Add({ { X0 + 30, Y0 + 30, -930, -180 }, Z, AOpen });
+			Lamp(FVector(-700, -600, Z + FH - 50), 2500.f, 900.f, Warm);
+			// the rooms: a bed against the outside wall, a nightstand, a number on the door
+			auto Guest = [&](const FR& Rm, bool bNorth)
+			{
+				const float BedY = bNorth ? Rm.Y1 - 110 : Rm.Y0 + 110;
+				Box(FVector(Rm.CX(), BedY, Z + 28), FVector(170, 200, 56), FLinearColor(0.7f, 0.68f, 0.6f));
+				Box(FVector(Rm.CX(), bNorth ? Rm.Y1 - 12 : Rm.Y0 + 12, Z + 80), FVector(180, 12, 160), Wood * 0.8f, WoodMaterial);
+				Box(FVector(Rm.CX() + 140, BedY + (bNorth ? 60 : -60), Z + 30), FVector(50, 50, 60), Wood, WoodMaterial);
+				const int32 Num = (F + 1) * 100 + (++GuestN);
+				Sign(FString::FromInt(Num), FVector(Rm.CX() + 90, bNorth ? 144 : -144, Z + 230), bNorth ? -90.f : 90.f, 14, SignCol);
+				const FR A = bNorth ? FR{ Rm.X0 + 30, Rm.Y0 + 30, Rm.X1 - 30, Rm.Y1 - 240 } : FR{ Rm.X0 + 30, Rm.Y0 + 240, Rm.X1 - 30, Rm.Y1 - 30 };
+				const bool bDark = (F - 1) * 5 + GuestN - 1 == DarkGuest;
+				Areas.Add({ A, Z, bDark ? ADark : AOpen });
+				if (!bDark) Lamp(FVector(Rm.CX(), Rm.CY(), Z + FH - 60), 5000.f, 1000.f, Warm);
+			};
+			GuestN = 0;
+			for (const FR& Rm : North) Guest(Rm, true);
+			for (const FR& Rm : South) Guest(Rm, false);
+		}
+
+		// ---- THE ALLEY out back, and the FIRE ESCAPE up the back wall ----
+		const float AX1 = X1 + 600;
+		Box(FVector((X1 + AX1) / 2, 0, -5), FVector(600, Y1 - Y0, 10), Concrete * 0.8f, FloorMaterial);
+		Box(FVector(AX1 + 6, 0, 250), FVector(12, Y1 - Y0, 500), Brick * 0.7f, WallMaterial);
+		for (float Y : { Y0, Y1 }) Box(FVector((X1 + AX1) / 2, Y, 250), FVector(600, 12, 500), Brick * 0.7f, WallMaterial);
+		Box(FVector(AX1 - 80, -500, 70), FVector(120, 220, 140), FLinearColor(0.1f, 0.25f, 0.12f)); AddSolid(AX1 - 140, -610, AX1 - 20, -390); // the dumpster
+		Sign(TEXT("FIRE ESCAPE"), FVector(X1 + 8, 300, 280), 0, 16, SignCol);
+		Lamp(FVector(X1 + 60, 500, 330), 1800.f, 900.f, FLinearColor(1.f, 0.75f, 0.45f));   // the light over the back door
+		Areas.Add({ { X1 + 80, Y0 + 80, AX1 - 80, Y1 - 80 }, 0, AOpen });
+		for (int32 F = 1; F <= 2; F++)
+		{
+			const float Z = F * FH;
+			Box(FVector(X1 + 80, 100, Z - 5), FVector(160, 700, 10), Steel);                                              // the landing
+			// the railing, with gaps where the ladders meet it (Y 300: from the alley, Y -100: on up)
+			for (const FVector2D& R : { FVector2D(-250, -160), FVector2D(-40, 240), FVector2D(360, 450) })
+				Box(FVector(X1 + 158, (R.X + R.Y) / 2, Z + 50), FVector(4, R.Y - R.X, 100), Steel);
+			Areas.Add({ { X1 + 20, -230, X1 + 140, 420 }, Z, AHigh });
+		}
+		auto Ladder = [&](FVector At, float Yaw, float Height)
+		{
+			const FTransform LT(FRotator(0, Yaw, 0), At);
+			AHULadder* L = SpawnNamed<AHULadder>(LT * GetActorTransform());
+			if (L) { L->Height = Height; L->LadderMesh = LadderMesh; L->FinishSpawning(LT * GetActorTransform()); }
+		};
+		Ladder(FVector(X1 + 165, 300, 0), 0.f, FH);          // alley up to the 2nd floor landing
+		Ladder(FVector(X1 + 165, -100, FH), 0.f, FH);        // 2nd floor landing up to the 3rd
+		Ladder(FVector(X1 + 8, 300, 2 * FH), 0.f, FH);       // 3rd floor landing up onto the roof
+		Keep.Add({ X1 + 160, 200, X1 + 300, 400 });
+
+		// ---- the roof, the basement ----
+		Areas.Add({ { X0 + 40, Y0 + 40, X1 - 40, Y1 - 40 }, 3 * FH, AOpen });
+		Lamp(FVector(0, 0, 3 * FH + 600), 1500.f, 2400.f, FLinearColor(0.55f, 0.65f, 1.f)); // moonlight
+		Areas.Add({ { 230, -970, 1370, -30 }, -FH, ADark });
+
+		// ---- GROUND lights and areas ----
+		Rooms = { { X0, Y0, 200, Y1 }, { 200, 0, X1, Y1 }, { 200, Y0, X1, 0 } }; // lobby, bar, service (the cameras use these)
+		for (const FR& Rm : Rooms)
+		{
+			// a chandelier every 7 m or so: the lobby's big
+			const int32 NX = FMath::Max(1, FMath::RoundToInt(Rm.W() / 700.f)), NY = FMath::Max(1, FMath::RoundToInt(Rm.D() / 700.f));
+			for (int32 a = 0; a < NX; a++) for (int32 b = 0; b < NY; b++)
+				Lamp(FVector(Rm.X0 + Rm.W() * (a + 0.5f) / NX, Rm.Y0 + Rm.D() * (b + 0.5f) / NY, FH - 60), 6000.f, 900.f, Warm);
+			Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, AOpen });
+		}
+	}
 
 	// ---- spot pickers ----
 	TArray<FVector> Taken; // things already placed (local)
@@ -595,7 +805,10 @@ void AHUCrimeScene::Build()
 	// furniture from the middle of the room, or wedged beside a built-in fixture - instead of the open floor.
 	auto TuckedSpot = [&](const FArea& A, FVector& Out) -> bool
 	{
-		const FR Room{ A.Rect.X0 - 80, A.Rect.Y0 - 80, A.Rect.X1 + 80, A.Rect.Y1 + 80 }; // the areas sit 80 cm in from the walls
+		// ground-floor areas sit 80 cm in from the walls; the hand-built upper floors and basement are drawn to the walls already
+		const bool bGround = FMath::Abs(A.Z) < 1.f;
+		const float Pad = bGround ? 80.f : 0.f;
+		const FR Room{ A.Rect.X0 - Pad, A.Rect.Y0 - Pad, A.Rect.X1 + Pad, A.Rect.Y1 + Pad };
 		const float Gap = 28.f; // from a wall: right up against it
 		TArray<FVector2D> Cand;
 		for (float X : { Room.X0 + Gap, Room.X1 - Gap }) for (float Y : { Room.Y0 + Gap, Room.Y1 - Gap }) Cand.Add(FVector2D(X, Y));
@@ -614,7 +827,7 @@ void AHUCrimeScene::Build()
 		{
 			if (!Pu) continue;
 			const FVector L = GetActorTransform().InverseTransformPosition(Pu->GetActorLocation());
-			if (!Room.Contains(L.X, L.Y)) continue;
+			if (!Room.Contains(L.X, L.Y) || FMath::Abs(L.Z - Pu->SizeCm.Z / 2 - A.Z) > 50.f) continue; // (on this floor)
 			FVector2D Away(L.X - Room.CX(), L.Y - Room.CY());
 			Away = Away.IsNearlyZero() ? FVector2D(1, 0) : Away.GetSafeNormal();
 			const float Reach = FMath::Max(Pu->SizeCm.X, Pu->SizeCm.Y) * 0.5f + 30.f;
@@ -623,7 +836,7 @@ void AHUCrimeScene::Build()
 		}
 		for (const FR& S : Solid)
 		{
-			if (!Room.Contains(S.CX(), S.CY(), -100.f)) continue;
+			if (!bGround || !Room.Contains(S.CX(), S.CY(), -100.f)) continue; // fixtures are only known on the ground floor
 			const float U = Loot.FRandRange(0.15f, 0.85f);
 			Cand.Add(FVector2D(FMath::Lerp(S.X0, S.X1, U), Loot.FRand() < 0.5f ? S.Y0 - 24.f : S.Y1 + 24.f));
 			Cand.Add(FVector2D(Loot.FRand() < 0.5f ? S.X0 - 24.f : S.X1 + 24.f, FMath::Lerp(S.Y0, S.Y1, U)));

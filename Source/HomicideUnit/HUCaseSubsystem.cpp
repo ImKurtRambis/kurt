@@ -5,6 +5,9 @@
 #include "Misc/Paths.h"
 #include "HUSave.h"
 #include "HUCaseGen.h"
+#include "HUProfiles.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Kismet/GameplayStatics.h"
 
 void UHUCaseSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -65,6 +68,16 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	if (!Cases.IsValidIndex(Index)) Index = SquadSeed != 0 ? (SquadSeed + CasesStarted) % Cases.Num() : FMath::RandRange(0, Cases.Num() - 1); // a squad all gets the same case, and a new one each shift
 	CasesStarted++;
 	Current = Cases[Index];
+	// testing a place: -HUPlace=HOTEL on the command line
+	{ FString Forced; if (FParse::Value(FCommandLine::Get(), TEXT("HUPlace="), Forced)) for (const FString& P : HUCaseGen::Places()) if (P.Contains(Forced)) ChosenPlace = P; }
+	// a hand-built map only gets the offenders that fit it: if the squad picked one, swap in a case with a fitting offender
+	// (made the same way on every machine, from the case number)
+	if (const TArray<EHUProfile> Fit = HUProfiles::ForPlace(ChosenPlace); Fit.Num() && !Fit.Contains((EHUProfile)Current.Profile))
+		for (int32 Try = 1; Try < 200; Try++)
+		{
+			const TArray<FHUCase> One = HUCaseGen::MakeCases(Current.Number, 1, Current.Number * 7919 + Try);
+			if (One.Num() && Fit.Contains((EHUProfile)One[0].Profile)) { Current = One[0]; break; }
+		}
 	// the squad room's choices
 	if (!ChosenPlace.IsEmpty() && ChosenPlace != Current.Place)
 	{

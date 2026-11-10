@@ -68,6 +68,15 @@ namespace HUProfiles
 	}
 	inline const TCHAR* Name(EHUProfile P) { return Get(P).Name; }
 
+	// MAPS with their own offenders: a place built by hand (see HUCrimeScene) only gets the kinds of criminal
+	// that fit it. Empty = any (the generated places).
+	inline TArray<EHUProfile> ForPlace(const FString& Place)
+	{
+		const FString P = Place.ToUpper();
+		if (P.Contains(TEXT("HOTEL"))) return { EHUProfile::Stalker, EHUProfile::Passion, EHUProfile::Poisoner };
+		return {};
+	}
+
 	// which profiles fit a kind of crime
 	inline TArray<EHUProfile> ForCrime(const FString& Crime, const FString& Weapon)
 	{

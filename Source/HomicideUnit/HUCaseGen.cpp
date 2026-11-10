@@ -215,6 +215,8 @@ TArray<FHUCase> HUCaseGen::MakeCases(int32 FirstNumber, int32 Count, int32 Seed)
 		float Sum = 0; for (int32 p = 1; p < (int32)EHUProfile::Count; p++) Sum += 1.f + I.ProfileBoost[p];
 		float Roll = R.FRand() * Sum; EHUProfile Prof = EHUProfile::Stalker;
 		for (int32 p = 1; p < (int32)EHUProfile::Count; p++) { Roll -= 1.f + I.ProfileBoost[p]; if (Roll <= 0) { Prof = (EHUProfile)p; break; } }
+		// a hand-built map only gets the offenders that fit it
+		if (const TArray<EHUProfile> Fit = HUProfiles::ForPlace(C.Place); Fit.Num() && !Fit.Contains(Prof)) Prof = Fit[R.RandRange(0, Fit.Num() - 1)];
 		C.Profile = (uint8)Prof;
 
 		// a missing child is possible behind some profiles (a predator, a parent in a custody fight, a ransom, a debt)
