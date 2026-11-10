@@ -298,13 +298,20 @@ void AHUSuspectActor::Tick(float DeltaSeconds)
 	}
 	const APawn* E = Escort.Get();
 	if (!bCuffed || !E) return;
-	// a step behind and to the side of whoever's walking them, facing the way they're going
-	const FVector Behind = E->GetActorLocation() - E->GetActorForwardVector() * 95.f + E->GetActorRightVector() * 40.f;
-	FVector Target(Behind.X, Behind.Y, GetActorLocation().Z);
+	// walked in front of whoever has them by the arm: an arm's length ahead, back to the officer
+	// (so the cuffs are in view), facing the way the officer faces. When the officer turns, the
+	// suspect swings around them instead of being dragged through them.
+	constexpr float Ahead = 100.f;
+	const FVector Center = E->GetActorLocation();
 	const FVector Now = GetActorLocation();
-	const FVector Next = FMath::VInterpTo(Now, Target, DeltaSeconds, 5.f);
-	SetActorLocation(Next);
-	if (FVector::Dist2D(Now, Next) > 0.5f) SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0, (Next - Now).Rotation().Yaw, 0), DeltaSeconds, 8.f));
+	const float OfficerYaw = E->GetActorRotation().Yaw;
+	FVector Rel = (Now - Center) * FVector(1, 1, 0);
+	const float CurYaw = Rel.SizeSquared() > 1.f ? Rel.Rotation().Yaw : OfficerYaw;
+	const float NewYaw = FMath::RInterpTo(FRotator(0, CurYaw, 0), FRotator(0, OfficerYaw, 0), DeltaSeconds, 7.f).Yaw;
+	const float NewDist = FMath::FInterpTo(Rel.Size(), Ahead, DeltaSeconds, 6.f);
+	const FVector Next = Center + FRotator(0, NewYaw, 0).Vector() * NewDist;
+	SetActorLocation(FVector(Next.X, Next.Y, Now.Z));
+	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0, OfficerYaw, 0), DeltaSeconds, 10.f));
 }
 
 void AHUSuspectActor::Subdue(APawn* User, bool bTaser)
