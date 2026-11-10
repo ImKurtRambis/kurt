@@ -9,6 +9,7 @@
 #include "HUTools.h"
 #include "HUProfiles.h"
 #include "HUInterrogation.h"
+#include "HULook.h"
 #include "HUCaseSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHUClueFound, const FHUClue&, Clue);
@@ -110,6 +111,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Player") uint8 VoiceProvider = 2; // ElevenLabs
 	// Settings: hold V in interviews to SAY a question (local speech-to-text)
 	UPROPERTY(BlueprintReadWrite, Category = "Player") bool bVoiceQuestions = false;
+	// how your detective looks (picked at the name plate, saved, shown to the squad)
+	UPROPERTY(BlueprintReadWrite, Category = "Player") FHULook Look;
 	UPROPERTY() FString VoiceKey;
 	UFUNCTION(BlueprintPure, Category = "Kit") bool HasTool(EHUTool Tool) const { return Tool == EHUTool::Handcuffs || (OwnedTools & (1 << (int32)Tool)) != 0; }
 	// false if you can't afford it or already own it

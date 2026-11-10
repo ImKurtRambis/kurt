@@ -2,7 +2,7 @@
 // You sit at your desk; everything on it does something:
 //   CASE FILES (start / continue your career)  ·  DESK PHONE (host a squad)  ·  YOUR CELL PHONE (join a squad)
 //   THE COMPUTER (settings)  ·  POLICE MANUAL (how to play)  ·  THE PAPER (what's new)
-//   YOUR NAME PLATE (your personnel file: type your name)  ·  FRAMED PHOTO (credits)  ·  CAR KEYS (go home: quit)
+//   YOUR NAME PLATE (your personnel file: your name, and how your detective looks - build, height, skin, hair, coat, hat)  ·  FRAMED PHOTO (credits)  ·  CAR KEYS (go home: quit)
 // Hover an object to light it up and read what it does; click it - or ← → and ENTER. ESC closes a panel.
 // Your name, the join address and your settings are saved.
 #pragma once
@@ -68,6 +68,10 @@ private:
 	void StartTyping(int32 Field);
 	void FinishTyping(bool bKeep);
 	void ChangeSetting(int32 Dir);
+	void ChangeLook(int32 Dir);
+	void BuildFigurine();
+	UPROPERTY() USceneComponent* Figurine = nullptr;
+	UPROPERTY() TArray<UStaticMeshComponent*> FigureParts;
 	int32 RowsIn(EHUMenuPanel P) const;
 	bool LevelExists(FName Level) const;
 	void GoTo(FName Level, const FString& Options);

@@ -1,4 +1,4 @@
-#include "HUDeskMenu.h"
+﻿#include "HUDeskMenu.h"
 #include "HUListenSubsystem.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
@@ -194,6 +194,7 @@ void AHUDeskMenu::OnConstruction(const FTransform& Transform)
 void AHUDeskMenu::BeginPlay()
 {
 	Super::BeginPlay();
+	BuildFigurine();
 	APlayerController* P = PC();
 	if (!P) return;
 	P->SetViewTarget(this);
@@ -255,13 +256,14 @@ static int32 OrderIndex(int32 Item) { for (int32 i = 0; i < UE_ARRAY_COUNT(DeskO
 
 int32 AHUDeskMenu::RowsIn(EHUMenuPanel P) const
 {
-	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 1; default: return 0; }
+	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 1 + HULook::Fields; default: return 0; }
 }
 
 void AHUDeskMenu::Prev()
 {
 	if (bTyping) return;
 	if (Panel == EHUMenuPanel::Settings) { ChangeSetting(-1); return; }
+	if (Panel == EHUMenuPanel::Personnel) { ChangeLook(-1); return; }
 	if (Panel != EHUMenuPanel::None) return;
 	Pick = (int32)DeskOrder[(OrderIndex(Pick) + UE_ARRAY_COUNT(DeskOrder) - 1) % UE_ARRAY_COUNT(DeskOrder)];
 }
@@ -269,8 +271,36 @@ void AHUDeskMenu::Next()
 {
 	if (bTyping) return;
 	if (Panel == EHUMenuPanel::Settings) { ChangeSetting(1); return; }
+	if (Panel == EHUMenuPanel::Personnel) { ChangeLook(1); return; }
 	if (Panel != EHUMenuPanel::None) return;
 	Pick = (int32)DeskOrder[(OrderIndex(Pick) + 1) % UE_ARRAY_COUNT(DeskOrder)];
+}
+
+// the name plate: ← → change the picked part of your look (row 0 is your name)
+void AHUDeskMenu::ChangeLook(int32 Dir)
+{
+	UHUCaseSubsystem* C = Cases();
+	if (!C || Row < 1) return;
+	HULook::Step(C->Look, Row - 1, Dir);
+	C->SaveProgress();
+	BuildFigurine();
+}
+
+// your detective, in miniature, standing on the desk behind the name plate
+void AHUDeskMenu::BuildFigurine()
+{
+	const UHUCaseSubsystem* C = Cases();
+	if (!C) return;
+	if (!Figurine)
+	{
+		Figurine = NewObject<USceneComponent>(this, TEXT("HUFigurine"));
+		Figurine->SetupAttachment(RootComponent);
+		Figurine->SetRelativeLocation(FVector(52, 30, DeskZ));
+		Figurine->SetRelativeRotation(FRotator(0, 200, 0)); // facing you, a little turned
+		Figurine->SetRelativeScale3D(FVector(0.15f));
+		Figurine->RegisterComponent();
+	}
+	HULook::BuildFigure(this, Figurine, FigureParts, C->Look, false);
 }
 void AHUDeskMenu::Up() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + N - 1) % N; }
 void AHUDeskMenu::Down() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + 1) % N; }
@@ -289,7 +319,7 @@ void AHUDeskMenu::Activate()
 	{
 	case EHUMenuPanel::None: Use((EHUDeskItem)Pick); break;
 	case EHUMenuPanel::Settings: ChangeSetting(1); break;
-	case EHUMenuPanel::Personnel: StartTyping(0); break;
+	case EHUMenuPanel::Personnel: if (Row == 0) StartTyping(0); else ChangeLook(1); break;
 	case EHUMenuPanel::Join:
 		if (Row == 0) StartTyping(1);
 		else if (const UHUCaseSubsystem* C = Cases())
@@ -480,7 +510,10 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 	case EHUMenuPanel::Personnel:
 		Title = TEXT("PERSONNEL FILE");
 		if (bTyping) Lines.Add(FString::Printf(TEXT("▸ NAME:  %s%s"), *Typed, *Caret));
-		else Lines.Add(FString::Printf(TEXT("▸ NAME:  %s"), Name().IsEmpty() ? TEXT("(none yet)") : *Name()));
+		else Lines.Add(FString::Printf(TEXT("%sNAME:  %s"), Sel(0), Name().IsEmpty() ? TEXT("(none yet)") : *Name()));
+		// how you look - the figure on the desk changes as you go
+		if (C) for (int32 f = 0; f < HULook::Fields; f++)
+			Lines.Add(FString::Printf(TEXT("%s%s:   <  %s  >"), Sel(f + 1), HULook::FieldName(f), *HULook::ValueName(C->Look, f)));
 		if (C)
 		{
 			Lines.Add(FString::Printf(TEXT("   CASES CLOSED:  %d"), C->CasesSolved));
@@ -490,7 +523,7 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 			Lines.Add(TEXT("   KIT:  ") + (Kit.IsEmpty() ? FString(TEXT("nothing signed out yet")) : Kit));
 		}
 		Lines.Add(TEXT(""));
-		Lines.Add(bTyping ? TEXT("Type your name   ·   ENTER save   ·   ESC cancel") : TEXT("ENTER / click change your name   ·   ESC back"));
+		Lines.Add(bTyping ? TEXT("Type your name   ·   ENTER save   ·   ESC cancel") : TEXT("↑ ↓ choose   ·   ← → change your look   ·   ENTER on NAME to type it   ·   saved automatically   ·   ESC back"));
 		break;
 	case EHUMenuPanel::Settings:
 	{

@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/GameInstance.h"
+#include "Net/UnrealNetwork.h"
 
 AHUCharacter::AHUCharacter()
 {
@@ -34,6 +35,12 @@ void AHUCharacter::BeginPlay()
 	Super::BeginPlay();
 	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
 	if (C) Eyes->SetFieldOfView(C->FieldOfView);
+	// your look: from your save, sent to the host so the squad sees it (everyone else's comes in by replication)
+	Body = NewObject<USceneComponent>(this, TEXT("HUBody"));
+	Body->SetupAttachment(GetCapsuleComponent());
+	Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight()));
+	Body->RegisterComponent();
+	BuildBody(); // (yours is sent once you're possessed - see Tick)
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->SetInputMode(FInputModeGameOnly());
@@ -51,6 +58,21 @@ void AHUCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AHUCharacter::OpenMenu);
 }
 
+void AHUCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AHUCharacter, Look);
+}
+
+void AHUCharacter::ServerSetLook_Implementation(const FHULook& NewLook) { Look = NewLook; BuildBody(); }
+
+// a stand-in body built from your look: hidden from your own camera (you see your hand), seen by everyone else
+void AHUCharacter::BuildBody()
+{
+	if (!Body) return;
+	HULook::BuildFigure(this, Body, BodyParts, Look, true);
+}
+
 // ESC: the menu (settings, pager, leave the case) - not straight back to the desk
 void AHUCharacter::OpenMenu()
 {
@@ -63,8 +85,16 @@ void AHUCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
-	// look (works whatever input mappings the project has)
 	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	// your look, from your save: set it once you're the one controlling this body (the host passes it on)
+	if (!bLookSent && IsLocallyControlled() && C)
+	{
+		bLookSent = true;
+		Look = C->Look;
+		BuildBody();
+		if (!HasAuthority()) ServerSetLook(C->Look);
+	}
+	// look (works whatever input mappings the project has)
 	const float Sens = C ? C->MouseSensitivity : 1.f;
 	float DX = 0, DY = 0;
 	PC->GetInputMouseDelta(DX, DY);
