@@ -234,6 +234,12 @@ void AHUDeskMenu::BeginPlay()
 void AHUDeskMenu::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// the mic level meter runs while the Microphone setting is picked
+	if (UHUListenSubsystem* ML = GetGameInstance()->GetSubsystem<UHUListenSubsystem>())
+	{
+		const bool bWant = Panel == EHUMenuPanel::Settings && Row == 9;
+		if (bWant && !ML->IsMonitoring()) ML->StartMonitor(); else if (!bWant && ML->IsMonitoring()) ML->StopMonitor();
+	}
 	APlayerController* P = PC();
 	Hover = -1;
 	FHitResult Hit;
@@ -465,7 +471,7 @@ void AHUDeskMenu::ChangeSetting(int32 Dir)
 			C->SaveProgress();
 		}
 		return;
-	case 9: if (C) { C->bVoiceQuestions = !C->bVoiceQuestions; C->SaveProgress(); } return;
+	case 9: if (UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>()) L->CycleMic(Dir); return; // the microphone
 	}
 	S->ApplySettings(false);
 	S->SaveSettings();
@@ -547,9 +553,15 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 		else Lines.Add(FString::Printf(TEXT("%sVoice API key:  not set — put it in ElevenLabsKey.txt in the project folder, or copy it and press ENTER here"), Sel(8)));
 		Lines.Add(TEXT(""));
 		{
-			const UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
-			Lines.Add(FString::Printf(TEXT("%sSpeak questions (mic):  %s%s"), Sel(9), C && C->bVoiceQuestions ? TEXT("On — hold V in an interview and say a question") : TEXT("Off — pick questions with 1-6"),
-				L && !L->IsInstalled() ? TEXT("   (speech files not installed — see AI\\README.txt)") : TEXT("")));
+			// THE MICROPHONE: this game is played by talking. A live level while it's picked - talk and the bar moves.
+			UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+			if (L)
+			{
+				const int32 N = FMath::RoundToInt(L->Level() * 16.f);
+				const FString Meter = Row == 9 && L->IsMonitoring() ? FString(TEXT("   [")) + FString::ChrN(N, '|') + FString::ChrN(16 - N, '.') + TEXT("]") : FString();
+				Lines.Add(FString::Printf(TEXT("%sMicrophone (required — you talk to suspects):  %s%s%s"), Sel(9), *L->MicLabel(), *Meter,
+					!L->IsInstalled() ? TEXT("   (speech files not installed — see AI\\README.txt)") : TEXT("")));
+			}
 		}
 		Lines.Add(TEXT("↑ ↓ choose   ·   ← → / ENTER change   ·   saved automatically   ·   ESC back"));
 		break;

@@ -11,6 +11,7 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameUserSettings.h"
 #include "HUVoiceSubsystem.h"
+#include "HUListenSubsystem.h"
 #include "Components/InputComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -312,6 +313,11 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		return;
 	}
 	TickMarkers();
+	if (UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>())
+	{
+		const bool bWant = bMenuOpen && MenuRow == 6;
+		if (bWant && !L->IsMonitoring()) L->StartMonitor(); else if (!bWant && L->IsMonitoring()) L->StopMonitor();
+	}
 	if (!Keys) Setup(PC);
 
 	// the hand sways a little as you walk
@@ -474,7 +480,7 @@ void UHUInteractComponent::ChangeMenu(int32 Dir)
 	case 3: S->SetOverallScalabilityLevel((FMath::Max(0, S->GetOverallScalabilityLevel()) + Dir + 4) % 4); S->ApplySettings(false); S->SaveSettings(); break;
 	case 4: S->SetFullscreenMode((EWindowMode::Type)(((int32)S->GetFullscreenMode() + Dir + 3) % 3)); S->ApplySettings(false); S->SaveSettings(); break;
 	case 5: C->VoiceProvider = (uint8)((C->VoiceProvider + Dir + 3) % 3); C->SaveProgress(); break;
-	case 6: C->bVoiceQuestions = !C->bVoiceQuestions; C->SaveProgress(); break;
+	case 6: if (UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>()) L->CycleMic(Dir); break; // the microphone
 	default: break;
 	}
 }
@@ -493,7 +499,14 @@ FString UHUInteractComponent::MenuLine(int32 Row) const
 	case 3: return FString::Printf(TEXT("Graphics:  %s"), S ? Quality[FMath::Clamp(S->GetOverallScalabilityLevel(), 0, 3)] : TEXT("?"));
 	case 4: return FString::Printf(TEXT("Window:  %s"), S ? Modes[FMath::Clamp((int32)S->GetFullscreenMode(), 0, 2)] : TEXT("?"));
 	case 5: return FString::Printf(TEXT("Voices:  %s"), C ? *UHUVoiceSubsystem::ProviderName((EHUVoiceProvider)C->VoiceProvider) : TEXT(""));
-	case 6: return FString::Printf(TEXT("Speak questions (mic):  %s"), C && C->bVoiceQuestions ? TEXT("On") : TEXT("Off"));
+	case 6:
+	{
+		// the microphone, with a live level while it's picked: talk and the bar should move
+		UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+		if (!L) return TEXT("Microphone:  ?");
+		const int32 N = FMath::RoundToInt(L->Level() * 12.f);
+		return FString::Printf(TEXT("Microphone:  %s%s"), *L->MicLabel(), MenuRow == 6 && L->IsMonitoring() ? *(FString(TEXT("   [")) + FString::ChrN(N, '|') + FString::ChrN(12 - N, ' ') + TEXT("]")) : TEXT(""));
+	}
 	case 7: return TEXT("Leave the case — back to the desk");
 	default: return FString();
 	}

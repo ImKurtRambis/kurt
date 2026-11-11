@@ -1,4 +1,4 @@
-// Speech to text, on this PC (free, offline): hold V in an interview, say one of the questions, let go.
+﻿// Speech to text, on this PC (free, offline): hold V in an interview, say one of the questions, let go.
 // The microphone is recorded with Unreal's audio capture, then Moonshine (via sherpa-onnx, both open source)
 // turns it into text. The game only uses the text to pick the closest preset question - it never asks
 // anything you didn't choose.
@@ -32,6 +32,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Listen") float Level() const { return MicLevel; }
 
 	bool StartListening();
+
+	// ---- the microphone (Settings): this game is played by talking, so pick the right one ----
+	// every input device Windows has (names); refreshed each call
+	TArray<FString> MicNames();
+	// the picked one's name, or "Windows default" - and step through them (saved)
+	FString MicLabel();
+	void CycleMic(int32 Dir);
+	// hear the mic without recording (the level meter in Settings)
+	bool StartMonitor();
+	void StopMonitor();
+	bool IsMonitoring() const { return bMonitoring; }
 	void StopListening(FHUHeard Done);
 
 private:
@@ -39,7 +50,9 @@ private:
 	FCriticalSection Lock;
 	TArray<float> Samples;
 	int32 CaptureRate = 48000;
-	bool bListening = false, bWorking = false;
+	bool bListening = false, bWorking = false, bMonitoring = false;
+	bool OpenMic(); // opens the picked device (samples kept only while listening)
+	int32 PickedDeviceIndex();
 	float MicLevel = 0.f;
 	int32 Counter = 0;
 	FString Dir() const;

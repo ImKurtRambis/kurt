@@ -39,13 +39,51 @@ void UHUListenSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-bool UHUListenSubsystem::StartListening()
+// ---------- the microphone ----------
+TArray<FString> UHUListenSubsystem::MicNames()
 {
-	if (bListening || bWorking || !IsInstalled()) return false; // interviews are spoken now: no setting needed
+	TArray<FString> Out;
 	if (!Capture) Capture = MakeUnique<Audio::FAudioCapture>();
-	{ FScopeLock L(&Lock); Samples.Reset(); }
-	Audio::FAudioCaptureDeviceParams Params; // the default microphone
-	TWeakObjectPtr<UHUListenSubsystem> Self(this);
+	TArray<Audio::FCaptureDeviceInfo> Devs;
+	Capture->GetCaptureDevicesAvailable(Devs);
+	for (const Audio::FCaptureDeviceInfo& D : Devs) Out.Add(D.DeviceName);
+	return Out;
+}
+
+FString UHUListenSubsystem::MicLabel()
+{
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C || C->MicDevice.IsEmpty()) return TEXT("Windows default");
+	return MicNames().Contains(C->MicDevice) ? C->MicDevice : C->MicDevice + TEXT(" (not plugged in - using Windows default)");
+}
+
+// Windows default, then each device in turn
+void UHUListenSubsystem::CycleMic(int32 Dir)
+{
+	UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C) return;
+	TArray<FString> Opts = MicNames();
+	Opts.Insert(FString(), 0);
+	const int32 I = FMath::Max(0, Opts.IndexOfByKey(C->MicDevice));
+	C->MicDevice = Opts[(I + Dir + Opts.Num()) % Opts.Num()];
+	C->SaveProgress();
+	if (bMonitoring) { StopMonitor(); StartMonitor(); } // the meter follows the new mic
+}
+
+int32 UHUListenSubsystem::PickedDeviceIndex()
+{
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C || C->MicDevice.IsEmpty()) return Audio::DefaultDeviceIndex;
+	const int32 I = MicNames().IndexOfByKey(C->MicDevice);
+	return I == INDEX_NONE ? Audio::DefaultDeviceIndex : I;
+}
+
+// open the picked microphone; samples are kept only while listening (the meter just watches the level)
+bool UHUListenSubsystem::OpenMic()
+{
+	if (!Capture) Capture = MakeUnique<Audio::FAudioCapture>();
+	Audio::FAudioCaptureDeviceParams Params;
+	Params.DeviceIndex = PickedDeviceIndex();
 	const bool bOk = Capture->OpenAudioCaptureStream(Params, [this](const void* In, int32 Frames, int32 Channels, int32 Rate, double, bool)
 	{
 		// float samples, interleaved -> mono
@@ -58,17 +96,39 @@ bool UHUListenSubsystem::StartListening()
 			float S = 0.f;
 			for (int32 c = 0; c < Channels; c++) S += F[i * Channels + c];
 			S /= FMath::Max(1, Channels);
-			Samples.Add(S);
+			if (bListening) Samples.Add(S);
 			Peak = FMath::Max(Peak, FMath::Abs(S));
 		}
 		MicLevel = FMath::Clamp(Peak * 3.f, 0.f, 1.f);
 		if (Samples.Num() > Rate * 15) Samples.RemoveAt(0, Frames); // 15 seconds at most
 	}, 1024);
 	if (!bOk || !Capture->StartStream()) { UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: no microphone")); Capture->CloseStream(); return false; }
-	bListening = true;
 	return true;
 }
 
+bool UHUListenSubsystem::StartMonitor()
+{
+	if (bMonitoring || bListening) return bMonitoring;
+	bMonitoring = OpenMic();
+	return bMonitoring;
+}
+
+void UHUListenSubsystem::StopMonitor()
+{
+	if (!bMonitoring) return;
+	bMonitoring = false; MicLevel = 0.f;
+	if (Capture) { Capture->StopStream(); Capture->CloseStream(); }
+}
+
+bool UHUListenSubsystem::StartListening()
+{
+	if (bListening || bWorking || !IsInstalled()) return false; // interviews are spoken: no setting needed
+	StopMonitor();
+	{ FScopeLock L(&Lock); Samples.Reset(); }
+	bListening = true;
+	if (!OpenMic()) { bListening = false; return false; }
+	return true;
+}
 void UHUListenSubsystem::StopListening(FHUHeard Done)
 {
 	if (!bListening) { Done.ExecuteIfBound(FString()); return; }

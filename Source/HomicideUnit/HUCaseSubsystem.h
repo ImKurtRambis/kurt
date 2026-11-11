@@ -1,4 +1,4 @@
-// The case in play: loads cases, tracks evidence found, lies broken and the accusation.
+﻿// The case in play: loads cases, tracks evidence found, lies broken and the accusation.
 // One per game instance, so it survives level changes (precinct -> scene -> precinct).
 // In Blueprints: Get Game Instance Subsystem (HUCaseSubsystem).
 #pragma once
@@ -130,6 +130,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Player") bool bVoiceQuestions = false;
 	// how your detective looks (picked at the name plate, saved, shown to the squad)
 	UPROPERTY(BlueprintReadWrite, Category = "Player") FHULook Look;
+	// the microphone to talk to suspects with, by name (empty: Windows' default input)
+	UPROPERTY(BlueprintReadWrite, Category = "Player") FString MicDevice;
 	UPROPERTY() FString VoiceKey;
 	UFUNCTION(BlueprintPure, Category = "Kit") bool HasTool(EHUTool Tool) const { return Tool == EHUTool::Handcuffs || (OwnedTools & (1 << (int32)Tool)) != 0; }
 	// false if you can't afford it or already own it
