@@ -1,4 +1,4 @@
-#include "HUPromptWidget.h"
+﻿#include "HUPromptWidget.h"
 #include "HUListenSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
@@ -6,6 +6,7 @@
 #include "HUSecurityDesk.h"
 #include "HUCharacter.h"
 #include "HUSuspectActor.h"
+#include "HUReaction.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "GameFramework/PlayerController.h"
@@ -60,67 +61,64 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			Bar(Out, Ly + 2, G, P + FVector2D(W - 300, 58), FVector2D(272, 7), Pres / 100.f, MoodCol);
 			Text(Out, Ly + 2, G, FString::Printf(TEXT("LIES ON THE RECORD  %d / %d"), CS->Breaks, CS->Current.Solution.RequiredBreaks), Font("Bold", 9, 100), P + FVector2D(28, 64), Dim);
 
-			// what they've told you: pick one to work on
+			// what they've told you
 			const float ColW = W * 0.54f;
 			Text(Out, Ly + 2, G, TEXT("WHAT THEY SAID"), Font("Bold", 9, 140), P + FVector2D(28, 92), Gold);
 			for (int32 i = 0; i < S.Statements.Num(); i++)
 			{
 				const FVector2D RP = P + FVector2D(28, 114 + i * 34);
-				const bool bSel = i == Sus->StatementSel, bBroken = CS->IsBroken(S.Id, i);
-				if (bSel) Box(Out, Ly + 2, G, RP - FVector2D(10, 4), FVector2D(ColW - 20, 30), Gold * FLinearColor(1, 1, 1, 0.14f), 7.f);
+				const bool bBroken = CS->IsBroken(S.Id, i);
 				FString St = TEXT("\"") + S.Statements[i].Text + TEXT("\"");
-				const FSlateFontInfo SF = Font(bSel ? "Bold" : "Regular", 12);
+				const FSlateFontInfo SF = Font("Regular", 12);
 				while (St.Len() > 8 && Measure(St, SF).X > ColW - (bBroken ? 150 : 40)) St = St.LeftChop(5) + TEXT("…\"");
 				Text(Out, Ly + 3, G, St, SF, RP, bBroken ? Dim : Ink);
 				if (bBroken) { Box(Out, Ly + 3, G, RP + FVector2D(ColW - 140, 1), FVector2D(110, 18), Red * FLinearColor(1, 1, 1, 0.85f), 9.f); TextCentered(Out, Ly + 4, G, TEXT("LIE ON RECORD"), Font("Bold", 8, 60), RP + FVector2D(ColW - 85, 10), FLinearColor::White); }
 			}
 
-			// questions you can ask: 1-6, or hold V and say one
+			// talking to them: hold V (what you said, and the microphone)
 			{
 				const UHUListenSubsystem* Mic = Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
-				const bool bMic = Mic && Mic->IsEnabled();
 				const float QY = 114 + S.Statements.Num() * 34 + 14;
-				Text(Out, Ly + 2, G, bMic ? TEXT("ASK  —  1-6, or hold V and say it") : TEXT("ASK  —  1-6"), Font("Bold", 9, 140), P + FVector2D(28, QY), Gold);
-				const TArray<FString> Qs = Sus->QuestionLabels();
-				for (int32 q = 0; q < Qs.Num(); q++)
+				Text(Out, Ly + 2, G, TEXT("TALK TO THEM  —  hold V and speak"), Font("Bold", 9, 140), P + FVector2D(28, QY), Gold);
+				const TCHAR* Tips[] = { TEXT("Ask them anything: where they were, who they saw, how they knew the victim."),
+					TEXT("Name evidence you've bagged to confront them: \"explain the bloody glove\"."),
+					TEXT("Bring up their record, or call out a lie: \"you're lying to me\"."),
+					TEXT("Give orders: \"sit down\", \"look at me\", \"show me your hands\" - they may not obey."),
+					TEXT("\"That's all\" ends it.") };
+				for (int32 q = 0; q < UE_ARRAY_COUNT(Tips); q++) Text(Out, Ly + 3, G, Tips[q], Font("Regular", 10), P + FVector2D(28, QY + 22 + q * 18), Dim);
+				const FVector2D HP = P + FVector2D(28, QY + 22 + UE_ARRAY_COUNT(Tips) * 18 + 10);
+				if (Sus->bMicOpen)
 				{
-					const FVector2D QP = P + FVector2D(28, QY + 22 + q * 22);
-					Box(Out, Ly + 2, G, QP + FVector2D(0, 1), FVector2D(18, 17), FLinearColor(1, 1, 1, 0.12f), 4.f);
-					TextCentered(Out, Ly + 3, G, FString::FromInt(q + 1), Font("Bold", 9), QP + FVector2D(9, 9), Ink);
-					FString QT = Qs[q];
-					if (q == 4 && S.Statements.IsValidIndex(Sus->StatementSel)) QT = FString::Printf(TEXT("Tell me more about statement %d."), Sus->StatementSel + 1);
-					Text(Out, Ly + 3, G, QT, Font("Regular", 11), QP + FVector2D(28, 0), Sus->bThinking ? Dim : Ink);
+					Box(Out, Ly + 2, G, HP, FVector2D(10, 10), Red, 5.f);
+					Text(Out, Ly + 3, G, TEXT("LISTENING — let go of V when you're done"), Font("Bold", 10), HP + FVector2D(18, -3), Red);
+					Bar(Out, Ly + 2, G, HP + FVector2D(18, 16), FVector2D(200, 5), Mic ? Mic->Level() : 0.f, Red);
 				}
-				if (Sus->bMicOpen || !Sus->Heard.IsEmpty())
+				else if (!Sus->Heard.IsEmpty())
 				{
-					const FVector2D HP = P + FVector2D(28, QY + 22 + Qs.Num() * 22 + 6);
-					if (Sus->bMicOpen)
-					{
-						Box(Out, Ly + 2, G, HP, FVector2D(10, 10), Red, 5.f);
-						Text(Out, Ly + 3, G, TEXT("LISTENING — let go of V when you're done"), Font("Bold", 10), HP + FVector2D(18, -3), Red);
-						Bar(Out, Ly + 2, G, HP + FVector2D(18, 16), FVector2D(200, 5), Mic ? Mic->Level() : 0.f, Red);
-					}
-					else Text(Out, Ly + 3, G, TEXT("HEARD:  ") + Sus->Heard, Font("Italic", 10), HP, Dim);
+					const TArray<FString> HR = Wrap(TEXT("YOU:  \"") + Sus->Heard + TEXT("\""), Font("Italic", 11), ColW - 40);
+					for (int32 r = 0; r < HR.Num() && r < 3; r++) Text(Out, Ly + 3, G, HR[r], Font("Italic", 11), HP + FVector2D(0, r * 17), Ink);
 				}
+				else if (Mic && !Mic->IsInstalled()) Text(Out, Ly + 3, G, TEXT("Speech-to-text isn't installed - press T to type instead."), Font("Italic", 10), HP, Amber);
 			}
 
-			// what you're putting in front of them
+			// your evidence: say its name to put it in front of them
 			const float RX = P.X + ColW + 20, RW = W - ColW - 48;
-			Text(Out, Ly + 2, G, TEXT("CONFRONT THEM WITH"), Font("Bold", 9, 140), FVector2D(RX, P.Y + 92), Gold);
 			const TArray<FString> Bag = Sus->BaggedIds();
-			FString EvName = TEXT("No evidence — just press them"), EvDetail = TEXT("Push them on what they said and watch how they react.");
-			FHUClue K;
-			if (Bag.IsValidIndex(Sus->EvidenceSel) && CS->GetClue(Bag[Sus->EvidenceSel], K)) { EvName = K.Name; EvDetail = K.Detail; }
-			Box(Out, Ly + 2, G, FVector2D(RX, P.Y + 112), FVector2D(RW, 34), FLinearColor(1, 1, 1, 0.07f), 8.f);
-			TextCentered(Out, Ly + 3, G, FString::Printf(TEXT("◂   %s   ▸"), *EvName), Font("Bold", 12), FVector2D(RX + RW * 0.5f, P.Y + 129), Ink);
-			const TArray<FString> DetailRows = Wrap(EvDetail, Font("Regular", 10), RW - 10);
-			for (int32 r = 0; r < DetailRows.Num() && r < 3; r++) Text(Out, Ly + 3, G, DetailRows[r], Font("Regular", 10), FVector2D(RX + 4, P.Y + 156 + r * 15), Dim);
-			if (Bag.Num() > 0) Text(Out, Ly + 3, G, FString::Printf(TEXT("%d piece%s bagged"), Bag.Num(), Bag.Num() == 1 ? TEXT("") : TEXT("s")), Font("Regular", 9), FVector2D(RX + RW - 90, P.Y + 92), Dim);
+			Text(Out, Ly + 2, G, FString::Printf(TEXT("YOUR EVIDENCE  —  say it to show it  (%d)"), Bag.Num()), Font("Bold", 9, 140), FVector2D(RX, P.Y + 92), Gold);
+			if (Bag.Num() == 0) Text(Out, Ly + 3, G, TEXT("Nothing bagged yet."), Font("Italic", 11), FVector2D(RX + 4, P.Y + 114), Dim);
+			for (int32 b = 0; b < Bag.Num() && b < 6; b++)
+			{
+				FHUClue K;
+				if (CS->GetClue(Bag[b], K)) Text(Out, Ly + 3, G, TEXT("·  ") + K.Name, Font("Regular", 11), FVector2D(RX + 4, P.Y + 114 + b * 18), Ink);
+			}
+			if (Bag.Num() > 6) Text(Out, Ly + 3, G, FString::Printf(TEXT("+ %d more"), Bag.Num() - 6), Font("Regular", 10), FVector2D(RX + 4, P.Y + 114 + 6 * 18), Dim);
 
-			// their answer
-			Text(Out, Ly + 2, G, TEXT("THEIR ANSWER"), Font("Bold", 9, 140), FVector2D(RX, P.Y + 214), Gold);
+			// their answer, and what their body's doing
+			const float AY = P.Y + 240;
+			const FString How = FString(HUReact::EmotionName(Sus->Emotion)).ToUpper() + (Sus->LastAction != HUReact::None ? FString(TEXT("  ·  ")) + HUReact::ActionLabel(Sus->LastAction) : FString());
+			Text(Out, Ly + 2, G, TEXT("THEIR ANSWER  —  ") + How, Font("Bold", 9, 140), FVector2D(RX, AY), Gold);
 			const TArray<FString> Reply = Wrap(Sus->LastReply.IsEmpty() ? FString(TEXT("\"") + S.Intro + TEXT("\"")) : Sus->LastReply, Font("Italic", 12), RW - 10);
-			for (int32 r = 0; r < Reply.Num() && r < 8; r++) Text(Out, Ly + 3, G, Reply[r], Font("Italic", 12), FVector2D(RX + 4, P.Y + 236 + r * 19), Ink);
+			for (int32 r = 0; r < Reply.Num() && r < 7; r++) Text(Out, Ly + 3, G, Reply[r], Font("Italic", 12), FVector2D(RX + 4, AY + 22 + r * 19), Ink);
 
 			if (Sus->bTyping || Sus->bThinking)
 			{
@@ -128,8 +126,8 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				const FString Line = Sus->bThinking ? FString(TEXT("They're thinking...")) : FString::Printf(TEXT("YOU:  %s%s"), *Sus->Draft, (FMath::FloorToInt(GetWorld()->GetTimeSeconds() * 2.f) % 2) ? TEXT("|") : TEXT(" "));
 				Text(Out, Ly + 3, G, Line, Font("Regular", 12), FVector2D(P.X + 36, P.Y + H - 76), Ink);
 			}
-			const FString Keys = Sus->bTyping ? FString(TEXT("type your question     [Enter] ask     [Esc] cancel"))
-				: FString(TEXT("[W] [S] statement     [A] [D] evidence     [E] confront / press     [R] record     [T] ask a question     [Q] leave"));
+			const FString Keys = Sus->bTyping ? FString(TEXT("type what you say     [Enter] say it     [Esc] cancel"))
+				: FString(TEXT("[V] hold and talk     [T] type instead     [Q] leave"));
 			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 11), FVector2D(0, 0), Dim, 1.f, false);
 			Prompt(Out, Ly + 3, G, Keys, Font("Regular", 11), FVector2D(P.X + (W - KW) * 0.5f, P.Y + H - 36), Dim, 1.f, true);
 			return Ly + 6;

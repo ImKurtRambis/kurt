@@ -1,4 +1,4 @@
-#include "HUInteractComponent.h"
+﻿#include "HUInteractComponent.h"
 #include "HUInteractable.h"
 #include "HUPromptWidget.h"
 #include "HUCaseSubsystem.h"
@@ -934,20 +934,20 @@ void UHUInteractComponent::SendInterrogation(const FString& SuspectPath, uint8 A
 	else ServerInterrogate(SuspectPath, Action, Statement, ClueId);
 }
 
-void UHUInteractComponent::SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer)
+void UHUInteractComponent::SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action)
 {
 	const ENetMode Mode = GetWorld()->GetNetMode();
-	if (Mode == NM_Standalone) { MulticastAnswer_Implementation(SuspectPath, Question, Answer); return; }
-	if (GetOwner()->HasAuthority()) MulticastAnswer(SuspectPath, Question, Answer);
-	else ServerAnswer(SuspectPath, Question, Answer);
+	if (Mode == NM_Standalone) { MulticastAnswer_Implementation(SuspectPath, Question, Answer, Emotion, Action); return; }
+	if (GetOwner()->HasAuthority()) MulticastAnswer(SuspectPath, Question, Answer, Emotion, Action);
+	else ServerAnswer(SuspectPath, Question, Answer, Emotion, Action);
 }
-void UHUInteractComponent::ServerAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer)
+void UHUInteractComponent::ServerAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action)
 {
-	MulticastAnswer(SuspectPath, Question.Left(200), Answer.Left(400));
+	MulticastAnswer(SuspectPath, Question.Left(200), Answer.Left(400), Emotion, Action);
 }
-void UHUInteractComponent::MulticastAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer)
+void UHUInteractComponent::MulticastAnswer_Implementation(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action)
 {
-	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyAnswer(Cast<APawn>(GetOwner()), Question, Answer);
+	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyAnswer(Cast<APawn>(GetOwner()), Question, Answer, Emotion, Action);
 }
 
 void UHUInteractComponent::ServerInterrogate_Implementation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)

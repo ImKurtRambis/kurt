@@ -14,9 +14,11 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "HUReaction.h"
 #include "HUBrainSubsystem.generated.h"
 
 DECLARE_DELEGATE_OneParam(FHUBrainReply, const FString& /*Reply, empty on failure*/);
+DECLARE_DELEGATE_OneParam(FHUBrainReact, const FHUReaction& /*Say empty on failure*/);
 
 UCLASS()
 class HOMICIDEUNIT_API UHUBrainSubsystem : public UGameInstanceSubsystem
@@ -34,6 +36,10 @@ public:
 
 	// ask a suspect something. Their conversation so far is remembered for this case.
 	void AskSuspect(const FString& SuspectId, const FString& Question, FHUBrainReply Done);
+	// THE THINKING BRAIN: what the detective just said (spoken), plus what the game decided happened (Situation:
+	// evidence shown and whether it caught a lie, their record brought up...). Answers with the words to speak,
+	// the emotion to speak them with, and what their body does - including obeying or refusing an order.
+	void React(const FString& SuspectId, const FString& Said, const FString& Situation, FHUBrainReact Done);
 	// forget every conversation (a new case)
 	void ResetConversations() { History.Reset(); }
 

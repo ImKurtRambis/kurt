@@ -1,4 +1,4 @@
-// On the player: traces what you're looking at, shows its prompt and any subtitle on screen, sends E / Q to it,
+﻿// On the player: traces what you're looking at, shows its prompt and any subtitle on screen, sends E / Q to it,
 // and carries the HOTBAR - what's in your hand:
 //   1 hands  ·  2 flashlight  ·  3 UV light  ·  4 print kit  ·  5 crowbar  ·  6 scanner   (mouse wheel cycles)
 // and the UTILITY BELT - look down (with nothing to pick up there): cuffs, pepper spray, taser, radio, pager.
@@ -113,9 +113,9 @@ public:
 	UFUNCTION(Server, Reliable) void ServerInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
 	UFUNCTION(NetMulticast, Reliable) void MulticastInterrogate(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId);
 	// a typed question and the suspect's answer (from the asker's local brain), shown to the squad
-	void SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
-	UFUNCTION(Server, Reliable) void ServerAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
-	UFUNCTION(NetMulticast, Reliable) void MulticastAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer);
+	void SendAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion = 255, uint8 Action = 0);
+	UFUNCTION(Server, Reliable) void ServerAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
+	UFUNCTION(NetMulticast, Reliable) void MulticastAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
 
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;

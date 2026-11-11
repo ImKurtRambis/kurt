@@ -94,6 +94,78 @@ FString UHUBrainSubsystem::SystemPrompt(const FString& Id) const
 	return P;
 }
 
+// ---------- the thinking brain: words + emotion + body action, as JSON ----------
+void UHUBrainSubsystem::React(const FString& SuspectId, const FString& Said, const FString& Situation, FHUBrainReact Done)
+{
+	if (!bReady) { WarmUp(); Done.ExecuteIfBound(FHUReaction()); return; }
+	FString Emotions, Actions;
+	for (uint8 i = 0; i < HUReact::EmotionCount; i++) Emotions += (i ? TEXT(", ") : TEXT("")) + FString(HUReact::EmotionName(i));
+	for (uint8 i = 0; i < HUReact::ActionCount; i++) Actions += (i ? TEXT(", ") : TEXT("")) + FString(HUReact::ActionName(i));
+	FString Sys = SystemPrompt(SuspectId);
+	Sys += FString::Printf(TEXT("\n\nYou are in the room with the detective, and they talk to you out loud. Reply ONLY with a JSON object:\n")
+		TEXT("{\"say\": \"your spoken words, 1 to 3 short sentences\", \"emotion\": one of [%s], \"action\": one of [%s]}\n")
+		TEXT("\"action\" is what your body does as you answer. If the detective gives you an order (sit down, stand up, show me your hands, look at me, calm down), ")
+		TEXT("decide whether you obey from how you are right now: if you obey, do that action (sit, stand, hands_up, face_you...); if you refuse, say so and pick another action. ")
+		TEXT("When a line starts with GAME:, it is what really just happened - it is true, react to it, and keep to its meaning."), *Emotions, *Actions);
+
+	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+	TArray<TSharedPtr<FJsonValue>> Msgs;
+	auto Msg = [&Msgs](const TCHAR* Role, const FString& Text) { TSharedRef<FJsonObject> M = MakeShared<FJsonObject>(); M->SetStringField(TEXT("role"), Role); M->SetStringField(TEXT("content"), Text); Msgs.Add(MakeShared<FJsonValueObject>(M)); };
+	Msg(TEXT("system"), Sys);
+	for (const TPair<FString, FString>& QA : History.FindRef(SuspectId)) { Msg(TEXT("user"), QA.Key); Msg(TEXT("assistant"), FString::Printf(TEXT("{\"say\": \"%s\", \"emotion\": \"calm\", \"action\": \"none\"}"), *QA.Value.Replace(TEXT("\""), TEXT("'")))); }
+	const FString User = (Situation.IsEmpty() ? FString() : TEXT("GAME: ") + Situation + TEXT("\n")) + TEXT("The detective says: \"") + Said + TEXT("\"");
+	Msg(TEXT("user"), User);
+	Body->SetArrayField(TEXT("messages"), Msgs);
+	Body->SetNumberField(TEXT("max_tokens"), 160);
+	Body->SetNumberField(TEXT("temperature"), 0.8);
+	{ TSharedRef<FJsonObject> RF = MakeShared<FJsonObject>(); RF->SetStringField(TEXT("type"), TEXT("json_object")); Body->SetObjectField(TEXT("response_format"), RF); }
+	FString Json;
+	FJsonSerializer::Serialize(Body, TJsonWriterFactory<>::Create(&Json));
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
+	Req->SetURL(FString::Printf(TEXT("http://127.0.0.1:%d/v1/chat/completions"), Port));
+	Req->SetVerb(TEXT("POST"));
+	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	Req->SetContentAsString(Json);
+	Req->SetTimeout(40.f);
+	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
+	const FString Key = Said;
+	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Key, Done](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	{
+		FHUReaction R;
+		FString Content;
+		TSharedPtr<FJsonObject> Obj;
+		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Resp->GetContentAsString()), Obj) && Obj.IsValid())
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Choices;
+			if (Obj->TryGetArrayField(TEXT("choices"), Choices) && Choices->Num() > 0)
+				if (const TSharedPtr<FJsonObject>* M; (*Choices)[0]->AsObject()->TryGetObjectField(TEXT("message"), M)) Content = (*M)->GetStringField(TEXT("content"));
+		}
+		// the model's JSON (if it wrapped it in anything, cut to the braces)
+		const int32 A = Content.Find(TEXT("{")), B = Content.Find(TEXT("}"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+		TSharedPtr<FJsonObject> J;
+		if (A >= 0 && B > A && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Content.Mid(A, B - A + 1)), J) && J.IsValid())
+		{
+			R.Say = J->GetStringField(TEXT("say"));
+			R.Emotion = HUReact::EmotionFrom(J->GetStringField(TEXT("emotion")));
+			R.Action = HUReact::ActionFrom(J->GetStringField(TEXT("action")));
+		}
+		else R.Say = Content; // plain words: still usable
+		int32 X = 0, Y = 0;
+		while (R.Say.FindChar('*', X) && R.Say.Mid(X + 1).FindChar('*', Y)) R.Say.RemoveAt(X, Y + 2);
+		R.Say.ReplaceInline(TEXT("\""), TEXT(""));
+		R.Say.TrimStartAndEndInline();
+		if (R.Say.Len() > 320) R.Say = R.Say.Left(320) + TEXT("...");
+		if (Self.IsValid() && !R.Say.IsEmpty())
+		{
+			TArray<TPair<FString, FString>>& H = Self->History.FindOrAdd(SuspectId);
+			H.Add({ TEXT("The detective says: \"") + Key + TEXT("\""), R.Say });
+			if (H.Num() > 6) H.RemoveAt(0);
+		}
+		Done.ExecuteIfBound(R);
+	});
+	Req->ProcessRequest();
+}
+
 void UHUBrainSubsystem::AskSuspect(const FString& SuspectId, const FString& Question, FHUBrainReply Done)
 {
 	if (!bReady) { WarmUp(); Done.ExecuteIfBound(FString()); return; }

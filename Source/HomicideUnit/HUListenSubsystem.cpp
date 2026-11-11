@@ -1,4 +1,4 @@
-#include "HUListenSubsystem.h"
+﻿#include "HUListenSubsystem.h"
 #include "HUCaseSubsystem.h"
 #include "AudioCaptureCore.h"
 #include "Misc/Paths.h"
@@ -41,7 +41,7 @@ void UHUListenSubsystem::Deinitialize()
 
 bool UHUListenSubsystem::StartListening()
 {
-	if (bListening || bWorking || !IsEnabled()) return false;
+	if (bListening || bWorking || !IsInstalled()) return false; // interviews are spoken now: no setting needed
 	if (!Capture) Capture = MakeUnique<Audio::FAudioCapture>();
 	{ FScopeLock L(&Lock); Samples.Reset(); }
 	Audio::FAudioCaptureDeviceParams Params; // the default microphone
