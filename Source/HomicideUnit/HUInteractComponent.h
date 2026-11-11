@@ -117,6 +117,12 @@ public:
 	UFUNCTION(Server, Reliable) void ServerAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
 	UFUNCTION(NetMulticast, Reliable) void MulticastAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
 
+	// a moment flagged on the security tapes: the note goes to the whole squad; bCatch = it's the clip that
+	// catches the culprit's lie (every machine puts the lie on its record)
+	void SendTapeNote(const FString& Note, bool bCatch);
+	UFUNCTION(Server, Reliable) void ServerTapeNote(const FString& Note, bool bCatch);
+	UFUNCTION(NetMulticast, Reliable) void MulticastTapeNote(const FString& Note, bool bCatch);
+
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
 

@@ -57,6 +57,23 @@ public:
 	// confront a suspect's statement with a piece of evidence you've found
 	UFUNCTION(BlueprintCallable, Category = "Case") EHUChallengeResult Challenge(const FString& SuspectId, int32 StatementIndex, const FString& ClueId);
 	UFUNCTION(BlueprintPure, Category = "Case") bool IsBroken(const FString& SuspectId, int32 StatementIndex) const;
+
+	// ---- THE SECURITY TAPES: pulled at the scene, watched on the desk computers back at the precinct ----
+	// Recorded as pictures when they're pulled (every camera, every moment), so they play anywhere after.
+	UPROPERTY() TArray<class UTextureRenderTarget2D*> TapeFrames; // camera * TapeMoments + moment (null: recorder off)
+	UPROPERTY() TArray<FString> TapeClock;     // per moment
+	UPROPERTY() TArray<bool> TapeLost;         // per moment: the recorder was off
+	UPROPERTY() TArray<FString> TapeCamNames;  // per camera
+	UPROPERTY() TArray<FString> TapeNotes;     // per frame: what a detective makes of it (shown when flagged)
+	int32 TapeCatch = -1;                      // the frame that catches the culprit's lie (-1: none)
+	FString TapeCatchSuspect;
+	bool bTapesPulled = false;
+	bool bTapeCaught = false;
+	int32 TapeMoments() const { return TapeClock.Num(); }
+	int32 TapeCams() const { return TapeCamNames.Num(); }
+	// the flagged clip shows the culprit where they swore they weren't: one of their lies goes on the record.
+	// Returns what happened, for the squad.
+	FString CatchByTape();
 	UFUNCTION(BlueprintPure, Category = "Case") bool CanAccuse() const { return bCaseActive && Breaks >= Current.Solution.RequiredBreaks; }
 	// true when you named the killer; ends the case either way
 	UFUNCTION(BlueprintCallable, Category = "Case") bool Accuse(const FString& SuspectId);

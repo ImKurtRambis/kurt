@@ -176,7 +176,7 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				Box(Out, Ly + 4, G, FVector2D(X - 5, TP.Y - 5), FVector2D(10, 10), k == Desk->Frame ? Gold : FLinearColor(1, 1, 1, Desk->Frames[k].bLost ? 0.1f : 0.3f), 5.f);
 			}
 		}
-		const FString Keys = TEXT("[A] [D] camera     [W] [S] earlier / later     [Q] step away");
+		const FString Keys = Desk->bPaused ? TEXT("[A] [D] camera     [W] [S] step     [Space] play     [E] flag this moment     [Q] step away") : TEXT("[A] [D] camera     [W] [S] step     [Space] pause     [E] flag this moment     [Q] step away");
 		const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
 		Prompt(Out, Ly + 4, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 46), Dim, 1.f, true);
 		return Ly + 6;

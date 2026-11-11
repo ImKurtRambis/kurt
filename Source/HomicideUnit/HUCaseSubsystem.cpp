@@ -96,6 +96,8 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	InScene.Reset();
 	Arrested.Reset();
 	BookingStep.Reset();
+	TapeFrames.Reset(); TapeClock.Reset(); TapeLost.Reset(); TapeCamNames.Reset(); TapeNotes.Reset();
+	TapeCatch = -1; TapeCatchSuspect.Reset(); bTapesPulled = false; bTapeCaught = false;
 	bAwaitingCaptain = false;
 	BoardPins.Reset();
 	BoardMarks.Reset();
@@ -153,6 +155,24 @@ EHUChallengeResult UHUCaseSubsystem::Challenge(const FString& SuspectId, int32 S
 	Breaks++;
 	OnLieBroken.Broadcast(S, StatementIndex, St.OnBreak);
 	return EHUChallengeResult::Broken;
+}
+
+FString UHUCaseSubsystem::CatchByTape()
+{
+	if (bTapeCaught) return FString();
+	bTapeCaught = true;
+	FHUSuspect S;
+	if (!GetSuspect(TapeCatchSuspect, S)) return FString();
+	for (int32 i = 0; i < S.Statements.Num(); i++)
+	{
+		const FHUStatement& St = S.Statements[i];
+		if (St.Truth || IsBroken(S.Id, i)) continue;
+		BrokenKeys.Add(FString::Printf(TEXT("%s#%d"), *S.Id, i));
+		Breaks++;
+		OnLieBroken.Broadcast(S, i, St.OnBreak);
+		return FString::Printf(TEXT("The tape puts %s right there - it doesn't square with \"%s\". That lie is on the record."), *S.Name, *St.Text);
+	}
+	return FString::Printf(TEXT("The tape puts %s right there. It backs up what you've already proven."), *S.Name);
 }
 
 bool UHUCaseSubsystem::IsBroken(const FString& SuspectId, int32 StatementIndex) const

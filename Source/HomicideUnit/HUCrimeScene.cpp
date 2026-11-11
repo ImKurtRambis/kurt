@@ -1,4 +1,4 @@
-#include "HUCrimeScene.h"
+﻿#include "HUCrimeScene.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
@@ -918,15 +918,17 @@ void AHUCrimeScene::Build()
 		TArray<int32> CamRooms;
 		CamRooms.Add(RoomOf(PlayerStart.X < Plan.X0 ? FVector(Plan.X0 + 150, EntY, 0) : PlayerStart));
 		const int32 VictimRoom = RoomOf(VictimAt);
-		if (Cr.FRand() < 0.5f) CamRooms.AddUnique(VictimRoom);
+		CamRooms.AddUnique(VictimRoom); // the one that matters is always there
 		for (int32 Try = 0; Try < 6 && CamRooms.Num() < 3; Try++) CamRooms.AddUnique(Cr.RandRange(0, Rooms.Num() - 1));
-		TArray<FTransform> Cams; TArray<FString> CamNames;
+		TArray<FTransform> Cams; TArray<FString> CamNames; TArray<float> CamFloor;
 		for (int32 n = 0; n < CamRooms.Num(); n++)
 		{
 			const FR& Rm = Rooms[CamRooms[n]];
 			const float CX = Cr.FRand() < 0.5f ? Rm.X0 + 30 : Rm.X1 - 30, CY = Cr.FRand() < 0.5f ? Rm.Y0 + 30 : Rm.Y1 - 30;
-			const FVector At(CX, CY, H - 45);
-			const FVector Look = FVector(Rm.CX(), Rm.CY(), 60) - At;
+			const float FloorZ = CamRooms[n] == VictimRoom ? VictimAt.Z : 0.f; // (in a building with floors: on the victim's)
+			CamFloor.Add(FloorZ);
+			const FVector At(CX, CY, FloorZ + H - 45);
+			const FVector Look = FVector(Rm.CX(), Rm.CY(), FloorZ + 60) - At;
 			// the camera on the wall: a box, a lens, a red light
 			const FRotator R = Look.Rotation();
 			HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cube, At, FVector(26, 12, 12), FLinearColor(0.75f, 0.75f, 0.72f), R, false);
@@ -936,44 +938,87 @@ void AHUCrimeScene::Build()
 			CamNames.Add(FString::Printf(TEXT("CAM %d  ·  %s"), n + 1, CamRooms[n] == VictimRoom ? TEXT("WHERE IT HAPPENED") : n == 0 ? TEXT("FRONT") : TEXT("BACK ROOMS")));
 		}
 
-		// the night on tape: a handful of moments around the crime
+		// THE NIGHT ON TAPE: the half hour before it happened, and just after. Scripted from the case:
+		//   the culprit with the victim early on (talking), another suspect around them (a red herring), strangers
+		//   passing through, the victim moving to where it happened, the culprit closing in - and, on the camera in
+		//   that room, the culprit right there with them (THE clip: flag it and their lie goes on the record).
+		//   A robbery / fire / disappearance: the culprit where it happened just before; a missing person walks out
+		//   with them. Sometimes the recorder was switched off around the crime.
 		int32 Hr = 10, Mn = 0; { FString Hs, Ms; if (C.Time.Split(TEXT(":"), &Hs, &Ms)) { Hr = FCString::Atoi(*Hs); Mn = FCString::Atoi(*Ms.Left(2)); } }
 		auto Clock = [&](int32 Off) { int32 Mins = Hr * 60 + Mn + Off; Mins = (Mins + 24 * 60) % (24 * 60); const int32 H12 = (Mins / 60) % 12 == 0 ? 12 : (Mins / 60) % 12; return FString::Printf(TEXT("%d:%02d PM"), H12, Mins % 60); };
-		const int32 Offsets[] = { -25, -12, -4, -1, 2, 9 };
+		const int32 Offsets[] = { -32, -28, -24, -20, -16, -12, -8, -5, -3, -1, 2, 6 };
+		const int32 NM = UE_ARRAY_COUNT(Offsets), CatchAt = 8; // Offsets[8] == -3
 		const int32 Killer = SusId.IndexOfByKey(C.Solution.Killer);
+		const int32 Decoy = SusAt.Num() > 1 ? (Killer + 1 + Cr.RandRange(0, SusAt.Num() - 2)) % SusAt.Num() : -1;
 		const EHUProfile Prof = (EHUProfile)C.Profile;
 		const bool bCut = Prof == EHUProfile::ContractKiller || Prof == EHUProfile::Enforcer || Prof == EHUProfile::ConArtist || Cr.FRand() < 0.25f;
-		TArray<FVector> Early; // where everyone was earlier in the night
-		for (int32 i = 0; i < SusAt.Num(); i++)
-		{
-			const FR& Rm = Rooms[Cr.RandRange(0, Rooms.Num() - 1)];
-			Early.Add(FVector(Cr.FRandRange(Rm.X0 + 80, Rm.X1 - 80), Cr.FRandRange(Rm.Y0 + 80, Rm.Y1 - 80), 0));
-		}
+		const bool bHomicide = C.Crime == TEXT("homicide"), bMissing = C.Crime == TEXT("missing"), bArson = C.Crime == TEXT("arson");
+		auto RoomSpot = [&](int32 R) { const FR& Rm = Rooms[R]; return FVector(Cr.FRandRange(Rm.X0 + 80, Rm.X1 - 80), Cr.FRandRange(Rm.Y0 + 80, Rm.Y1 - 80), 0); };
+		TArray<FVector> Early; // where each suspect was earlier in the night
+		for (int32 i = 0; i < SusAt.Num(); i++) Early.Add(RoomSpot(Cr.RandRange(0, Rooms.Num() - 1)));
+		const FVector Meet = RoomSpot(CamRooms.Num() > 1 ? CamRooms[1] : CamRooms[0]); // where the culprit and the victim talked (on camera)
+		const FVector Door(Plan.X0 + 150, EntY, 0);
+		// two strangers walking through
+		TArray<FVector> SA, SB;
+		for (int32 s = 0; s < 2; s++) { SA.Add(RoomSpot(Cr.RandRange(0, Rooms.Num() - 1))); SB.Add(RoomSpot(Cr.RandRange(0, Rooms.Num() - 1))); }
+		const int32 NS = SusAt.Num(), NP = NS + 2 + 1; // suspects, strangers, the victim
+		TArray<TArray<FVector>> Local; Local.SetNum(NM);   // local positions per moment (zero = not there)
 		TArray<FHUFootageFrame> Frames;
-		for (int32 k = 0; k < UE_ARRAY_COUNT(Offsets); k++)
+		for (int32 k = 0; k < NM; k++)
 		{
 			FHUFootageFrame F;
 			const int32 Off = Offsets[k];
 			F.Clock = Clock(Off);
 			F.bAfter = Off >= 0;
 			F.bLost = bCut && (Off == -1 || Off == 2);
-			const float Drift = FMath::Clamp((Off + 25) / 34.f, 0.f, 1.f); // drifting from where they were to where patrol found them
-			for (int32 i = 0; i < SusAt.Num(); i++)
+			TArray<FVector>& P = Local[k]; P.Init(FVector::ZeroVector, NP);
+			const float Drift = FMath::Clamp((Off + 32) / 38.f, 0.f, 1.f);
+			for (int32 i = 0; i < NS; i++) P[i] = FMath::Lerp(Early[i], SusAt[i], Drift);
+			// the victim: at the meeting spot, then where it happened (gone after, unless they're lying there)
+			FVector V = Off <= -24 ? Meet : Off <= -12 ? FMath::Lerp(Meet, VictimAt, (Off + 24) / 12.f) : VictimAt;
+			if (bArson && Off >= -8) V = FVector::ZeroVector; // they'd gone by the time it was set
+			if (Off >= 0) V = FVector::ZeroVector;
+			if (Killer >= 0)
 			{
-				FVector P = FMath::Lerp(Early[i], SusAt[i], Drift);
-				if (i == Killer)
-				{
-					// the one who did it: heading for the victim, with them at the moment, then walking away
-					if (Off == -4) P = FMath::Lerp(Early[i], VictimAt, 0.7f);
-					if (Off == -1) P = VictimAt + FVector(70, 40, 0);
-					if (Off == 2) P = FMath::Lerp(VictimAt, SusAt[i], 0.5f);
-				}
-				F.People.Add(GetActorTransform().TransformPosition(P));
+				FVector& K = P[Killer];
+				if (Off == -32 || Off == -28) K = Meet + FVector(85, 30, 0);             // talking with the victim
+				if (Off == -8) K = FMath::Lerp(K, VictimAt, 0.5f);                       // heading that way
+				if (Off == -5) K = FMath::Lerp(K, VictimAt, 0.85f);
+				if (Off == -3 || Off == -1) K = VictimAt + FVector(70, 40, 0);         // right there
+				if (Off == 2) K = FMath::Lerp(VictimAt, SusAt[Killer], 0.5f);           // walking away
+				if (bMissing && (Off == -1)) { K = FMath::Lerp(VictimAt, Door, 0.6f); V = K + FVector(-60, 40, 0); } // leaving together
 			}
-			// the victim, standing, until it happened
-			F.People.Add(Off < 0 && C.Crime == TEXT("homicide") ? GetActorTransform().TransformPosition(VictimAt) : FVector::ZeroVector);
+			if (Decoy >= 0 && (Off == -24 || Off == -20)) P[Decoy] = (Off == -24 ? Meet : FMath::Lerp(Meet, VictimAt, 0.4f)) + FVector(-90, -20, 0); // around the victim too
+			for (int32 s = 0; s < 2; s++) if (Off <= -5 && (Off + 32) / 4 % 2 == s) P[NS + s] = FMath::Lerp(SA[s], SB[s], Cr.FRand());
+			P[NS + 2] = V;
+			for (const FVector& L : P) F.People.Add(L.IsNearlyZero() ? FVector::ZeroVector : GetActorTransform().TransformPosition(L));
 			Frames.Add(F);
 		}
+		// what a detective writes down for each camera at each moment (shown when a moment's flagged)
+		TArray<FString> Notes;
+		FString CatchSuspect; int32 CatchFrame = -1;
+		auto NameOf = [&](int32 i) { FHUSuspect S; return SusId.IsValidIndex(i) && Cases->GetSuspect(SusId[i], S) ? S.Name : FString(TEXT("someone")); };
+		for (int32 c = 0; c < CamRooms.Num(); c++)
+			for (int32 k = 0; k < NM; k++)
+			{
+				const FR& Rm = Rooms[CamRooms[c]];
+				auto Seen = [&](const FVector& L) { return !L.IsNearlyZero() && Rm.Contains(L.X, L.Y) && FMath::Abs(L.Z - CamFloor[c]) < 150.f; };
+				TArray<FString> Who;
+				for (int32 i = 0; i < NS; i++) if (Seen(Local[k][i])) Who.Add(NameOf(i));
+				int32 Strangers = 0; for (int32 s = 0; s < 2; s++) if (Seen(Local[k][NS + s])) Strangers++;
+				const bool bVic = Seen(Local[k][NS + 2]);
+				FString N;
+				if (Who.Num() || Strangers || bVic)
+				{
+					TArray<FString> Parts = Who;
+					if (bVic) Parts.Add(TEXT("the victim"));
+					if (Strangers) Parts.Add(Strangers == 1 ? TEXT("a stranger in a hat") : TEXT("two strangers"));
+					N = FString::Printf(TEXT("%s, %s — %s."), *Frames[k].Clock, *CamNames[c], *FString::Join(Parts, TEXT(", ")));
+					if (Killer >= 0 && Seen(Local[k][Killer]) && bVic && FVector::Dist2D(Local[k][Killer], Local[k][NS + 2]) < 200.f) N += FString::Printf(TEXT(" %s and the victim, close together."), *NameOf(Killer));
+				}
+				Notes.Add(N);
+				if (k == CatchAt && Killer >= 0 && Seen(Local[k][Killer]) && !Frames[k].bLost) { CatchFrame = c * NM + k; CatchSuspect = SusId[Killer]; }
+			}
 
 		// the desk itself, somewhere on the floor
 		FVector DeskAt;
@@ -984,6 +1029,7 @@ void AHUCrimeScene::Build()
 			if (AHUSecurityDesk* Desk = SpawnNamed<AHUSecurityDesk>(DT * GetActorTransform()))
 			{
 				Desk->Cameras = Cams; Desk->CameraNames = CamNames; Desk->Frames = Frames; Desk->Coats = SusCoat; Desk->VictimActor = Victim;
+				Desk->Notes = Notes; Desk->CatchFrame = CatchFrame; Desk->CatchSuspect = CatchSuspect;
 				Desk->FinishSpawning(DT * GetActorTransform());
 			}
 		}

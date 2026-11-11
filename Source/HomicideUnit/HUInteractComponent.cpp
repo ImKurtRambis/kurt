@@ -950,6 +950,27 @@ void UHUInteractComponent::MulticastAnswer_Implementation(const FString& Suspect
 	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyAnswer(Cast<APawn>(GetOwner()), Question, Answer, Emotion, Action);
 }
 
+void UHUInteractComponent::SendTapeNote(const FString& Note, bool bCatch)
+{
+	if (GetWorld()->GetNetMode() == NM_Standalone) { MulticastTapeNote_Implementation(Note, bCatch); return; }
+	if (GetOwner()->HasAuthority()) MulticastTapeNote(Note, bCatch); else ServerTapeNote(Note, bCatch);
+}
+void UHUInteractComponent::ServerTapeNote_Implementation(const FString& Note, bool bCatch) { MulticastTapeNote(Note.Left(300), bCatch); }
+void UHUInteractComponent::MulticastTapeNote_Implementation(const FString& Note, bool bCatch)
+{
+	APawn* User = Cast<APawn>(GetOwner());
+	APlayerController* Local = GetWorld()->GetFirstPlayerController();
+	APawn* Me = Local ? Local->GetPawn() : nullptr;
+	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!Mine) return;
+	const FString Who = User == Me ? FString(TEXT("You")) : User && User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName() : FString(TEXT("Your partner"));
+	Mine->Notify(TEXT("ON THE TAPE"), FString::Printf(TEXT("%s: %s"), *Who, *Note), FLinearColor(0.6f, 0.85f, 1.f));
+	if (!bCatch) return;
+	UHUCaseSubsystem* C = Cases();
+	const FString Res = C ? C->CatchByTape() : FString();
+	if (!Res.IsEmpty()) Mine->Notify(TEXT("THE TAPE CATCHES A LIE"), Res, FLinearColor(0.95f, 0.35f, 0.3f));
+}
+
 void UHUInteractComponent::ServerInterrogate_Implementation(const FString& SuspectPath, uint8 Action, int32 Statement, const FString& ClueId)
 {
 	MulticastInterrogate(SuspectPath, Action, Statement, ClueId);
