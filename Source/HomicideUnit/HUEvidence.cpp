@@ -66,6 +66,9 @@ void AHUEvidence::OnConstruction(const FTransform& Transform)
 void AHUEvidence::BeginPlay()
 {
 	Super::BeginPlay();
+	// back at the scene a second time (the motor pool door): what the squad already bagged isn't here any more
+	if (const UHUCaseSubsystem* S = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr)
+		if (S->HasFound(ClueId)) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s was bagged on an earlier visit - left out"), *ClueId); Destroy(); return; }
 	// dark and trace evidence can't be seen until a beam finds it
 	if (Conceal == EHUConceal::Dark || Conceal == EHUConceal::Trace) Show(false);
 }

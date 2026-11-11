@@ -135,7 +135,7 @@ void AHUVictim::Interact_Implementation(APawn* User, bool bSecondary)
 	if (bSearched || Kind == EHUVictimKind::Scorch || Kind == EHUVictimKind::Outline) return;
 	bSearched = true;
 	I->PlayReach();
-	if (Pocket)
+	if (IsValid(Pocket)) // (gone if it was bagged on an earlier visit)
 	{
 		// lay what you found beside the body
 		Pocket->SetActorLocation(GetActorLocation() + GetActorRightVector() * -55.f + GetActorForwardVector() * 10.f);
@@ -215,7 +215,7 @@ void AHUVictim::ExamineSpot(int32 Spot, UHUInteractComponent* I)
 	I->Say(FString::Printf(TEXT("THE %s:  %s"), *FString(SpotName(Spot)).ToUpper(), *Text));
 	if (bFirst && Sign != EHUProfile::None)
 	{
-		if (UHUCaseSubsystem* S = Cases()) S->AddBodyLead(Sign);
+		if (UHUCaseSubsystem* S = Cases()) if (!S->BodyLeads.Contains(Sign)) S->AddBodyLead(Sign); // (once per case, even over two visits)
 		I->Notify(TEXT("PROFILE LEAD"), FString::Printf(TEXT("The body points to a %s"), HUProfiles::Name(Sign)), FLinearColor(0.8f, 0.55f, 0.98f));
 	}
 	if (bFirst && Examined.Num() == 5) I->Notify(TEXT("BODY EXAMINED"), TEXT("Head to toe. Search the pockets too (Q)."), FLinearColor(0.36f, 0.76f, 1.f));

@@ -64,6 +64,9 @@ void AHUSuspectActor::BeginPlay()
 	Super::BeginPlay();
 	NameTag->SetText(FText::FromString(DisplayName().ToUpper()));
 	FaceYaw = GetActorRotation().Yaw;
+	// back at the scene a second time: anyone already taken in is in holding at the precinct, not here
+	if (const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr)
+		if (Cases->Arrested.Contains(SuspectId)) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is in holding - not at the scene"), *SuspectId); SetActorHiddenInGame(true); SetActorEnableCollision(false); SetActorTickEnabled(false); }
 }
 
 FString AHUSuspectActor::DisplayName() const

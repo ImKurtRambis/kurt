@@ -78,8 +78,8 @@ void AHUCruiser::CountSquad(int32& AtCar, int32& Total) const
 bool AHUCruiser::Ready(FString* Why) const
 {
 	const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
-	if (!Cases || !Cases->bCaseActive) { if (Why) *Why = TEXT("Your cruiser — no case on the board"); return false; }
-	if (!Cases->bBriefed) { if (Why) *Why = TEXT("Your cruiser — the Captain wants you at the briefing first"); return false; }
+	if (!Cases || !Cases->bCaseActive) { if (Why) *Why = bReturnTrip ? TEXT("Motor pool — no open case to go back to") : TEXT("Your cruiser — no case on the board"); return false; }
+	if (!Cases->bBriefed && !bReturnTrip) { if (Why) *Why = TEXT("Your cruiser — the Captain wants you at the briefing first"); return false; }
 	int32 AtCar, Total; CountSquad(AtCar, Total);
 	if (AtCar < Total) { if (Why) *Why = FString::Printf(TEXT("Waiting for your squad — %d of %d at the car"), AtCar, Total); return false; }
 	return true;
@@ -92,12 +92,15 @@ FText AHUCruiser::GetPrompt_Implementation(APawn* User) const
 	FString Why;
 	if (!Ready(&Why)) return FText::FromString(Why);
 	const UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-	return FText::FromString(TEXT("[E] Drive to ") + (DestinationLabel.IsEmpty() ? Cases->Current.Place : DestinationLabel));
+	return FText::FromString((bReturnTrip ? TEXT("[E] Drive back out to ") : TEXT("[E] Drive to ")) + (DestinationLabel.IsEmpty() ? Cases->Current.Place : DestinationLabel));
 }
 
 void AHUCruiser::Interact_Implementation(APawn* User, bool bSecondary)
 {
-	if (bPlayerCar && !bSecondary && !bLeaving && Ready()) Depart();
+	if (!bPlayerCar || bSecondary || bLeaving || !Ready()) return;
+	// heading back out: the squad's already been briefed on this case (their car at the scene brings them home again)
+	if (bReturnTrip) if (UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()) Cases->bBriefed = true;
+	Depart();
 }
 
 void AHUCruiser::Depart()

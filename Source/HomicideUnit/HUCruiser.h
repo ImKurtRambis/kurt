@@ -27,6 +27,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") bool bPlayerCar = true;
 	// where it goes, for the prompt (empty: the case's location)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") FString DestinationLabel;
+	// a trip BACK to an open case from the precinct (the motor pool door): no briefing needed, just an open case
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") bool bReturnTrip = false;
 
 	// how many detectives are in the game, and how many are at the car
 	UFUNCTION(BlueprintPure, Category = "Cruiser") void CountSquad(int32& AtCar, int32& Total) const;
@@ -38,9 +40,10 @@ public:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
 
-private:
+protected:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	bool bLeaving = false;
+private:
 	float Flash = 0.f;
 	FTimerHandle TravelTimer;
 	void Travel();
