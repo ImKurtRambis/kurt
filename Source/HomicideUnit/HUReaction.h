@@ -39,6 +39,24 @@ namespace HUReact
 	}
 }
 
+// PREMADE LINES: said straight away, in the suspect's own voice, while the thinking brain works out the real
+// answer - so the conversation never stalls. Recorded once when the interview starts (see AHUSuspectActor).
+namespace HUFiller
+{
+	enum EKind : uint8 { Question, Order, Evidence, Record, Accused, KindCount };
+	inline const TArray<FString>& Lines(uint8 K)
+	{
+		static const TArray<FString> L[KindCount] = {
+			{ TEXT("Let me get this straight..."), TEXT("Hm. Okay..."), TEXT("Well..."), TEXT("Let me think.") },
+			{ TEXT("What, now?"), TEXT("Excuse me?"), TEXT("Seriously?") },
+			{ TEXT("What's that supposed to be?"), TEXT("Where'd you get that?"), TEXT("Hold on..."), TEXT("Let me see that.") },
+			{ TEXT("Oh, here we go."), TEXT("That was a long time ago.") },
+			{ TEXT("Excuse me?"), TEXT("Whoa, whoa..."), TEXT("You've got some nerve.") },
+		};
+		return L[K < KindCount ? K : 0];
+	}
+}
+
 // the thinking brain's answer
 struct FHUReaction
 {

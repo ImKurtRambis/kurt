@@ -158,6 +158,7 @@ void AHUSuspectActor::OpenInterview(APawn* User)
 	}
 	bTyping = false; Draft.Reset(); bMicOpen = false; Heard.Reset();
 	bFacing = true; // they turn to face you
+	RecordFillers(); // their premade lines, in their voice (once)
 	if (UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>(); L && !L->IsInstalled())
 		if (UHUInteractComponent* I = User->FindComponentByClass<UHUInteractComponent>()) I->Notify(TEXT("NO MICROPHONE TOOLS"), TEXT("Speech-to-text isn't installed (see AI\\README.txt). Press T to type to them instead."), FLinearColor(0.95f, 0.6f, 0.3f));
 	if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
@@ -286,11 +287,81 @@ void AHUSuspectActor::Handle(const FString& Said)
 	if (!Clue.IsEmpty() || bRecord || bLie)
 	{
 		// a move on the record: every machine applies it; this machine's brain then answers (0x80 = said out loud)
-		bThinking = true; LastReply = TEXT("...");
+		// the premade line first, so the brain knows how they've started
+		PlayFiller(!Clue.IsEmpty() ? HUFiller::Evidence : bRecord ? HUFiller::Record : HUFiller::Accused);
+		bThinking = true; if (OpenedWith.IsEmpty()) LastReply = TEXT("...");
 		I->SendInterrogation(GetPathName(), (uint8)((bRecord && Clue.IsEmpty() ? 1 : 0) | 0x80), MatchStatement(Said, Clue), Clue);
 		return;
 	}
+	const bool bOrder = SaysAny(Said, { TEXT("sit"), TEXT("stand"), TEXT("look at me"), TEXT("hands"), TEXT("calm down"), TEXT("turn around"), TEXT("shut up"), TEXT("don't move"), TEXT("step back"), TEXT("come here") });
+	PlayFiller(bOrder ? HUFiller::Order : HUFiller::Question);
 	Think(Said, FString(), FString());
+}
+
+// ---------- premade lines: said at once while the brain thinks ----------
+void AHUSuspectActor::RecordFillers()
+{
+	UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+	if (bRecordingFillers || FillerSounds.Num() > 0 || !V || !V->HasNeuralVoice()) return;
+	FillerQueue.Reset();
+	// one of each kind first (ready soonest), then the rest
+	for (int32 n = 0; n < 4; n++) for (uint8 K = 0; K < HUFiller::KindCount; K++) if (HUFiller::Lines(K).IsValidIndex(n)) FillerQueue.AddUnique(HUFiller::Lines(K)[n]);
+	bRecordingFillers = true;
+	RecordNextFiller();
+}
+
+// one at a time, so the voice engine isn't swamped (they're short: a few seconds in all)
+void AHUSuspectActor::RecordNextFiller()
+{
+	UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+	if (!V || FillerQueue.Num() == 0) { bRecordingFillers = false; return; }
+	TWeakObjectPtr<AHUSuspectActor> Me(this);
+	if (bThinking) // a real answer is on its way: don't hold up the voice engine, try again in a moment
+	{
+		FTimerHandle H;
+		GetWorldTimerManager().SetTimer(H, FTimerDelegate::CreateLambda([Me]() { if (Me.IsValid()) Me->RecordNextFiller(); }), 1.f, false);
+		return;
+	}
+	const FString Next = FillerQueue[0];
+	FillerQueue.RemoveAt(0);
+	TWeakObjectPtr<AHUSuspectActor> Self(this);
+	V->Synthesize(Next, VoiceNum(), FString(), false, FHUVoiceReady::CreateLambda([Self, Next](USoundWave* S, float)
+	{
+		if (!Self.IsValid()) return;
+		if (S) Self->FillerSounds.Add(Next, S);
+		Self->RecordNextFiller();
+	}), 1.f, 0.45f);
+}
+
+void AHUSuspectActor::PlayFiller(uint8 Kind)
+{
+	TArray<FString> Ready;
+	for (const FString& L : HUFiller::Lines(Kind)) if (FillerSounds.Contains(L)) Ready.Add(L);
+	OpenedWith.Reset();
+	if (Ready.Num() == 0) return; // not recorded yet: just the "..." until the answer
+	const FString& L = Ready[FMath::RandRange(0, Ready.Num() - 1)];
+	USoundWave* S = FillerSounds[L];
+	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
+	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, S, GetActorLocation() + FVector(0, 0, 170));
+	SpeakNotBefore = GetWorld()->GetTimeSeconds() + (S ? S->Duration : 1.f) + 0.15;
+	LastReply = L;
+	OpenedWith = L;
+}
+
+// the real answer: straight away, or as soon as the premade line has finished
+void AHUSuspectActor::PlayVoice(USoundWave* Sound)
+{
+	if (!Sound || !GetWorld()) return;
+	const double Wait = SpeakNotBefore - GetWorld()->GetTimeSeconds();
+	if (Wait > 0.0)
+	{
+		PendingVoice = Sound;
+		TWeakObjectPtr<AHUSuspectActor> Self(this);
+		GetWorldTimerManager().SetTimer(VoiceTimer, FTimerDelegate::CreateLambda([Self]() { if (Self.IsValid() && Self->PendingVoice) { USoundWave* P = Self->PendingVoice; Self->PendingVoice = nullptr; Self->SpeakNotBefore = 0.0; Self->PlayVoice(P); } }), (float)Wait, false);
+		return;
+	}
+	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
+	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation() + FVector(0, 0, 170));
 }
 
 // the thinking brain: words, emotion, body - shared with the squad, and spoken by the voice on every machine
@@ -315,8 +386,12 @@ void AHUSuspectActor::Think(const FString& Said, const FString& Situation, const
 		UHUInteractComponent* I = Asker.IsValid() ? Asker->FindComponentByClass<UHUInteractComponent>() : nullptr;
 		if (I) I->SendAnswer(Self->GetPathName(), Said, Out.Say, Out.Emotion, Out.Action);
 	};
-	bThinking = true; LastReply = TEXT("...");
-	if (B && B->IsReady()) B->React(SuspectId, Said, Situation, FHUBrainReact::CreateLambda(Deliver));
+	bThinking = true; if (OpenedWith.IsEmpty()) LastReply = TEXT("...");
+	// they've already started out loud with a premade line: the brain carries on from it
+	FString Sit = Situation;
+	if (!OpenedWith.IsEmpty()) Sit += (Sit.IsEmpty() ? TEXT("") : TEXT(" ")) + FString::Printf(TEXT("You have already started your answer out loud with \"%s\" - carry straight on from there; don't repeat it."), *OpenedWith);
+	OpenedWith.Reset();
+	if (B && B->IsReady()) B->React(SuspectId, Said, Sit, FHUBrainReact::CreateLambda(Deliver));
 	else { if (B) B->WarmUp(); Deliver(FHUReaction()); }
 }
 
@@ -452,13 +527,10 @@ void AHUSuspectActor::Speak(const FString& Said, uint8 InEmotion)
 	float Excite = M == EHUSuspectMood::Calm ? 0.35f : M == EHUSuspectMood::Defensive ? 0.5f : M == EHUSuspectMood::Rattled ? 0.65f : M == EHUSuspectMood::Cracking ? 0.85f : 0.5f;
 	if (InEmotion < HUReact::EmotionCount) HUReact::Delivery(InEmotion, Excite, Speed);
 	// a voice per suspect (the 911 caller and the captain use others)
-	const int32 VoiceNum = 1 + (int32)(GetTypeHash(SuspectId) % 10);
 	TWeakObjectPtr<AHUSuspectActor> Self(this);
-	V->Synthesize(Said, VoiceNum, FString(), false, FHUVoiceReady::CreateLambda([Self](USoundWave* S, float)
+	V->Synthesize(Said, VoiceNum(), FString(), false, FHUVoiceReady::CreateLambda([Self](USoundWave* S, float)
 	{
-		if (!Self.IsValid() || !S) return;
-		if (Self->VoiceAudio.IsValid()) Self->VoiceAudio->Stop();
-		Self->VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(Self.Get(), S, Self->GetActorLocation() + FVector(0, 0, 170));
+		if (Self.IsValid() && S) Self->PlayVoice(S); // after any premade line that's still playing
 	}), Speed, Excite);
 }
 // ---------- the microphone: hold V, talk, let go ----------

@@ -99,4 +99,18 @@ private:
 	float FaceYaw = 0.f;
 	bool bFacing = false;
 	TArray<FTransform> BaseXf; // the parts' rest positions (legs, body, head, arms)
+	// premade lines (HUFiller), recorded in this suspect's voice when the interview starts, played at once while
+	// the brain thinks; the real answer waits until the line has finished
+	UPROPERTY() TMap<FString, class USoundWave*> FillerSounds;
+	TArray<FString> FillerQueue;
+	FString OpenedWith; // the premade line they just said (the brain is told, then it's cleared)
+	bool bRecordingFillers = false;
+	double SpeakNotBefore = 0.0;
+	void RecordFillers();
+	void RecordNextFiller();
+	void PlayFiller(uint8 Kind);
+	void PlayVoice(class USoundWave* Sound);
+	UPROPERTY() class USoundWave* PendingVoice = nullptr;
+	FTimerHandle VoiceTimer;
+	int32 VoiceNum() const { return 1 + (int32)(GetTypeHash(SuspectId) % 10); }
 };
