@@ -24,7 +24,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 ## The game loop and the levels (`Content/Maps`)
 
 1. **L_Menu** — `AHUDeskMenu`: you sit at your desk; objects on it are the menu (case files = start, cell phone = join a squad by 6-digit code, computer = settings, etc.). Widget: `UHUMenuWidget`.
-2. **L_Lobby** — `AHUSquadRoom`: the squad room / pre-lobby. Chalkboard with the squad code + roster, laptop (location) and folder (difficulty) for the host, a time clock to ready up (Y). All ready → countdown → `UHUSquadSubsystem::StartShift()` server-travels everyone.
+2. **L_Lobby** — `AHUSquadRoom`: the squad room / pre-lobby. Chalkboard with the squad code + roster, laptop (location) and folder (difficulty) for the host, a time clock to ready up (Y). All ready → countdown → `UHUSquadSubsystem::StartShift()` server-travels everyone. On the back side wall, the **case board** (`AHUCaseBoard`, spawned by the squad room): suspect mugshots, the scene, the weapon and every bagged piece of evidence; the squad pins evidence to suspects with red string and marks suspects prime/cleared (state in `UHUCaseSubsystem::BoardPins/BoardMarks`). `-HUBoardTest` on `L_Lobby` works the board by script and saves screenshots to `Saved/Screenshots`.
 3. **L_Briefing** — `AHUBriefingRoom` (+ `AHUBriefingLaptop`, `AHUMotorPool`, `AHUCruiser`, `AHUSupplyLocker`): Captain's slides on a projector, a 911 call plays (`Play911`), corridor to the motor pool, cruiser drives the squad to the scene.
 4. **L_Scene** — `AHUCrimeScene`: generates the whole crime scene from the case (rooms, lofts, ladders, crawlspace, street outside, patrol, prisoner van, suspects, victim, evidence). Your cruiser drives back to L_Lobby, where `ResolveArrests()` judges the case.
 
@@ -38,7 +38,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Squads / online (Steam or LAN sessions, 6-digit codes) | `HUSquadSubsystem.*`, `HUPlayerState.*`, `HUGameModes.*` |
 | The player | `HUCharacter.*` (movement, sitting), `HUInteractComponent.*` (look-at, E/Q, hotbar 1–7, flashlight/UV/scanner, hand viewmodel, hover glow, notifications, **squad interaction replay**) |
 | HUD & menus (drawn in C++, no UMG assets) | `HUPromptWidget.*`, `HUMenuWidget.*`, shared kit `HUDraw.h` |
-| Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker` |
+| Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker`, `HUCaseBoard` |
 | Tools & concealment | `HUTools.h` |
 | Interrogation (pressure, moods, confession) | `HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`, interview UI in `AHUSuspectActor` + `HUPromptWidget` |
 | Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |

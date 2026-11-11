@@ -6,6 +6,7 @@
 #include "Components/InputComponent.h"
 #include "HUCaseSubsystem.h"
 #include "HUCaseGen.h"
+#include "HUCaseBoard.h"
 #include "Net/UnrealNetwork.h"
 #include "HUInteractComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -140,6 +141,14 @@ void AHUSquadRoom::BeginPlay()
 	if (IsHost())
 		if (const AGameStateBase* GS = GetWorld()->GetGameState())
 			for (APlayerState* P : GS->PlayerArray) if (AHUPlayerState* HP = Cast<AHUPlayerState>(P)) HP->bReady = false;
+	// the CASE BOARD, on the -Y wall at the back of the room by the Captain's in-tray. Each machine spawns its own
+	// with the same name, so a squadmate's use of it finds this machine's copy.
+	{
+		FActorSpawnParameters SP;
+		SP.Name = TEXT("HU_CaseBoard");
+		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		GetWorld()->SpawnActor<AHUCaseBoard>(AHUCaseBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(40, -RY, 0)) * GetActorTransform(), SP);
+	}
 	for (float X : { -350.f, 0.f, 350.f })
 	{
 		UPointLightComponent* L = NewObject<UPointLightComponent>(this);

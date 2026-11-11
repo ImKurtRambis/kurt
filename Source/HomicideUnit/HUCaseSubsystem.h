@@ -132,6 +132,10 @@ public:
 	// back at the precinct: each prisoner is booked (mugshot, prints, property: 3 steps), then the case goes to the Captain
 	UPROPERTY(BlueprintReadOnly, Category = "Case") TMap<FString, int32> BookingStep;
 	UPROPERTY(BlueprintReadOnly, Category = "Case") bool bAwaitingCaptain = false;
+	// the CASE BOARD at the back of the squad room (AHUCaseBoard): evidence cards pinned under a suspect's photo
+	// (clue id -> suspect id), and how the squad has marked each suspect (0 none, 1 prime suspect, 2 cleared)
+	UPROPERTY(BlueprintReadWrite, Category = "Board") TMap<FString, FString> BoardPins;
+	UPROPERTY(BlueprintReadWrite, Category = "Board") TMap<FString, uint8> BoardMarks;
 	UFUNCTION(BlueprintPure, Category = "Case") bool IsBooked(const FString& Id) const { const int32* S = BookingStep.Find(Id); return S && *S >= 3; }
 	UFUNCTION(BlueprintPure, Category = "Case") int32 UnbookedCount() const { int32 N = 0; for (const FString& Id : Arrested) if (!IsBooked(Id)) N++; return N; }
 	// the Captain takes the case: judge the arrests, pay out, close it

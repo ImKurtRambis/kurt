@@ -97,6 +97,8 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	Arrested.Reset();
 	BookingStep.Reset();
 	bAwaitingCaptain = false;
+	BoardPins.Reset();
+	BoardMarks.Reset();
 	BodyLeads.Reset();
 	Pressure.Reset(); Misses.Reset(); Lawyered.Reset(); Confessed.Reset(); PressCount.Reset(); RecordRaised.Reset();
 	if (UHUBrainSubsystem* Brain = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) Brain->ResetConversations();
