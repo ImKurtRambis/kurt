@@ -1,4 +1,4 @@
-#include "HUSquadRoom.h"
+﻿#include "HUSquadRoom.h"
 #include "HUBuild.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
@@ -50,13 +50,16 @@ AHUSquadRoom::AHUSquadRoom()
 	BoardCode = MakeText(this, Root, TEXT("BoardCode"), FVector(RX - 8, 0, 215), 180, 46, FColor(255, 225, 120));
 	BoardRoster = MakeText(this, Root, TEXT("BoardRoster"), FVector(RX - 8, 0, 125), 180, 15, FColor(225, 230, 235));
 	DoorSign = MakeText(this, Root, TEXT("DoorSign"), FVector(-RX + 8, 0, 285), 0, 20, FColor(255, 181, 71));
-	BoardTitle->SetText(FText::FromString(TEXT("SQUAD ROOM")));
+	BoardTitle->SetText(FText::FromString(TEXT("ROLL CALL")));
 	// the case-selection table by the door: a laptop for where, a folder for how hard
 	LaptopScreen = MakeText(this, Root, TEXT("LaptopScreen"), FVector(-439.f, -360.f, 88.f), 0, 3.2f, FColor(150, 220, 255));
 	FolderLabel = MakeText(this, Root, TEXT("FolderLabel"), FVector(-398.f, -295.f, 92.f), 0, 5.f, FColor(255, 225, 120));
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	DoorSign->SetText(FText::FromString(TEXT("ROLL CALL  >  BRIEFING")));
+	// over the doorway in the -Y wall, both sides
+	MakeText(this, Root, TEXT("BureauSign"), FVector(0, -RY + 8, 290), 90, 18, FColor(255, 181, 71))->SetText(FText::FromString(TEXT("DETECTIVE BUREAU  >")));
+	MakeText(this, Root, TEXT("RollCallSign"), FVector(0, -RY - 18, 290), -90, 18, FColor(255, 181, 71))->SetText(FText::FromString(TEXT("<  ROLL CALL")));
 }
 
 UHUSquadSubsystem* AHUSquadRoom::Squad() const { return GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUSquadSubsystem>() : nullptr; }
@@ -73,8 +76,14 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	for (float S : { -1.f, 1.f })
 	{
 		Block(this, R, Blocks, EShape::Cube, FVector(S * (RX + 5), 0, RH / 2), FVector(10, RY * 2, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (RY + 5), RH / 2), FVector(RX * 2, 10, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (RY - 2), 45), FVector(RX * 2, 4, 90), Trim);
+		if (S > 0) { Block(this, R, Blocks, EShape::Cube, FVector(0, RY + 5, RH / 2), FVector(RX * 2, 10, RH), Wall); Block(this, R, Blocks, EShape::Cube, FVector(0, RY - 2, 45), FVector(RX * 2, 4, 90), Trim); continue; }
+		// the -Y wall: a doorway in the middle, through to the DETECTIVE BUREAU
+		for (float D : { -1.f, 1.f })
+		{
+			Block(this, R, Blocks, EShape::Cube, FVector(D * (RX + 110) / 2, -RY - 5, RH / 2), FVector(RX - 110, 10, RH), Wall);
+			Block(this, R, Blocks, EShape::Cube, FVector(D * (RX + 110) / 2, -RY + 2, 45), FVector(RX - 110, 4, 90), Trim);
+		}
+		Block(this, R, Blocks, EShape::Cube, FVector(0, -RY - 5, (250 + RH) / 2), FVector(220, 10, RH - 250), Wall);
 	}
 	// the chalkboard
 	BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 4, 0, 200), FVector(4, 560, 190), FLinearColor(0.03f, 0.06f, 0.04f)));
@@ -92,14 +101,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	ClockParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-RX + 23.5f, 260, 152), FVector(22, 22, 1), FLinearColor(0.9f, 0.88f, 0.8f), FRotator(0, 0, 90)));
 	ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 24, 260, 126), FVector(2, 14, 3), FLinearColor(0.05f, 0.05f, 0.05f)));
 	ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 8, 305, 140), FVector(6, 30, 60), FLinearColor(0.35f, 0.25f, 0.12f))); // the card rack
-	// the squad's desks, pushed together, with chairs and a coffee pot
-	for (float X : { -150.f, 150.f }) for (float Y : { -220.f, 220.f })
-	{
-		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 74), FVector(150, 90, 6), Desk);
-		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) Block(this, R, Blocks, EShape::Cube, FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
-		Block(this, R, Blocks, EShape::Cube, FVector(X - 10, Y + (Y > 0 ? -70 : 70), 45), FVector(45, 45, 6), Steel);
-		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 30, Y, 90), FVector(30, 34, 26), FLinearColor(0.6f, 0.57f, 0.48f)));
-	}
+	// the coffee pot, by the time clock
 	Block(this, R, Blocks, EShape::Cube, FVector(-500, 420, 45), FVector(120, 60, 90), Desk);
 	CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-500, 420, 105), FVector(16, 16, 22), FLinearColor(0.05f, 0.05f, 0.05f)));
 	CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-470, 420, 95), FVector(9, 9, 10), FLinearColor(0.85f, 0.85f, 0.8f)));
@@ -111,28 +113,51 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
 	FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0)));
 	FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f)));
-	// HOLDING: a barred cell in the corner where the van's prisoners wait to be booked
+	// a few rows of chairs facing the board, for roll call
+	for (float X : { -150.f, 50.f, 250.f }) for (float Y : { -250.f, -120.f, 120.f, 250.f })
+	{
+		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 45), FVector(45, 45, 6), Steel);
+		Block(this, R, Blocks, EShape::Cube, FVector(X - 22, Y, 70), FVector(4, 45, 50), Steel);
+	}
+
+	// ======== THE DETECTIVE BUREAU: through the door in the -Y wall - where the squad works the case ========
+	// (Y from -BY1 to -RY: the desks with their computers, the case board, holding and booking, the Captain's in-tray)
+	const float BY1 = RY + 1000.f;
+	Block(this, R, Blocks, EShape::Cube, FVector(0, -(RY + BY1) / 2, -5), FVector(RX * 2, BY1 - RY, 10), Floor * 0.9f);
+	Block(this, R, Blocks, EShape::Cube, FVector(0, -(RY + BY1) / 2, RH + 5), FVector(RX * 2, BY1 - RY, 10), Wall * 0.6f);
+	for (float S : { -1.f, 1.f }) Block(this, R, Blocks, EShape::Cube, FVector(S * (RX + 5), -(RY + BY1) / 2, RH / 2), FVector(10, BY1 - RY, RH), Wall * 0.95f);
+	Block(this, R, Blocks, EShape::Cube, FVector(0, -BY1 - 5, RH / 2), FVector(RX * 2, 10, RH), Wall * 0.95f);
+	// the squad's desks, pushed together, each with a computer (the case archive, and the scene's security tapes)
+	for (float X : { -450.f, -150.f }) for (float Y : { -RY - 300.f, -RY - 600.f })
+	{
+		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 74), FVector(150, 90, 6), Desk);
+		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) Block(this, R, Blocks, EShape::Cube, FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+		Block(this, R, Blocks, EShape::Cube, FVector(X - 10, Y + 70, 45), FVector(45, 45, 6), Steel);
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 30, Y, 90), FVector(30, 34, 26), FLinearColor(0.6f, 0.57f, 0.48f)));
+	}
+	// HOLDING: a barred cell in the far corner where the van's prisoners wait to be booked (back against the far wall)
+	const float CY0 = -BY1 + 200.f; // the bars, facing the room
 	const FLinearColor Bars(0.35f, 0.37f, 0.4f);
-	Block(this, R, Blocks, EShape::Cube, FVector(500, 395, 1), FVector(300, 190, 2), FLinearColor(0.2f, 0.2f, 0.21f), FRotator::ZeroRotator, false);
-	for (float X = 355.f; X <= 645.f; X += 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(X, 300, 120), FVector(3, 3, 240), Bars);   // the bars along the front
-	for (float Y = 310.f; Y <= 490.f; Y += 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(350, Y, 120), FVector(3, 3, 240), Bars);   // and the side
-	Block(this, R, Blocks, EShape::Cube, FVector(500, 300, 238), FVector(300, 6, 6), Bars);
-	Block(this, R, Blocks, EShape::Cube, FVector(560, 470, 22), FVector(160, 40, 6), FLinearColor(0.3f, 0.3f, 0.3f));                           // the bench
-	// the height chart for mugshots, on the cell's back wall
-	for (int32 i = 0; i < 6; i++) Block(this, R, Blocks, EShape::Cube, FVector(430, 496, 120 + i * 20), FVector(80, 2, 1.5f), FLinearColor(0.85f, 0.85f, 0.8f), FRotator::ZeroRotator, false);
+	Block(this, R, Blocks, EShape::Cube, FVector(500, CY0 - 95, 1), FVector(300, 190, 2), FLinearColor(0.2f, 0.2f, 0.21f), FRotator::ZeroRotator, false);
+	for (float X = 355.f; X <= 645.f; X += 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(X, CY0, 120), FVector(3, 3, 240), Bars);   // the bars along the front
+	for (float Y = CY0 - 10.f; Y >= -BY1 + 10.f; Y -= 20.f) Block(this, R, Blocks, EShape::Cylinder, FVector(350, Y, 120), FVector(3, 3, 240), Bars); // and the side
+	Block(this, R, Blocks, EShape::Cube, FVector(500, CY0, 238), FVector(300, 6, 6), Bars);
+	Block(this, R, Blocks, EShape::Cube, FVector(560, -BY1 + 30, 22), FVector(160, 40, 6), FLinearColor(0.3f, 0.3f, 0.3f));                       // the bench
+	for (int32 i = 0; i < 6; i++) Block(this, R, Blocks, EShape::Cube, FVector(430, -BY1 + 4, 120 + i * 20), FVector(80, 2, 1.5f), FLinearColor(0.85f, 0.85f, 0.8f), FRotator::ZeroRotator, false); // height chart
 	// the BOOKING COUNTER beside it: a ledger, an ink pad, a camera on a tripod
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 400, 50), FVector(70, 170, 100), Desk));
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 380, 101.5f), FVector(30, 40, 3), FLinearColor(0.12f, 0.15f, 0.3f)));
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, 430, 101.2f), FVector(14, 18, 2.4f), FLinearColor(0.05f, 0.05f, 0.05f)));
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(260, 470, 145), FVector(18, 22, 14), FLinearColor(0.08f, 0.08f, 0.08f)));
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(260, 470, 115), FVector(3, 3, 50), Steel));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, -BY1 + 100, 50), FVector(70, 170, 100), Desk));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, -BY1 + 120, 101.5f), FVector(30, 40, 3), FLinearColor(0.12f, 0.15f, 0.3f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(250, -BY1 + 70, 101.2f), FVector(14, 18, 2.4f), FLinearColor(0.05f, 0.05f, 0.05f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(260, -BY1 + 30, 145), FVector(18, 22, 14), FLinearColor(0.08f, 0.08f, 0.08f)));
+	CounterParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(260, -BY1 + 30, 115), FVector(3, 3, 50), Steel));
 	// the CAPTAIN'S IN-TRAY: where a finished case goes
-	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 74), FVector(110, 120, 6), Desk));
-	for (float DX : { -48.f, 48.f }) for (float DY : { -52.f, 52.f }) Block(this, R, Blocks, EShape::Cube, FVector(450 + DX, -420 + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
-	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 82), FVector(36, 46, 8), FLinearColor(0.4f, 0.3f, 0.15f)));
-	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(450, -420, 85), FVector(30, 40, 3), FLinearColor(0.75f, 0.6f, 0.32f)));
-	// overhead lamps
-	for (float X : { -350.f, 0.f, 350.f }) Block(this, R, Blocks, EShape::Cube, FVector(X, 0, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
+	const FVector Tray(450, -RY - 250, 0);
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 74), FVector(110, 120, 6), Desk));
+	for (float DX : { -48.f, 48.f }) for (float DY : { -52.f, 52.f }) Block(this, R, Blocks, EShape::Cube, Tray + FVector(DX, DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 82), FVector(36, 46, 8), FLinearColor(0.4f, 0.3f, 0.15f)));
+	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 85), FVector(30, 40, 3), FLinearColor(0.75f, 0.6f, 0.32f)));
+	// overhead lamps, both rooms
+	for (float X : { -350.f, 0.f, 350.f }) for (float Y : { 0.f, -RY - 300.f, -RY - 700.f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
 }
 
 void AHUSquadRoom::BeginPlay()
@@ -150,10 +175,10 @@ void AHUSquadRoom::BeginPlay()
 		FActorSpawnParameters SP;
 		SP.Name = TEXT("HU_CaseBoard");
 		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		GetWorld()->SpawnActor<AHUCaseBoard>(AHUCaseBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(40, -RY, 0)) * GetActorTransform(), SP);
+		GetWorld()->SpawnActor<AHUCaseBoard>(AHUCaseBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(-300, -RY - 1000.f, 0)) * GetActorTransform(), SP);
 		// and across the room on the +Y wall, the MOTOR POOL door: the squad drives back out to an open case from here
 		SP.Name = TEXT("HU_MotorPoolDoor");
-		GetWorld()->SpawnActor<AHUMotorPoolDoor>(AHUMotorPoolDoor::StaticClass(), FTransform(FRotator(0, -90, 0), FVector(-150, RY, 0)) * GetActorTransform(), SP);
+		GetWorld()->SpawnActor<AHUMotorPoolDoor>(AHUMotorPoolDoor::StaticClass(), FTransform(FRotator(0, 0, 0), FVector(-RX, -RY - 500.f, 0)) * GetActorTransform(), SP);
 	}
 	// the TAPE PLAYER behind the desk computers: plays the security tapes pulled at the scene (each player's own)
 	{
@@ -164,11 +189,11 @@ void AHUSquadRoom::BeginPlay()
 			Deck->FinishSpawning(T);
 		}
 	}
-	for (float X : { -350.f, 0.f, 350.f })
+	for (float X : { -350.f, 0.f, 350.f }) for (float LY : { 0.f, -RY - 500.f })
 	{
 		UPointLightComponent* L = NewObject<UPointLightComponent>(this);
 		L->SetupAttachment(RootComponent);
-		L->SetRelativeLocation(FVector(X, 0, RH - 50));
+		L->SetRelativeLocation(FVector(X, LY, RH - 50));
 		L->SetIntensity(7000.f);
 		L->SetAttenuationRadius(1100.f);
 		L->SetLightColor(FLinearColor(1.f, 0.9f, 0.75f));
@@ -438,7 +463,7 @@ void AHUSquadRoom::UpdateHolding()
 		{
 			G = NewObject<USceneComponent>(this);
 			G->SetupAttachment(RootComponent);
-			G->SetRelativeLocation(FVector(420 + (i % 3) * 90, 350 + (i / 3) * 70, 0));
+			G->SetRelativeLocation(FVector(420 + (i % 3) * 90, -RY - 850.f - (i / 3) * 70, 0)); // in the holding cell, in the bureau
 			G->SetRelativeRotation(FRotator(0, -90, 0)); // facing out through the bars
 			G->RegisterComponent();
 			TArray<UStaticMeshComponent*> Parts;
