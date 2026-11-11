@@ -1,7 +1,12 @@
-// THE SQUAD ROOM: the pre-lobby. Everyone waits here before the shift starts.
-// A chalkboard shows the squad's 6-digit code (friends type it into their cell phone at the desk menu) and
-// who's here. E on the board copies the code. The host walks to the ROLL CALL door and presses E to start:
-// the whole squad goes to the Captain's briefing together. ESC leaves the squad and goes back to the desk.
+// Two places, one class:
+// ROLL CALL (L_Lobby, AHUSquadRoom): just where the squad clocks in. A chalkboard shows the squad's 6-digit code
+// (friends type it into their cell phone at the desk menu) and who's punched in; E on the board copies the code.
+// The host picks the case at the table; once everyone's punched in at the time clock (or pressed Y) the squad goes
+// to the Captain's briefing together.
+// THE PRECINCT (L_Precinct, AHUPrecinct): the squad's base, the same for every case - where it gets solved. Back
+// from a scene you land here: the desk computers (the case archive, the security tapes), the case board, holding
+// and the booking counter, the Captain's in-tray, the motor pool (back out to the scene), coffee - and the door to
+// roll call for the next shift once the case is in.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -23,6 +28,8 @@ public:
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* DoorSign;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* LaptopScreen;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* FolderLabel;
+	// true: this is the precinct (see AHUPrecinct), not roll call
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Squad") bool bPrecinct = false;
 
 	// the host's picks for the shift (-1 = random). Replicated, so the whole squad gets the same case.
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") int32 PlaceChoice = -1;
@@ -55,6 +62,7 @@ private:
 	UPROPERTY() TArray<UPrimitiveComponent*> ClockParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> CounterParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> TrayParts;
+	UPROPERTY() TArray<UPrimitiveComponent*> ShiftParts; // the precinct's door to roll call
 	// the prisoners in holding (figures, by suspect id)
 	UPROPERTY() TMap<FString, USceneComponent*> Prisoners;
 	void UpdateHolding();
@@ -66,4 +74,13 @@ private:
 	bool bWelcomed = false;
 	class UHUSquadSubsystem* Squad() const;
 	bool IsHost() const;
+};
+
+// THE PRECINCT: the squad's base (its own level, L_Precinct). Same rooms for every case.
+UCLASS(Blueprintable)
+class HOMICIDEUNIT_API AHUPrecinct : public AHUSquadRoom
+{
+	GENERATED_BODY()
+public:
+	AHUPrecinct() { bPrecinct = true; }
 };

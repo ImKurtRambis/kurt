@@ -12,6 +12,7 @@ LEVELS = [
     ("/Game/Maps/L_Lobby", "/Script/HomicideUnit.HUSquadRoom", None),
     ("/Game/Maps/L_Briefing", "/Script/HomicideUnit.HUBriefingRoom", None),
     ("/Game/Maps/L_Scene", "/Script/HomicideUnit.HUCrimeScene", None),
+    ("/Game/Maps/L_Precinct", "/Script/HomicideUnit.HUPrecinct", None),
 ]
 
 level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)

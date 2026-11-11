@@ -245,7 +245,7 @@ void AHUCrimeScene::Build()
 			AHUCruiser* Cr = SpawnNamed<AHUCruiser>(CT * GetActorTransform());
 			if (!Cr) return;
 			Cr->bPlayerCar = bMine;
-			Cr->SceneLevel = TEXT("/Game/Maps/L_Lobby");
+			Cr->SceneLevel = TEXT("/Game/Maps/L_Precinct"); // back to base: the precinct
 			Cr->DestinationLabel = TEXT("the precinct");
 			Cr->FinishSpawning(CT * GetActorTransform());
 		};
