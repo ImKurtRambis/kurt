@@ -16,6 +16,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -102,6 +103,10 @@ namespace
 
 AHUCrimeScene::AHUCrimeScene()
 {
+	// Sensible precinct surfaces out of the box; designers can still override them per map.
+	FloorMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Linoleum.MI_HU_Linoleum"));
+	WallMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Plaster.MI_HU_Plaster"));
+	WoodMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Walnut.MI_HU_Walnut"));
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
