@@ -4,6 +4,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUDraw.h"
 #include "HUSecurityDesk.h"
+#include "HUCaseDesk.h"
 #include "HUCharacter.h"
 #include "HUSuspectActor.h"
 #include "HUReaction.h"
@@ -132,6 +133,44 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			Prompt(Out, Ly + 3, G, Keys, Font("Regular", 11), FVector2D(P.X + (W - KW) * 0.5f, P.Y + H - 36), Dim, 1.f, true);
 			return Ly + 6;
 		}
+	}
+	// ---- reading at a desk: a folder (paper) or the desk computer (green screen) ----
+	if (const AHUCaseDesk* Desk = Owner->Reading.Get(); Desk && Desk->bReading)
+	{
+		const bool bTerm = Desk->bTerminal;
+		const float PH = L.Y * 0.8f, PW = FMath::Min(L.X - 80.f, PH * 0.95f);
+		const FVector2D P((L.X - PW) * 0.5f, (L.Y - PH) * 0.42f);
+		const FLinearColor Paper = bTerm ? FLinearColor(0.01f, 0.03f, 0.015f) : FLinearColor(0.93f, 0.9f, 0.82f);
+		const FLinearColor InkC = bTerm ? FLinearColor(0.45f, 1.f, 0.55f) : FLinearColor(0.12f, 0.1f, 0.08f);
+		const FLinearColor Faint = bTerm ? FLinearColor(0.3f, 0.7f, 0.38f) : FLinearColor(0.42f, 0.36f, 0.3f);
+		Box(Out, Ly, G, FVector2D(0, 0), L, FLinearColor(0, 0, 0, 0.8f), 0.f);
+		Box(Out, Ly + 1, G, P - FVector2D(12, 12), FVector2D(PW + 24, PH + 24), bTerm ? FLinearColor(0.16f, 0.15f, 0.13f) : FLinearColor(0.72f, 0.6f, 0.38f), bTerm ? 16.f : 6.f);
+		Box(Out, Ly + 2, G, P, FVector2D(PW, PH), Paper, bTerm ? 8.f : 2.f);
+		if (bTerm) for (float Y = 0; Y < PH; Y += 4.f) Box(Out, Ly + 3, G, P + FVector2D(0, Y), FVector2D(PW, 1.f), FLinearColor(0, 0, 0, 0.25f), 0.f);
+		const FSlateFontInfo Body = bTerm ? Font("Mono", 13) : Font("Regular", 14);
+		const FSlateFontInfo Head = bTerm ? Font("Mono", 15) : Heading(15);
+		Text(Out, Ly + 4, G, Desk->ReaderTitle(), Font("Bold", 11, 160), P + FVector2D(32, 22), Faint);
+		const int32 Np = Desk->Pages.Num();
+		if (Desk->Pages.IsValidIndex(Desk->Page))
+		{
+			const AHUCaseDesk::FPage& Pg = Desk->Pages[Desk->Page];
+			Text(Out, Ly + 4, G, Pg.Title, Head, P + FVector2D(32, 44), InkC);
+			Box(Out, Ly + 4, G, P + FVector2D(32, 72), FVector2D(PW - 64, 1.5f), Faint, 0.f);
+			TArray<FString> Rows;
+			for (const FString& Line : Pg.Lines) { TArray<FString> W = Wrap(Line, Body, PW - 64); if (W.Num() == 0) Rows.Add(FString()); else Rows.Append(W); }
+			const float RowH = bTerm ? 19.f : 21.f;
+			const int32 Fit = FMath::Max(1, FMath::FloorToInt((PH - 140.f) / RowH));
+			const int32 First = FMath::Clamp(Desk->Scroll, 0, FMath::Max(0, Rows.Num() - Fit));
+			for (int32 r = 0; r < Fit && First + r < Rows.Num(); r++) Text(Out, Ly + 4, G, Rows[First + r], Body, P + FVector2D(32, 86 + r * RowH), InkC);
+			if (First + Fit < Rows.Num()) Text(Out, Ly + 4, G, TEXT("more below  [S]"), Font("Italic", 11), P + FVector2D(PW - 150, PH - 54), Faint);
+			if (First > 0) Text(Out, Ly + 4, G, TEXT("[W]  more above"), Font("Italic", 11), P + FVector2D(PW - 150, 52), Faint);
+		}
+		const FString PageNo = FString::Printf(TEXT("PAGE %d / %d"), Desk->Page + 1, FMath::Max(1, Np));
+		Text(Out, Ly + 4, G, PageNo, Font("Bold", 11, 120), P + FVector2D(32, PH - 34), Faint);
+		const FString Keys = bTerm ? TEXT("[A] [D] next tool     [W] [S] scroll     [Q] log off") : TEXT("[A] [D] turn the page     [W] [S] scroll     [Q] put it down");
+		const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
+		Prompt(Out, Ly + 4, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 46), Dim, 1.f, true);
+		return Ly + 6;
 	}
 	// ---- watching the security tapes: the feed fills the screen ----
 	if (const AHUSecurityDesk* Desk = Owner->Watching.Get())

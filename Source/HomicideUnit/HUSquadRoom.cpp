@@ -10,6 +10,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "HUMotorPoolDoor.h"
 #include "HUSecurityDesk.h"
+#include "HUCaseDesk.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 #include "HUInteractComponent.h"
@@ -200,6 +201,17 @@ void AHUSquadRoom::BeginPlay()
 		SP.Name = TEXT("HU_MotorPoolDoor");
 		GetWorld()->SpawnActor<AHUMotorPoolDoor>(AHUMotorPoolDoor::StaticClass(), FTransform(FRotator(0, 0, 0), FVector(-PX, 0, 0)) * GetActorTransform(), SP);
 	}
+	// the DESKS' case files: folders to pick up and read, one set per desk (same names on every machine)
+	{
+		int32 N = 0;
+		for (float X : { -350.f, -50.f }) for (float Y : { -170.f, 170.f })
+		{
+			FActorSpawnParameters SP;
+			SP.Name = *FString::Printf(TEXT("HU_CaseDesk%d"), N++);
+			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			GetWorld()->SpawnActor<AHUCaseDesk>(AHUCaseDesk::StaticClass(), FTransform(FRotator::ZeroRotator, FVector(X, Y, 0)) * GetActorTransform(), SP);
+		}
+	}
 	// the TAPE PLAYER behind the desk computers: plays the security tapes pulled at the scene (each player's own)
 	{
 		const FTransform T = GetActorTransform();
@@ -334,8 +346,8 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 	if (ComputerParts.Contains(I->FocusPart))
 	{
 		const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case archive"), TC->TapeCams()));
-		return FText::FromString(TEXT("[E] Check the case archive"));
+		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case tools: records, alibis, profile"), TC->TapeCams()));
+		return FText::FromString(TEXT("[E] Case tools: records, alibi check, profile  ·  [Q] Your service record"));
 	}
 	if (LaptopParts.Contains(I->FocusPart))
 		return FText::FromString(IsHost() ? FString::Printf(TEXT("Location: %s  ·  [E] next  ·  [Q] previous"), *PlaceLabel()) : FString::Printf(TEXT("Location: %s  (the host picks)"), *PlaceLabel()));
@@ -376,7 +388,7 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		}
 		return;
 	}
-	if (bSecondary) return;
+	if (bSecondary && !ComputerParts.Contains(I->FocusPart)) return; // (Q at a computer: the case tools)
 	if (UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
 	{
 		if (CounterParts.Contains(I->FocusPart))
@@ -432,8 +444,24 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 				for (TActorIterator<AHUSecurityDesk> It(GetWorld()); It; ++It) if (It->bAtPrecinct) { It->OpenFor(User); break; }
 			return;
 		}
-		if (const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
-			I->Say(FString::Printf(TEXT("CASE ARCHIVE — Det. %s: %d case%s closed. Pay on file: $%d."), C->DetectiveName.IsEmpty() ? TEXT("(no name)") : *C->DetectiveName, C->CasesSolved, C->CasesSolved == 1 ? TEXT("") : TEXT("s"), C->Cash));
+		// the case tools: this desk's terminal, on this player's own screen
+		const UHUCaseSubsystem* TC2 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+		if ((TC2 && TC2->bTapesPulled) == bSecondary)
+		{
+			if (User->IsLocallyControlled() && I->FocusPart)
+			{
+				AHUCaseDesk* Best = nullptr; float BestD = 1e12f;
+				for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
+				{
+					const float Dist = FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation());
+					if (Dist < BestD) { BestD = Dist; Best = *It; }
+				}
+				if (Best) Best->OpenTerminal(User);
+			}
+			return;
+		}
+		if (const UHUCaseSubsystem* C = TC2; C && User->IsLocallyControlled())
+			I->Say(FString::Printf(TEXT("SERVICE RECORD — Det. %s: %d case%s closed. Pay on file: $%d."), C->DetectiveName.IsEmpty() ? TEXT("(no name)") : *C->DetectiveName, C->CasesSolved, C->CasesSolved == 1 ? TEXT("") : TEXT("s"), C->Cash));
 		return;
 	}
 	UHUSquadSubsystem* S = Squad();

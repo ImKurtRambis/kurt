@@ -376,7 +376,7 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 
 	// the belt: look well down with nothing to pick up there. Opens past 55 degrees, closes back above 45.
 	const float Pitch = FRotator::NormalizeAxis(Look.Pitch);
-	const bool bFree = !bMenuOpen && !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Grabbed.IsValid() && !bHolding;
+	const bool bFree = !bMenuOpen && !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Reading.IsValid() && !Grabbed.IsValid() && !bHolding;
 	const bool bWant = bFree && Pitch < (bBeltOpen ? -45.f : -55.f);
 	if (bWant != bBeltOpen)
 	{
@@ -517,7 +517,7 @@ void UHUInteractComponent::Ping()
 {
 	APawn* Pawn = Cast<APawn>(GetOwner());
 	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-	if (!PC || Interviewing.IsValid() || Watching.IsValid()) return;
+	if (!PC || Interviewing.IsValid() || Watching.IsValid() || Reading.IsValid()) return;
 	FVector Eye; FRotator Look;
 	PC->GetPlayerViewPoint(Eye, Look);
 	FHitResult Hit;
@@ -888,6 +888,15 @@ void UHUInteractComponent::Use(bool bSecondary)
 	const FName Part = FocusPart ? FocusPart->GetFName() : NAME_None;
 	if (GetOwner()->HasAuthority()) MulticastUse(Path, Part, bSecondary, Held); // the host: straight out to everyone
 	else ServerUse(Path, Part, bSecondary, Held);                              // a squadmate: ask the host
+}
+
+void UHUInteractComponent::SendUseOn(AActor* Target, UPrimitiveComponent* Part, bool bSecondary)
+{
+	if (!Target) return;
+	AActor* SavedFocus = Focus; UPrimitiveComponent* SavedPart = FocusPart;
+	Focus = Target; FocusPart = Part;
+	Use(bSecondary);
+	Focus = SavedFocus; FocusPart = SavedPart;
 }
 
 void UHUInteractComponent::ServerUse_Implementation(const FString& TargetPath, FName Part, bool bSecondary, int32 HeldSlot)

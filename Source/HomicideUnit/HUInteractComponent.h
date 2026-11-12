@@ -125,6 +125,10 @@ public:
 
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
+	// the desk folder or desk computer you're reading (the HUD shows it)
+	TWeakObjectPtr<class AHUCaseDesk> Reading;
+	// use a particular part of something as if you were looking at it (sent to the squad like any use)
+	void SendUseOn(AActor* Target, UPrimitiveComponent* Part, bool bSecondary);
 
 	// pop-up cards in the corner (evidence bagged, kit bought...)
 	struct FNote { FString Title; FString Body; FLinearColor Color; float Born = 0.f; };
