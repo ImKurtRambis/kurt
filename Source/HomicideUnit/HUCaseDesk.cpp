@@ -1,4 +1,4 @@
-#include "HUCaseDesk.h"
+﻿#include "HUCaseDesk.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
@@ -172,9 +172,9 @@ FText AHUCaseDesk::GetPrompt_Implementation(APawn* User) const
 	const int32 K = I ? FolderOf(I->FocusPart) : -1;
 	if (K < 0) return FText::GetEmpty();
 	if (Holder[K].IsValid()) return FText::FromString(FString::Printf(TEXT("%s has the %s"), *WhoIs(Holder[K].Get()), FolderName(K)));
-	if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("%s  —  Det. %s's desk"), FolderName(K), *OwnerName()));
+	if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("%s  â€”  Det. %s's desk"), FolderName(K), *OwnerName()));
 	const UHUCaseSubsystem* C = Cases();
-	if (!C || !C->bCaseActive) return FText::FromString(FString::Printf(TEXT("%s  —  empty, no case open"), FolderName(K)));
+	if (!C || !C->bCaseActive) return FText::FromString(FString::Printf(TEXT("%s  â€”  empty, no case open"), FolderName(K)));
 	return FText::FromString(FString::Printf(TEXT("[E] Pick up the %s"), FolderName(K)));
 }
 
@@ -234,16 +234,13 @@ void AHUCaseDesk::Open(APawn* User, bool bTerm, int32 K)
 		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AHUCaseDesk::KeyLeft);
 		InputComponent->BindKey(EKeys::S, IE_Pressed, this, &AHUCaseDesk::KeyDown);
 		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AHUCaseDesk::KeyDown);
-		InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AHUCaseDesk::KeyDown);
+		InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AHUCaseDesk::WheelDown);
 		InputComponent->BindKey(EKeys::W, IE_Pressed, this, &AHUCaseDesk::KeyUp);
 		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AHUCaseDesk::KeyUp);
-		InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AHUCaseDesk::KeyUp);
+		InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AHUCaseDesk::WheelUp);
 		InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &AHUCaseDesk::KeyQ);
 		InputComponent->BindKey(EKeys::E, IE_Pressed, this, &AHUCaseDesk::KeyE);
 		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AHUCaseDesk::KeyE);
-		InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AHUCaseDesk::KeyM);
-		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AHUCaseDesk::KeyTab);
-			InputComponent->BindKey(EKeys::F, IE_Pressed, this, &AHUCaseDesk::KeyF);
 			InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AHUCaseDesk::MouseClick);
 	}
 		// the computer takes the mouse: a free cursor over the screen (folders keep the keys)
@@ -269,9 +266,12 @@ void AHUCaseDesk::OpenPeek(APawn* User)
 }
 
 // ---- PrecinctOS keys (the folders keep their own: A / D pages, W / S scroll, E / Q put it down) ----
+// the computer is MOUSE ONLY: these keys work the paper folders
+void AHUCaseDesk::WheelUp() { if (bReading && (!bTerminal || !IsOnDesktop() || bPeek)) ScrollUp(); }
+void AHUCaseDesk::WheelDown() { if (bReading && (!bTerminal || !IsOnDesktop() || bPeek)) ScrollDown(); }
 void AHUCaseDesk::KeyLeft()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (!bTerminal) { PrevPage(); return; }
 	if (bPeek) return;
 	if (IsOnDesktop()) { Sel = (Sel + AppCount() - 1) % AppCount(); return; }
@@ -280,7 +280,7 @@ void AHUCaseDesk::KeyLeft()
 }
 void AHUCaseDesk::KeyRight()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (!bTerminal) { NextPage(); return; }
 	if (bPeek) return;
 	if (IsOnDesktop()) { Sel = (Sel + 1) % AppCount(); return; }
@@ -288,25 +288,25 @@ void AHUCaseDesk::KeyRight()
 }
 void AHUCaseDesk::KeyUp()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (bTerminal && !bPeek && IsOnDesktop()) { Sel = (Sel + AppCount() - 1) % AppCount(); return; }
 	ScrollUp();
 }
 void AHUCaseDesk::KeyDown()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (bTerminal && !bPeek && IsOnDesktop()) { Sel = (Sel + 1) % AppCount(); return; }
 	ScrollDown();
 }
 void AHUCaseDesk::KeyE()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (!bTerminal) { Close(); return; }
 	if (!bPeek && IsOnDesktop()) OpenApp(Sel);
 }
 void AHUCaseDesk::KeyQ()
 {
-	if (!bReading) return;
+	if (!bReading || bTerminal) return;
 	if (!bTerminal || bPeek || IsOnDesktop()) { Close(); return; }
 	CloseWindow();
 }
@@ -337,8 +337,13 @@ void AHUCaseDesk::KeyF()
 // a click: whatever the screen drew under the cursor (icons: click picks, double-click opens)
 void AHUCaseDesk::MouseClick()
 {
-	if (!bReading || !bTerminal || !FSlateApplication::IsInitialized()) return;
-	const FVector2D At = FSlateApplication::Get().GetCursorPos();
+	if (!bReading || !bTerminal) return;
+	const APlayerController* PC = Viewer.IsValid() ? Cast<APlayerController>(Viewer->GetController()) : nullptr;
+	float MX = 0, MY = 0;
+	if (!PC || !PC->GetMousePosition(MX, MY)) { UE_LOG(LogTemp, Warning, TEXT("PrecinctOS click: no mouse position")); return; }
+	int32 VX = 1, VY = 1;
+	PC->GetViewportSize(VX, VY);
+	const FVector2D At(MX / FMath::Max(1, VX) * HitSpace.X, MY / FMath::Max(1, VY) * HitSpace.Y); // viewport pixels -> the screen's units
 	const FHit* Hit = nullptr;
 	for (int32 i = Hits.Num() - 1; i >= 0; i--) // topmost drawn last
 		if (At.X >= Hits[i].Min.X && At.Y >= Hits[i].Min.Y && At.X <= Hits[i].Max.X && At.Y <= Hits[i].Max.Y) { Hit = &Hits[i]; break; }
@@ -361,6 +366,8 @@ void AHUCaseDesk::MouseClick()
 	case EHit::Start: Close(); return;
 	case EHit::ScrollUp: ScrollUp(); return;
 	case EHit::ScrollDown: ScrollDown(); return;
+	case EHit::Share: KeyF(); return;
+	case EHit::Swallow: return;
 	}
 }
 

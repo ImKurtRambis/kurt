@@ -81,9 +81,10 @@ public:
 	void ReceiveShare(int32 App, const FString& From) { SharedFrom.Add(App, From); }
 	void OpenPeek(APawn* User);
 	// THE MOUSE: the screen records where it drew each clickable thing (absolute screen coords) as it paints
-	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown };
+	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown, Share, Swallow };
 	struct FHit { FVector2D Min, Max; EHit Kind; int32 Arg; };
 	mutable TArray<FHit> Hits;
+	mutable FVector2D HitSpace = FVector2D(1, 1); // the screen's size in the units the hits are in (it fills the viewport)
 
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
@@ -106,7 +107,7 @@ private:
 	void Close();
 	void Rebuild();       // fill Pages from the case
 	void NextPage(); void PrevPage(); void ScrollDown(); void ScrollUp(); void CloseKey();
-	void MouseClick();
+	void MouseClick(); void WheelUp(); void WheelDown();
 	double LastClickT = 0.0; int32 LastClickIcon = -1;
 	void KeyLeft(); void KeyRight(); void KeyUp(); void KeyDown(); void KeyE(); void KeyQ(); void KeyM(); void KeyTab(); void KeyF();
 	void OpenApp(int32 A);

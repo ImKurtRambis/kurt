@@ -1,4 +1,5 @@
-﻿#include "HUPromptWidget.h"
+﻿#include "Blueprint/SlateBlueprintLibrary.h"
+#include "HUPromptWidget.h"
 #include "HUListenSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
@@ -175,7 +176,8 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			// clickable spots, in absolute screen coords (the desk tests the cursor against them)
 			Desk->Hits.Reset();
 			auto Hit = [&](FVector2D Pos, FVector2D Size, AHUCaseDesk::EHit Kind, int32 Arg = 0)
-			{ Desk->Hits.Add({ G.LocalToAbsolute(Pos), G.LocalToAbsolute(Pos + Size), Kind, Arg }); };
+			{ Desk->Hits.Add({ Pos, Pos + Size, Kind, Arg }); }; // in the screen's own units (the desk scales the mouse to match)
+			Desk->HitSpace = L;
 			TextCentered(Out, Lw, G, FString(AHUCaseDesk::OSName) + TEXT("  Squad Edition"), Font("Italic", 11), M + FVector2D(MW - 110, MH - TB - 16), FLinearColor(1, 1, 1, 0.55f));
 			// the desktop shortcuts
 			const bool bPeekNow = Desk->bPeek;
@@ -210,6 +212,13 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				Hit(WP + FVector2D(0, WS.Y * 0.5f), FVector2D(WS.X, WS.Y * 0.5f), AHUCaseDesk::EHit::ScrollDown);
 				if (!bPeekNow) Hit(WP + FVector2D(WS.X - 62, 5), FVector2D(24, 20), AHUCaseDesk::EHit::Minimise);
 				Hit(WP + FVector2D(WS.X - 33, 5), FVector2D(24, 20), AHUCaseDesk::EHit::Close);
+				if (!bPeekNow)
+				{
+					// SEND TO SQUAD: puts this window on every partner's desktop
+					Hit(WP + FVector2D(WS.X - 172, 5), FVector2D(104, 20), AHUCaseDesk::EHit::Share);
+					Box(Out, Lw + 8, G, WP + FVector2D(WS.X - 172, 5), FVector2D(104, 20), FLinearColor(0.2f, 0.62f, 0.25f), 4.f);
+					TextCentered(Out, Lw + 9, G, TEXT("Send to squad"), Font("Bold", 9), WP + FVector2D(WS.X - 120, 15), FLinearColor::White);
+				}
 				Box(Out, Lw + 5, G, WP, WS, FLinearColor(0.0f, 0.3f, 0.86f), 10.f);
 				Box(Out, Lw + 6, G, WP, FVector2D(WS.X, 30), FLinearColor(0.05f, 0.4f, 0.96f), 10.f);
 				Box(Out, Lw + 7, G, WP + FVector2D(5, 3), FVector2D(WS.X - 10, 9), FLinearColor(1, 1, 1, 0.2f), 5.f); // gloss
@@ -265,9 +274,9 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 104, 12), FVector2D(10, 10), FLinearColor(0.95f, 0.8f, 0.3f), 5.f);
 			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 90, 12), FVector2D(10, 10), FLinearColor(0.4f, 0.9f, 0.45f), 2.f);
 			TextCentered(Out, Lw + 12, G, FDateTime::Now().ToString(TEXT("%I:%M %p")), Font("Regular", 11), TBP + FVector2D(MW - 42, TB * 0.5f), FLinearColor::White);
-			const FString Keys = bPeekNow ? FString::Printf(TEXT("Looking over Det. %s's shoulder     [W] [S] scroll     [Q] step back"), *Desk->OwnerName())
-				: Desk->IsOnDesktop() ? FString(TEXT("Mouse: double-click an icon     [W] [S] pick     [E] open     [Tab] switch window     [Q] / start button: log off"))
-				: FString(TEXT("Mouse: wheel scrolls, _ minimise, x close, taskbar switches     [Tab] switch     [F] send to the squad     [Q] close window"));
+			const FString Keys = bPeekNow ? FString::Printf(TEXT("Looking over Det. %s's shoulder     wheel: scroll     x / start button: step back"), *Desk->OwnerName())
+				: Desk->IsOnDesktop() ? FString(TEXT("Double-click an icon to open it     green start button: log off"))
+				: FString(TEXT("Wheel scrolls     _ minimise     x close     taskbar switches windows     Send to squad shares it"));
 			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
 			Prompt(Out, Lw + 13, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 40), Dim, 1.f, true);
 			return Lw + 14;
