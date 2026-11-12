@@ -177,7 +177,8 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			const bool bPeekNow = Desk->bPeek;
 			for (int32 i = 0; i < AHUCaseDesk::AppCount() && !bPeekNow; i++)
 			{
-				const FVector2D IP = M + FVector2D(22, 20 + i * 92);
+				const int32 PerCol = FMath::Max(1, FMath::FloorToInt((MH - TB - 30) / 92.f)); // icons run down, then wrap into the next column
+				const FVector2D IP = M + FVector2D(22 + (i / PerCol) * 96, 20 + (i % PerCol) * 92);
 				const FLinearColor AC = AHUCaseDesk::AppColor(i);
 				if (Desk->IsOnDesktop() && Desk->Sel == i) Box(Out, Lw, G, IP - FVector2D(8, 6), FVector2D(86, 86), FLinearColor(0.16f, 0.32f, 0.78f, 0.6f), 6.f);
 				Box(Out, Lw + 1, G, IP + FVector2D(16, 2), FVector2D(40, 48), FLinearColor(0, 0, 0, 0.25f), 4.f);           // shadow

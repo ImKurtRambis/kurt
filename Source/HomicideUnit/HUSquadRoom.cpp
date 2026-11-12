@@ -356,9 +356,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 		for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
 			if (FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation()) < 120.f * 120.f && !It->CanUse(User))
 				return FText::FromString(It->bOwnerOn ? FString::Printf(TEXT("[E] Look over Det. %s's shoulder"), *It->OwnerName()) : FString::Printf(TEXT("Det. %s's computer"), *It->OwnerName()));
-		const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case tools: records, alibis, profile"), TC->TapeCams()));
-		return FText::FromString(TEXT("[E] Case tools: records, alibi check, profile  ·  [Q] Your service record"));
+		return FText::FromString(TEXT("[E] Log on: records, suspects, phones, security footage  ·  [Q] Your service record"));
 	}
 	if (LaptopParts.Contains(I->FocusPart))
 		return FText::FromString(IsHost() ? FString::Printf(TEXT("Location: %s  ·  [E] next  ·  [Q] previous"), *PlaceLabel()) : FString::Printf(TEXT("Location: %s  (the host picks)"), *PlaceLabel()));
@@ -472,16 +470,9 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 			if (User->IsLocallyControlled()) I->Say(FString::Printf(TEXT("That's Det. %s's computer. Use your own desk."), *Best->OwnerName()));
 			return;
 		}
-		// the security tapes from the scene: E plays them (on this player's own screen)
-		if (const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); TC && TC->bTapesPulled && !bSecondary)
-		{
-			if (User->IsLocallyControlled())
-				for (TActorIterator<AHUSecurityDesk> It(GetWorld()); It; ++It) if (It->bAtPrecinct) { It->OpenFor(User); break; }
-			return;
-		}
-		// the case tools: this desk's terminal, on this player's own screen
+		// E: log on (the tapes are the Security Footage icon on the desktop); Q: your service record
 		const UHUCaseSubsystem* TC2 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-		if ((TC2 && TC2->bTapesPulled) == bSecondary)
+		if (!bSecondary)
 		{
 			if (User->IsLocallyControlled() && Best) Best->OpenTerminal(User);
 			return;

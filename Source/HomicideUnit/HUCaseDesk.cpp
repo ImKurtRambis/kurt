@@ -4,6 +4,8 @@
 #include "HUInteractComponent.h"
 #include "HUProfiles.h"
 #include "HUPlayerState.h"
+#include "HUPhoneData.h"
+#include "HUSecurityDesk.h"
 #include "GameFramework/GameStateBase.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -33,7 +35,15 @@ static const FDeskApp DeskApps[] = {
 	{ TEXT("Offender Profile"), TEXT("P"), FLinearColor(0.62f, 0.38f, 0.82f), 2 },
 	{ TEXT("Tape Flags"),       TEXT("T"), FLinearColor(0.25f, 0.5f, 0.88f),  3 },
 	{ TEXT("Case Status"),      TEXT("C"), FLinearColor(0.84f, 0.32f, 0.26f), 4 },
+	{ TEXT("Suspect Database"), TEXT("D"), FLinearColor(0.2f, 0.6f, 0.62f),   5 },
+	{ TEXT("Call Log"),         TEXT("L"), FLinearColor(0.35f, 0.75f, 0.4f),  6 },
+	{ TEXT("Text Messages"),    TEXT("M"), FLinearColor(0.3f, 0.55f, 0.95f),  7 },
+	{ TEXT("Web History"),      TEXT("W"), FLinearColor(0.95f, 0.5f, 0.15f),  8 },
+	{ TEXT("Phone Photos"),     TEXT("I"), FLinearColor(0.85f, 0.35f, 0.6f),  9 },
+	{ TEXT("Cell Pings"),       TEXT("G"), FLinearColor(0.55f, 0.55f, 0.6f),  10 },
+	{ TEXT("Security Footage"), TEXT("V"), FLinearColor(0.15f, 0.15f, 0.18f), 11 },
 };
+static constexpr int32 FootageTool = 11;
 const TCHAR* AHUCaseDesk::OSName = TEXT("PrecinctOS");
 int32 AHUCaseDesk::AppCount() { return UE_ARRAY_COUNT(DeskApps); }
 FString AHUCaseDesk::AppName(int32 A) { return A >= 0 && A < AppCount() ? FString(DeskApps[A].Name) : FString(); }
@@ -318,6 +328,20 @@ void AHUCaseDesk::KeyF()
 void AHUCaseDesk::OpenApp(int32 A)
 {
 	if (A < 0 || A >= AppCount()) return;
+	// the tapes play in their own viewer: log off and slot them in
+	if (DeskApps[A].Tool == FootageTool)
+	{
+		const UHUCaseSubsystem* C = Cases();
+		APawn* User = Viewer.Get();
+		if (!C || !C->bTapesPulled || !User)
+		{
+			OpenWins.AddUnique(A); Minimised.Remove(A); Active = A; Scroll = 0; Rebuild(); Broadcast();
+			return;
+		}
+		Close();
+		for (TActorIterator<AHUSecurityDesk> It(GetWorld()); It; ++It) if (It->bAtPrecinct) { It->OpenFor(User); break; }
+		return;
+	}
 	OpenWins.AddUnique(A);
 	Minimised.Remove(A);
 	SharedFrom.Remove(A);
@@ -491,6 +515,27 @@ void AHUCaseDesk::Rebuild()
 			for (const FString& Id : C->Arrested) P.Lines.Add(FString::Printf(TEXT("  %s - %s"), *SuspectName(Id), C->IsBooked(Id) ? TEXT("booked") : TEXT("awaiting booking")));
 			if (C->bAwaitingCaptain) P.Lines.Add(C->UnbookedCount() > 0 ? FString(TEXT("Book everyone, then submit at the Captain's in-tray.")) : FString(TEXT("Ready for the Captain's in-tray.")));
 			Pages.Add(P);
+		}
+		// the suspect database and, with a warrant, each suspect's phone (one section per suspect)
+		{
+			const TCHAR* Heads[] = { TEXT("SUSPECT DATABASE"), TEXT("CALL LOG"), TEXT("TEXT MESSAGES"), TEXT("WEB HISTORY"), TEXT("PHONE PHOTOS"), TEXT("CELL TOWER PINGS") };
+			for (int32 App = 0; App < 6; App++)
+			{
+				FPage P{ Heads[App], {} };
+				if (App == 0) P.Lines.Add(TEXT("DMV, records and phone company, cross-referenced."));
+				else P.Lines.Add(FString::Printf(TEXT("From the phone company and the handset. Crime at %s - read around it."), *Case.Time));
+				P.Lines.Add(TEXT(""));
+				for (const FHUSuspect& S : Case.Suspects)
+				{
+					P.Lines.Add(FString::Printf(TEXT("==== %s  (%s) ===="), *S.Name.ToUpper(), *S.Role));
+					for (const FString& Ln : HUPhone::Lines(C, S, (HUPhone::EApp)App)) P.Lines.Add(TEXT("  ") + Ln);
+					P.Lines.Add(TEXT(""));
+				}
+				Pages.Add(P);
+			}
+			FPage F{ TEXT("SECURITY FOOTAGE"), {} };
+			F.Lines.Add(C->bTapesPulled ? FString(TEXT("Tapes loaded. Open this icon again to play them.")) : FString(TEXT("NO TAPE IN THE DECK. Pull the tapes from the building's recorder at the scene (hold E on it).")));
+			Pages.Add(F);
 		}
 		// the window in front shows its tool's page (Pages holds every tool, in Tool order, until here)
 		{
