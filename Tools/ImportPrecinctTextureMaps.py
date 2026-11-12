@@ -4,24 +4,24 @@ SOURCE_DIR = unreal.Paths.project_content_dir() + "Art/Textures/Source/"
 DESTINATION = "/Game/Art/Materials/Textures"
 
 ASSETS = [
-    "M_Plaster_BaseColor.png", "M_Plaster_Normal.png", "M_Plaster_Roughness.png",
-    "M_Linoleum_BaseColor.png", "M_Linoleum_Normal.png", "M_Linoleum_Roughness.png",
-    "M_Walnut_BaseColor.png", "M_Walnut_Normal.png", "M_Walnut_Roughness.png",
-    "M_ComputerPlastic_BaseColor.png", "M_ManilaFolder_BaseColor.png", "M_VictimWool_BaseColor.png",
+    "M_Plaster_BaseColor.jpg", "M_Plaster_Normal.jpg", "M_Plaster_Roughness.jpg",
+    "M_Linoleum_BaseColor.jpg", "M_Linoleum_Normal.jpg", "M_Linoleum_Roughness.jpg",
+    "M_Walnut_BaseColor.jpg", "M_Walnut_Normal.jpg", "M_Walnut_Roughness.jpg",
+    "M_ComputerPlastic_BaseColor.jpg", "M_ComputerPlastic_Normal.jpg", "M_ComputerPlastic_Roughness.jpg",
+    "M_ManilaFolder_BaseColor.jpg", "M_ManilaFolder_Normal.jpg", "M_ManilaFolder_Roughness.jpg",
+    "M_VictimWool_BaseColor.jpg", "M_VictimWool_Normal.jpg", "M_VictimWool_Roughness.jpg",
 ]
 
 tasks = []
 for filename in ASSETS:
     name = filename[:-4]
-    if unreal.EditorAssetLibrary.does_asset_exist(DESTINATION + "/" + name):
-        continue
     task = unreal.AssetImportTask()
     task.filename = SOURCE_DIR + filename
     task.destination_path = DESTINATION
     task.destination_name = name
     task.automated = True
     task.save = True
-    task.replace_existing = False
+    task.replace_existing = True
     tasks.append(task)
 
 unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)

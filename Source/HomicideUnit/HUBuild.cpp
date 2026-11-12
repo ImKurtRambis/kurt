@@ -48,9 +48,12 @@ namespace HUBuild
 		const TCHAR* BaseColorPath, FLinearColor Tint, float TileSizeCm, float RoughnessScale)
 	{
 		if (!Owner || !Parent || !BaseColorPath) return nullptr;
-		UTexture* BaseColor = LoadObject<UTexture>(nullptr, BaseColorPath);
-		static UTexture* Normal = LoadObject<UTexture>(nullptr, TEXT("/Game/Art/Materials/Textures/M_Plaster_Normal.M_Plaster_Normal"));
-		static UTexture* Roughness = LoadObject<UTexture>(nullptr, TEXT("/Game/Art/Materials/Textures/M_Plaster_Roughness.M_Plaster_Roughness"));
+		const FString BasePath(BaseColorPath);
+		const FString NormalPath = BasePath.Replace(TEXT("_BaseColor"), TEXT("_Normal"));
+		const FString RoughnessPath = BasePath.Replace(TEXT("_BaseColor"), TEXT("_Roughness"));
+		UTexture* BaseColor = LoadObject<UTexture>(nullptr, *BasePath);
+		UTexture* Normal = LoadObject<UTexture>(nullptr, *NormalPath);
+		UTexture* Roughness = LoadObject<UTexture>(nullptr, *RoughnessPath);
 		if (!BaseColor || !Normal || !Roughness) return nullptr;
 		UMaterialInstanceDynamic* Surface = UMaterialInstanceDynamic::Create(Parent, Owner);
 		if (!Surface) return nullptr;

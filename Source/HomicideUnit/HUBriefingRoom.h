@@ -63,6 +63,7 @@ private:
 	UPROPERTY() UStaticMesh* Cylinder = nullptr;
 	UPROPERTY() UStaticMesh* Sphere = nullptr;
 	UPROPERTY() UMaterialInterface* BaseMat = nullptr;
+	UPROPERTY() UMaterialInterface* SurfaceParent = nullptr;
 	bool bPlayerReady = false;
 	// the 911 call
 	TArray<FString> CallSpeakers, CallLines;
@@ -80,5 +81,7 @@ private:
 	void Build();
 	void BuildCorridor();
 	UStaticMeshComponent* Block(UStaticMesh* Mesh, FVector Pos, FVector SizeCm, FLinearColor Color, FRotator Rot = FRotator::ZeroRotator);
+	UStaticMeshComponent* TexturedBlock(UStaticMesh* Mesh, FVector Pos, FVector SizeCm, FLinearColor Color,
+		const TCHAR* BaseColorPath, float TileSizeCm, FRotator Rot = FRotator::ZeroRotator);
 	UTextRenderComponent* Text(FName Name, FVector Pos, float Size, FColor Color);
 };

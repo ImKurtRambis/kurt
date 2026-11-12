@@ -95,8 +95,23 @@ def make_instance(material, name, base, normal, roughness, tile_size, roughness_
     unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(instance, "SurfaceTint", tint or unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
     unreal.EditorAssetLibrary.save_loaded_asset(instance)
 
+def update_precinct_instance(name, base, normal, roughness, tile_size):
+    path = MATERIAL_DIR + "/" + name
+    if not unreal.EditorAssetLibrary.does_asset_exist(path):
+        raise RuntimeError("Missing precinct material instance: " + path)
+    instance = unreal.EditorAssetLibrary.load_asset(path)
+    instance.set_editor_property("parent", unreal.EditorAssetLibrary.load_asset(MATERIAL_DIR + "/M_HU_WorldAlignedSurface"))
+    unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(instance, "BaseColor", asset(base))
+    unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(instance, "NormalMap", asset(normal))
+    unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(instance, "RoughnessMap", asset(roughness))
+    unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(instance, "TileSizeCm", tile_size)
+    unreal.EditorAssetLibrary.save_loaded_asset(instance)
+
 parent = make_parent()
-make_instance(parent, "MI_HU_ComputerPlastic", "M_ComputerPlastic_BaseColor", "M_Plaster_Normal", "M_Plaster_Roughness", 45.0, 0.82)
-make_instance(parent, "MI_HU_ManilaFolder", "M_ManilaFolder_BaseColor", "M_Plaster_Normal", "M_Plaster_Roughness", 24.0, 1.0)
-make_instance(parent, "MI_HU_VictimWool", "M_VictimWool_BaseColor", "M_Plaster_Normal", "M_Plaster_Roughness", 28.0, 1.05)
+update_precinct_instance("MI_HU_Plaster", "M_Plaster_BaseColor", "M_Plaster_Normal", "M_Plaster_Roughness", 200.0)
+update_precinct_instance("MI_HU_Linoleum", "M_Linoleum_BaseColor", "M_Linoleum_Normal", "M_Linoleum_Roughness", 200.0)
+update_precinct_instance("MI_HU_Walnut", "M_Walnut_BaseColor", "M_Walnut_Normal", "M_Walnut_Roughness", 80.0)
+make_instance(parent, "MI_HU_ComputerPlastic", "M_ComputerPlastic_BaseColor", "M_ComputerPlastic_Normal", "M_ComputerPlastic_Roughness", 45.0, 0.82)
+make_instance(parent, "MI_HU_ManilaFolder", "M_ManilaFolder_BaseColor", "M_ManilaFolder_Normal", "M_ManilaFolder_Roughness", 24.0, 1.0)
+make_instance(parent, "MI_HU_VictimWool", "M_VictimWool_BaseColor", "M_VictimWool_Normal", "M_VictimWool_Roughness", 28.0, 1.05)
 unreal.log("Created prop material parent and three instances.")
