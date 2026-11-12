@@ -10,6 +10,8 @@ Each surface has BaseColor, Normal (tangent-space, Unreal DirectX convention), a
 
 The material parent `M_HU_WorldAlignedSurface` and instances `MI_HU_Plaster`, `MI_HU_Linoleum`, and `MI_HU_Walnut` are in `/Game/Art/Materials/Precinct`. The parent uses Unreal's world-aligned texture functions and exposes `TileSizeCm`; instances start at 200 cm for plaster/walnut and 100 cm for linoleum. This avoids UV stretching on runtime-scaled block geometry.
 
-`AHUCrimeScene` loads the three instances as defaults for floors, walls, and wood trim/props. Map-level overrides still work. To reimport source maps and restore their texture settings, run `Tools/ImportPrecinctTextureMaps.py` through Unreal's Python commandlet; to recreate the material assets, run `Tools/CreatePrecinctMaterials.py`.
+`AHUCrimeScene` and the precinct/roll-call room load the three instances for floors, painted walls, and wood desks or trim. Map-level overrides still work. The precinct room also adds restrained cool grading and a light vignette; it does not add film grain or static. To reimport source maps and restore their texture settings, run `Tools/ImportPrecinctTextureMaps.py` through Unreal's Python commandlet; to recreate the material assets, run `Tools/CreatePrecinctMaterials.py`.
+
+The palette is tuned for a working mid-2000s police department: commercial VCT flooring, painted institutional walls, older wood desks, cool fluorescent overhead light, and a slightly heightened noir contrast. It keeps the period contemporary instead of borrowing 1940s set dressing.
 
 These are source maps, not baked lighting. Keep scene lighting separate so the textures respond to Unreal lighting.

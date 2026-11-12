@@ -17,6 +17,9 @@
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PostProcessComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -49,6 +52,23 @@ AHUSquadRoom::AHUSquadRoom()
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FloorF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Linoleum.MI_HU_Linoleum"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WallF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Plaster.MI_HU_Plaster"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Walnut.MI_HU_Walnut"));
+	FloorSurface = FloorF.Object;
+	WallSurface = WallF.Object;
+	WoodSurface = WoodF.Object;
+	VisualGrade = CreateDefaultSubobject<UPostProcessComponent>(TEXT("VisualGrade"));
+	VisualGrade->SetupAttachment(RootComponent);
+	VisualGrade->bUnbound = true;
+	VisualGrade->BlendWeight = 1.f;
+	FPostProcessSettings& Grade = VisualGrade->Settings;
+	Grade.bOverride_ColorSaturation = true;
+	Grade.ColorSaturation = FVector4(0.92f, 0.96f, 1.02f, 1.f);
+	Grade.bOverride_ColorContrast = true;
+	Grade.ColorContrast = FVector4(1.05f, 1.05f, 1.05f, 1.f);
+	Grade.bOverride_VignetteIntensity = true;
+	Grade.VignetteIntensity = 0.14f;
 	// text on the board faces into the room (-X)
 	BoardTitle = MakeText(this, Root, TEXT("BoardTitle"), FVector(RX - 8, 0, 270), 180, 24, FColor(235, 235, 225));
 	BoardCode = MakeText(this, Root, TEXT("BoardCode"), FVector(RX - 8, 0, 215), 180, 46, FColor(255, 225, 120));
@@ -73,13 +93,19 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	USceneComponent* R = RootComponent;
 	const FLinearColor Floor(0.16f, 0.12f, 0.08f), Wall(0.32f, 0.36f, 0.33f), Trim(0.12f, 0.08f, 0.05f), Desk(0.25f, 0.14f, 0.06f), Steel(0.3f, 0.32f, 0.34f);
 	const float W = bPrecinct ? PX : RX, D = bPrecinct ? PY : RY;
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(W * 2, D * 2, 10), Floor);
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, RH + 5), FVector(W * 2, D * 2, 10), Wall * 0.6f);
+	auto TexturedBlock = [this, R](FVector Pos, FVector Size, FLinearColor Color, UMaterialInterface* Surface, bool bCollide = true)
+	{
+		UStaticMeshComponent* Part = Block(this, R, Blocks, EShape::Cube, Pos, Size, Color, FRotator::ZeroRotator, bCollide);
+		if (Part && Surface) Part->SetMaterial(0, Surface);
+		return Part;
+	};
+	TexturedBlock(FVector(0, 0, -5), FVector(W * 2, D * 2, 10), Floor, FloorSurface);
+	TexturedBlock(FVector(0, 0, RH + 5), FVector(W * 2, D * 2, 10), Wall * 0.6f, WallSurface);
 	for (float S : { -1.f, 1.f })
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(S * (W + 5), 0, RH / 2), FVector(10, D * 2, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim);
+		TexturedBlock(FVector(S * (W + 5), 0, RH / 2), FVector(10, D * 2, RH), Wall, WallSurface);
+		TexturedBlock(FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall, WallSurface);
+		TexturedBlock(FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim, WoodSurface, false);
 	}
 	for (float X : { -W * 0.5f, 0.f, W * 0.5f }) for (float Y : { -D * 0.45f, D * 0.45f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
 
@@ -88,12 +114,12 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		// ======== ROLL CALL: just where the squad clocks in for the shift ========
 		// the chalkboard: the squad code and who's punched in
 		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 4, 0, 200), FVector(4, 560, 190), FLinearColor(0.03f, 0.06f, 0.04f)));
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 5, 0, 200), FVector(6, 580, 210), Trim));
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 12, 0, 96), FVector(14, 560, 4), Trim));
+		BoardParts.Add(TexturedBlock(FVector(RX - 5, 0, 200), FVector(6, 580, 210), Trim, WoodSurface));
+		BoardParts.Add(TexturedBlock(FVector(RX - 12, 0, 96), FVector(14, 560, 4), Trim, WoodSurface));
 		// the roll-call door to the briefing: double doors with a glass panel
 		for (float S : { -1.f, 1.f })
 		{
-			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 4, S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f)));
+			DoorParts.Add(TexturedBlock(FVector(-RX + 4, S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f), WoodSurface));
 			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 7.5f, S * 46, 170), FVector(1, 50, 60), FLinearColor(0.6f, 0.75f, 0.85f)));
 			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 9, S * 10, 115), FVector(4, 3, 18), FLinearColor(0.75f, 0.6f, 0.2f)));
 		}
@@ -103,8 +129,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 24, 260, 126), FVector(2, 14, 3), FLinearColor(0.05f, 0.05f, 0.05f)));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 8, 305, 140), FVector(6, 30, 60), FLinearColor(0.35f, 0.25f, 0.12f))); // the card rack
 		// the case-selection table: a laptop (where) and a case folder (how hard) - the host's picks for the shift
-		Block(this, R, Blocks, EShape::Cube, FVector(-420, -330, 72), FVector(90, 150, 6), Desk);
-		for (float DX : { -40.f, 40.f }) for (float DY : { -68.f, 68.f }) Block(this, R, Blocks, EShape::Cube, FVector(-420 + DX, -330 + DY, 35), FVector(5, 5, 70), Desk * 0.7f);
+		TexturedBlock(FVector(-420, -330, 72), FVector(90, 150, 6), Desk, WoodSurface);
+		for (float DX : { -40.f, 40.f }) for (float DY : { -68.f, 68.f }) TexturedBlock(FVector(-420 + DX, -330 + DY, 35), FVector(5, 5, 70), Desk * 0.7f, WoodSurface);
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
@@ -117,8 +143,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	// the squad's desks, pushed together, each with a computer (the case archive, and the scene's security tapes)
 	for (float X : { -350.f, -50.f }) for (float Y : { -170.f, 170.f })
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 74), FVector(150, 90, 6), Desk);
-		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) Block(this, R, Blocks, EShape::Cube, FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+		TexturedBlock(FVector(X, Y, 74), FVector(150, 90, 6), Desk, WoodSurface);
+		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) TexturedBlock(FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f, WoodSurface);
 		Block(this, R, Blocks, EShape::Cube, FVector(X - 10, Y + (Y > 0 ? 70.f : -70.f), 45), FVector(45, 45, 6), Steel);
 		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 30, Y, 90), FVector(30, 34, 26), FLinearColor(0.6f, 0.57f, 0.48f)));
 	}
@@ -133,25 +159,25 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	for (int32 i = 0; i < 6; i++) Block(this, R, Blocks, EShape::Cube, FVector(PX - 220, PY - 4, 120 + i * 20), FVector(80, 2, 1.5f), FLinearColor(0.85f, 0.85f, 0.8f), FRotator::ZeroRotator, false); // height chart
 	// the BOOKING COUNTER beside it: a ledger, an ink pad, a camera on a tripod
 	const FVector Book(PX - 420, PY - 100, 0);
-	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, Book + FVector(0, 0, 50), FVector(70, 170, 100), Desk));
+	CounterParts.Add(TexturedBlock(Book + FVector(0, 0, 50), FVector(70, 170, 100), Desk, WoodSurface));
 	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, Book + FVector(0, -20, 101.5f), FVector(30, 40, 3), FLinearColor(0.12f, 0.15f, 0.3f)));
 	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, Book + FVector(0, 30, 101.2f), FVector(14, 18, 2.4f), FLinearColor(0.05f, 0.05f, 0.05f)));
 	CounterParts.Add(Block(this, R, Blocks, EShape::Cube, Book + FVector(10, 70, 145), FVector(18, 22, 14), FLinearColor(0.08f, 0.08f, 0.08f)));
 	CounterParts.Add(Block(this, R, Blocks, EShape::Cylinder, Book + FVector(10, 70, 115), FVector(3, 3, 50), Steel));
 	// the CAPTAIN'S IN-TRAY: where a finished case goes
 	const FVector Tray(PX - 250, -PY + 200, 0);
-	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 74), FVector(110, 120, 6), Desk));
-	for (float DX : { -48.f, 48.f }) for (float DY : { -52.f, 52.f }) Block(this, R, Blocks, EShape::Cube, Tray + FVector(DX, DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+	TrayParts.Add(TexturedBlock(Tray + FVector(0, 0, 74), FVector(110, 120, 6), Desk, WoodSurface));
+	for (float DX : { -48.f, 48.f }) for (float DY : { -52.f, 52.f }) TexturedBlock(Tray + FVector(DX, DY, 36), FVector(5, 5, 72), Desk * 0.7f, WoodSurface);
 	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 82), FVector(36, 46, 8), FLinearColor(0.4f, 0.3f, 0.15f)));
 	TrayParts.Add(Block(this, R, Blocks, EShape::Cube, Tray + FVector(0, 0, 85), FVector(30, 40, 3), FLinearColor(0.75f, 0.6f, 0.32f)));
 	// the coffee pot
-	Block(this, R, Blocks, EShape::Cube, FVector(-PX + 100, PY - 60, 45), FVector(120, 60, 90), Desk);
+	TexturedBlock(FVector(-PX + 100, PY - 60, 45), FVector(120, 60, 90), Desk, WoodSurface);
 	CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-PX + 100, PY - 60, 105), FVector(16, 16, 22), FLinearColor(0.05f, 0.05f, 0.05f)));
 	CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-PX + 130, PY - 60, 95), FVector(9, 9, 10), FLinearColor(0.85f, 0.85f, 0.8f)));
 	// the door back to ROLL CALL (the next shift), on the +X wall: once the case is in
 	for (float S : { -1.f, 1.f })
 	{
-		ShiftParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(PX - 4, -150 + S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f)));
+		ShiftParts.Add(TexturedBlock(FVector(PX - 4, -150 + S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f), WoodSurface));
 		ShiftParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(PX - 7.5f, -150 + S * 46, 170), FVector(1, 50, 60), FLinearColor(0.6f, 0.75f, 0.85f)));
 	}
 }
@@ -167,9 +193,9 @@ void AHUSquadRoom::BeginPlay()
 			UPointLightComponent* L = NewObject<UPointLightComponent>(this);
 			L->SetupAttachment(RootComponent);
 			L->SetRelativeLocation(FVector(X, Y, RH - 50));
-			L->SetIntensity(6000.f);
+			L->SetIntensity(5200.f);
 			L->SetAttenuationRadius(1000.f);
-			L->SetLightColor(FLinearColor(1.f, 0.9f, 0.75f));
+			L->SetLightColor(FLinearColor(0.82f, 0.91f, 1.0f));
 			L->RegisterComponent();
 		}
 	};
