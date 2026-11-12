@@ -31,7 +31,9 @@ using namespace HUBuild;
 // the room: X from -700 to 700, Y from -500 to 500. The board is on the +X wall, the roll-call door on the -X wall.
 static const float RX = 700.f, RY = 500.f, RH = 340.f;
 // the precinct (the base, a level of its own): X from -PX to PX, Y from -PY to PY
-static const float PX = 800.f, PY = 600.f;
+static const float PX = 1400.f, PY = 1000.f;
+// the squad's four desks (desk centres; each faces +X, its chair on the -X side)
+static const FVector2D DeskSpots[] = { FVector2D(-700, -380), FVector2D(-250, -380), FVector2D(-700, 380), FVector2D(-250, 380) };
 
 static UTextRenderComponent* MakeText(AActor* Owner, USceneComponent* Root, const TCHAR* Name, FVector Pos, float Yaw, float Size, FColor Col)
 {
@@ -71,7 +73,7 @@ bool AHUSquadRoom::IsHost() const { return GetNetMode() != NM_Client; }
 void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset();
+	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); ChairParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset();
 	USceneComponent* R = RootComponent;
 	const FLinearColor Floor(0.16f, 0.12f, 0.08f), Wall(0.32f, 0.36f, 0.33f), Trim(0.12f, 0.08f, 0.05f), Desk(0.25f, 0.14f, 0.06f), Steel(0.3f, 0.32f, 0.34f);
 	const float W = bPrecinct ? PX : RX, D = bPrecinct ? PY : RY;
@@ -83,7 +85,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall);
 		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim);
 	}
-	for (float X : { -W * 0.5f, 0.f, W * 0.5f }) for (float Y : { -D * 0.45f, D * 0.45f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
+	for (float X = -W + 250.f; X <= W - 250.f; X += (W - 250.f) / 2.f) for (float Y : { -D * 0.45f, D * 0.45f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
 
 	if (!bPrecinct)
 	{
@@ -117,12 +119,23 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 
 	// ======== THE PRECINCT: the squad's base, the same whatever the case - where it gets solved ========
 	// the squad's desks, pushed together, each with a computer (the case archive, and the scene's security tapes)
-	for (float X : { -350.f, -50.f }) for (float Y : { -170.f, 170.f })
+	for (const FVector2D& DS : DeskSpots)
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 74), FVector(150, 90, 6), Desk);
-		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) Block(this, R, Blocks, EShape::Cube, FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
-		Block(this, R, Blocks, EShape::Cube, FVector(X - 10, Y + (Y > 0 ? 70.f : -70.f), 45), FVector(45, 45, 6), Steel);
-		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 30, Y, 90), FVector(30, 34, 26), FLinearColor(0.6f, 0.57f, 0.48f)));
+		const float X = DS.X, Y = DS.Y;
+		// the desk: 150 deep, 150 wide, top at 77 - the folders fan across the near half, the computer at the back
+		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, 74), FVector(150, 150, 6), Desk);
+		for (float DX : { -68.f, 68.f }) for (float DY : { -68.f, 68.f }) Block(this, R, Blocks, EShape::Cube, FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+		Block(this, R, Blocks, EShape::Cube, FVector(X + 15, Y + 55, 50), FVector(100, 34, 44), Desk * 0.8f); // a drawer pedestal, out of the knees' way
+		// the computer at the back: a beige box, the monitor on it facing the chair, a keyboard in front
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 45, Y + 10, 83), FVector(40, 46, 12), FLinearColor(0.6f, 0.57f, 0.48f)));
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 45, Y + 10, 108), FVector(36, 44, 38), FLinearColor(0.62f, 0.59f, 0.5f)));
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 26.8f, Y + 10, 109), FVector(1, 36, 28), FLinearColor(0.05f, 0.12f, 0.25f)));
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 5, Y + 10, 78), FVector(16, 44, 2), FLinearColor(0.55f, 0.53f, 0.46f)));
+		// the chair, pulled up to the -X side (E sits)
+		ChairParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X - 115, Y, 46), FVector(48, 48, 8), Steel));
+		ChairParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X - 138, Y, 78), FVector(5, 46, 56), Steel));
+		Block(this, R, Blocks, EShape::Cylinder, FVector(X - 115, Y, 21), FVector(6, 6, 42), Steel * 0.6f);
+		Block(this, R, Blocks, EShape::Cube, FVector(X - 115, Y, 3), FVector(50, 50, 6), Steel * 0.6f);
 	}
 	// HOLDING: a barred cell in the far corner where the van's prisoners wait to be booked
 	const float CY0 = PY - 200.f; // the bars, facing the room
@@ -164,7 +177,7 @@ void AHUSquadRoom::BeginPlay()
 	UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	auto Lights = [this](float W, float D)
 	{
-		for (float X : { -W * 0.5f, 0.f, W * 0.5f }) for (float Y : { -D * 0.45f, D * 0.45f })
+		for (float X = -W + 250.f; X <= W - 250.f; X += (W - 250.f) / 2.f) for (float Y : { -D * 0.45f, D * 0.45f })
 		{
 			UPointLightComponent* L = NewObject<UPointLightComponent>(this);
 			L->SetupAttachment(RootComponent);
@@ -211,8 +224,9 @@ void AHUSquadRoom::BeginPlay()
 	// the DESKS' case files: folders to pick up and read, one set per desk (same names on every machine)
 	{
 		int32 N = 0;
-		for (float X : { -350.f, -50.f }) for (float Y : { -170.f, 170.f })
+		for (const FVector2D& DS : DeskSpots)
 		{
+			const float X = DS.X, Y = DS.Y;
 			FActorSpawnParameters SP;
 			SP.Name = *FString::Printf(TEXT("HU_CaseDesk%d"), N);
 			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -345,6 +359,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 		}
 	}
 	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee  (faster work for a while)"));
+	if (ChairParts.Contains(I->FocusPart)) { const AHUCharacter* Ch = Cast<AHUCharacter>(User); return FText::FromString(Ch && Ch->bSeated ? TEXT("[E] Stand up") : TEXT("[E] Sit down")); }
 	if (ShiftParts.Contains(I->FocusPart))
 	{
 		const UHUCaseSubsystem* SC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
@@ -446,6 +461,21 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		else UGameplayStatics::OpenLevel(this, TEXT("L_Lobby"));
 		return;
 	}
+	if (ChairParts.Contains(I->FocusPart))
+	{
+		// every machine seats them (the squad sees it); WASD or E stands back up
+		if (AHUCharacter* Ch = Cast<AHUCharacter>(User))
+		{
+			if (Ch->bSeated) Ch->StandUp();
+			else
+			{
+				const int32 k = ChairParts.IndexOfByKey(I->FocusPart) / 2;
+				const FVector2D DS = DeskSpots[FMath::Clamp(k, 0, 3)];
+				Ch->SitDown(GetActorTransform().TransformPosition(FVector(DS.X - 112, DS.Y, 50)), GetActorRotation().Yaw);
+			}
+		}
+		return;
+	}
 	if (CoffeeParts.Contains(I->FocusPart))
 	{
 		const TCHAR* L[] = { TEXT("Burnt, bitter, hot. It does the job."), TEXT("Somebody made a fresh pot. A miracle."), TEXT("You top off the cup. Long night ahead.") };
@@ -514,7 +544,7 @@ void AHUSquadRoom::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 }
 void AHUSquadRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const
 {
-	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &CoffeeParts, &ClockParts, &CounterParts, &TrayParts, &ShiftParts })
+	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &ChairParts, &CoffeeParts, &ClockParts, &CounterParts, &TrayParts, &ShiftParts })
 		if (G->Contains(Part)) { Out.Append(*G); return; }
 	if (ComputerParts.Contains(Part)) Out.Add(Part); // just the one computer
 }
