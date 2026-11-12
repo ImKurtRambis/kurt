@@ -16,6 +16,7 @@ FString UHUBrainSubsystem::Root() const { return FPaths::ConvertRelativePathToFu
 
 bool UHUBrainSubsystem::IsInstalled() const
 {
+	if (FParse::Param(FCommandLine::Get(), TEXT("HUNoBrain"))) return false; // measuring the game without the model
 	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
 	return F.FileExists(*(Root() / TEXT("llama/llama-server.exe"))) && F.FileExists(*(Root() / TEXT("models/suspect.gguf")));
 }
@@ -309,3 +310,35 @@ void UHUBrainSubsystem::AskSuspect(const FString& SuspectId, const FString& Ques
 	});
 	Req->ProcessRequest();
 }
+
+#if !UE_BUILD_SHIPPING
+#include "Containers/Ticker.h"
+#include "Engine/Engine.h"
+#include "Misc/App.h"
+#include "HAL/IConsoleManager.h"
+// HU.Perf: every 5 seconds, log the frame times and whether the brain was writing - for the system requirements
+static FTSTicker::FDelegateHandle GHUPerf;
+static FAutoConsoleCommand GHUPerfCmd(TEXT("HU.Perf"), TEXT("Toggle a frame-time log every 5 s (with the brain's state)"), FConsoleCommandDelegate::CreateLambda([]()
+{
+	if (GHUPerf.IsValid()) { FTSTicker::GetCoreTicker().RemoveTicker(GHUPerf); GHUPerf.Reset(); return; }
+	struct FAcc { double Sum = 0, Worst = 0, T = 0; int32 N = 0, Slow = 0, Busy = 0; };
+	TSharedRef<FAcc> A = MakeShared<FAcc>();
+	GHUPerf = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([A](float Dt)
+	{
+		const UHUBrainSubsystem* B = nullptr;
+		if (GEngine) for (const FWorldContext& Ctx : GEngine->GetWorldContexts()) if (Ctx.OwningGameInstance) { B = Ctx.OwningGameInstance->GetSubsystem<UHUBrainSubsystem>(); break; }
+		const double Ms = FApp::GetDeltaTime() * 1000.0;
+		A->Sum += Ms; A->N++; A->Worst = FMath::Max(A->Worst, Ms); A->T += Dt;
+		if (Ms > 33.4) A->Slow++;
+		if (B && B->IsWriting()) A->Busy++;
+		if (A->T >= 5.0 && A->N > 0)
+		{
+			const double Avg = A->Sum / A->N;
+			UE_LOG(LogTemp, Display, TEXT("HU.Perf: avg %.1f ms (%.0f fps), worst %.1f ms, %d of %d frames over 33 ms, brain writing %d%% of the time, %d answers ready"),
+				Avg, 1000.0 / Avg, A->Worst, A->Slow, A->N, A->Busy * 100 / A->N, B ? B->ReadyCount() : 0);
+			*A = FAcc();
+		}
+		return true;
+	}));
+}));
+#endif

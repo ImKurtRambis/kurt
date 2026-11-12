@@ -51,6 +51,7 @@ public:
 	// a prewritten answer for this question, if there's a fresh one (it's then used up, remembered, and rewritten)
 	bool TakeReady(const FString& SuspectId, const FString& Said, FHUReaction& Out);
 	int32 ReadyCount() const { return Pre.Num(); }
+	bool IsWriting() const { return bPreBusy || LiveBusy > 0; }
 
 	UPROPERTY(EditAnywhere, Category = "Brain") int32 Port = 8089;
 

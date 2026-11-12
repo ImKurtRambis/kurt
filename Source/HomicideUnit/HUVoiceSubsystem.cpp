@@ -187,6 +187,7 @@ static FString ProjectFile(const TCHAR* Rel) { return FPaths::ConvertRelativePat
 
 bool UHUVoiceSubsystem::HasLocalVoice() const
 {
+	if (FParse::Param(FCommandLine::Get(), TEXT("HUNoVoice"))) return false; // measuring the game without the voices
 	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
 	return F.FileExists(*ProjectFile(TEXT("AI/python/python.exe"))) && F.FileExists(*ProjectFile(TEXT("Tools/VoiceServer.bat")))
 		&& (F.FileExists(*ProjectFile(TEXT("AI/orpheus/orpheus-3b-q4_k_m.gguf"))) || F.FileExists(*ProjectFile(TEXT("AI/csm/model/model.safetensors"))));
