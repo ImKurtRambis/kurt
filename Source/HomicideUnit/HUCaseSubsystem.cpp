@@ -1,4 +1,4 @@
-﻿#include "HUCaseSubsystem.h"
+#include "HUCaseSubsystem.h"
 #include "HUBrainSubsystem.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
@@ -9,6 +9,9 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Kismet/GameplayStatics.h"
+#include "HUProgress.h"
+#include "HUPlayerState.h"
+#include "GameFramework/GameStateBase.h"
 
 void UHUCaseSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -18,7 +21,9 @@ void UHUCaseSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		Cash = S->Cash; OwnedTools = S->OwnedTools; CasesSolved = S->CasesSolved;
 		DetectiveName = S->DetectiveName; JoinAddress = S->JoinAddress; MouseSensitivity = S->MouseSensitivity; FieldOfView = S->FieldOfView; VoiceProvider = S->VoiceProvider; VoiceKey = S->VoiceKey; bVoiceQuestions = S->bVoiceQuestions; Look = S->Look; MicDevice = S->MicDevice;
+		SquadXP = S->SquadXP; Specialty = S->Specialty; SpecXP = S->SpecXP; Upgrades = S->Upgrades; CaseWall = S->CaseWall;
 	}
+	SpecXP.SetNum(HUProgress::SpecCount);
 }
 
 void UHUCaseSubsystem::SaveProgress()
@@ -27,6 +32,7 @@ void UHUCaseSubsystem::SaveProgress()
 	if (!S) return;
 	S->Cash = Cash; S->OwnedTools = OwnedTools; S->CasesSolved = CasesSolved;
 	S->DetectiveName = DetectiveName; S->JoinAddress = JoinAddress; S->MouseSensitivity = MouseSensitivity; S->FieldOfView = FieldOfView; S->VoiceProvider = VoiceProvider; S->VoiceKey = VoiceKey; S->bVoiceQuestions = bVoiceQuestions; S->Look = Look; S->MicDevice = MicDevice;
+	S->SquadXP = SquadXP; S->Specialty = Specialty; S->SpecXP = SpecXP; S->Upgrades = Upgrades; S->CaseWall = CaseWall;
 	UGameplayStatics::SaveGameToSlot(S, TEXT("HomicideUnit"), 0);
 }
 
@@ -37,6 +43,24 @@ bool UHUCaseSubsystem::BuyTool(EHUTool Tool)
 	Cash -= Price;
 	OwnedTools |= (1 << (int32)Tool);
 	SaveProgress();
+	return true;
+}
+
+void UHUCaseSubsystem::SetSpecialty(uint8 Spec)
+{
+	Specialty = Spec < HUProgress::SpecCount ? Spec : 0;
+	SaveProgress();
+	if (UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) AHUPlayerState::PushLocal(W);
+}
+
+bool UHUCaseSubsystem::BuyUpgrade(int32 Index)
+{
+	const int32 Bit = 1 << Index, Price = HUProgress::UpgradePrice(Index);
+	if (Index < 0 || Index >= HUProgress::UpgradeCount || (Upgrades & Bit) || Cash < Price) return false;
+	Cash -= Price;
+	Upgrades |= Bit;
+	SaveProgress();
+	if (UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr) AHUPlayerState::PushLocal(W);
 	return true;
 }
 
@@ -438,8 +462,33 @@ void UHUCaseSubsystem::ResolveArrests()
 	else V = FString::Printf(TEXT("WRONG ARREST — the one who did it walked. It was %s."), *K.Name);
 	if (Wrong > 0) { Pay -= 75 * Wrong; V += FString::Printf(TEXT("  %d innocent %s booked: −$%d."), Wrong, Wrong == 1 ? TEXT("person") : TEXT("people"), 75 * Wrong); }
 	if (bGotThem) CasesSolved++;
-	AddCash(Pay); // never goes below zero
+	// PROGRESSION: everyone in the room earns it; a bigger squad earns more, the Overtime Budget pays more
+	UWorld* W = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	const int32 Squad = HUProgress::SquadSize(W);
+	const int32 Outcome = Arrested.Num() == 0 ? 0 : !bGotThem ? -1 : Pay >= 250 ? 2 : 1;
+	if (Pay > 0 && (HUProgress::SquadUpgrades(W) & HUProgress::Overtime)) Pay = FMath::RoundToInt(Pay * 1.2f);
+	const int32 XP = HUProgress::CaseXP(Outcome, Wrong, Squad);
+	const int32 RankBefore = HUProgress::RankOf(SquadXP), LevelBefore = HUProgress::SpecLevel(SpecXPOf(Specialty));
+	SquadXP += XP;
+	if (SpecXP.IsValidIndex(Specialty) && Specialty != HUProgress::None) SpecXP[Specialty] += XP;
+	AddCash(Pay); // never goes below zero (and saves)
 	if (Pay > 0) V += FString::Printf(TEXT("  Pay: +$%d."), Pay);
+	if (XP > 0) V += FString::Printf(TEXT("  +%d XP%s."), XP, Squad > 1 ? *FString::Printf(TEXT(" (squad of %d)"), Squad) : TEXT(""));
+	const int32 RankAfter = HUProgress::RankOf(SquadXP), LevelAfter = HUProgress::SpecLevel(SpecXPOf(Specialty));
+	if (RankAfter > RankBefore) V += FString::Printf(TEXT("  PROMOTED: %s!"), HUProgress::RankName(RankAfter));
+	if (Specialty != HUProgress::None && LevelAfter > LevelBefore) V += FString::Printf(TEXT("  %s is now level %d."), HUProgress::SpecName(Specialty), LevelAfter);
+	// the CASE WALL: every case the squad closed, with who worked it
+	if (bGotThem)
+	{
+		FString Names;
+		if (const AGameStateBase* GS = W ? W->GetGameState() : nullptr)
+			for (const APlayerState* P : GS->PlayerArray) if (P) Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + P->GetPlayerName().Replace(TEXT("_"), TEXT(" "));
+		if (Names.IsEmpty()) Names = DetectiveName;
+		CaseWall.Add(FString::Printf(TEXT("%s  -  %s booked%s  /  Det. %s"), *C.Victim, *K.Name, Outcome == 2 ? TEXT("") : TEXT(" (thin)"), *Names));
+		while (CaseWall.Num() > 12) CaseWall.RemoveAt(0);
+	}
+	SaveProgress();
+	AHUPlayerState::PushLocal(W);
 	LastVerdict = V;
 	Arrested.Reset();
 	BookingStep.Reset();

@@ -65,6 +65,7 @@ private:
 	UPROPERTY() TArray<UPrimitiveComponent*> FolderParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> ComputerParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> CoffeeParts;
+	UPROPERTY() TArray<UPrimitiveComponent*> ChairParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> ClockParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> CounterParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> TrayParts;

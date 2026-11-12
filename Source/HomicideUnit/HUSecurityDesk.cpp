@@ -289,6 +289,8 @@ void AHUSecurityDesk::Show()
 	// and the body only once it's happened
 	Capture->HiddenActors.Remove(VictimActor);
 	if (VictimActor && !F.bAfter) Capture->HiddenActors.Add(VictimActor);
+	// the figures were just moved: push that to the renderer now, or every moment pulled in one go records the same frame
+	GetWorld()->SendAllEndOfFrameUpdates();
 	Capture->CaptureScene();
 }
 

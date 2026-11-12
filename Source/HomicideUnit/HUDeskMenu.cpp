@@ -1,4 +1,5 @@
-﻿#include "HUDeskMenu.h"
+#include "HUDeskMenu.h"
+#include "HUProgress.h"
 #include "HUListenSubsystem.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
@@ -262,7 +263,7 @@ static int32 OrderIndex(int32 Item) { for (int32 i = 0; i < UE_ARRAY_COUNT(DeskO
 
 int32 AHUDeskMenu::RowsIn(EHUMenuPanel P) const
 {
-	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 1 + HULook::Fields; default: return 0; }
+	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 2 + HULook::Fields; /* name, looks, specialty */ default: return 0; }
 }
 
 void AHUDeskMenu::Prev()
@@ -287,6 +288,11 @@ void AHUDeskMenu::ChangeLook(int32 Dir)
 {
 	UHUCaseSubsystem* C = Cases();
 	if (!C || Row < 1) return;
+	if (Row == 1 + HULook::Fields) // the specialty
+	{
+		C->SetSpecialty((uint8)((C->Specialty + Dir + HUProgress::SpecCount) % HUProgress::SpecCount));
+		return;
+	}
 	HULook::Step(C->Look, Row - 1, Dir);
 	C->SaveProgress();
 	BuildFigurine();
@@ -522,6 +528,12 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 			Lines.Add(FString::Printf(TEXT("%s%s:   <  %s  >"), Sel(f + 1), HULook::FieldName(f), *HULook::ValueName(C->Look, f)));
 		if (C)
 		{
+			// your specialty and how far up you are
+			const int32 Lv = HUProgress::SpecLevel(C->SpecXPOf(C->Specialty));
+			Lines.Add(FString::Printf(TEXT("%sSPECIALTY:   <  %s%s  >"), Sel(1 + HULook::Fields), HUProgress::SpecName(C->Specialty), C->Specialty ? *FString::Printf(TEXT("  (level %d%s)"), Lv, Lv < 5 ? *FString::Printf(TEXT(", %d / %d XP"), C->SpecXPOf(C->Specialty), HUProgress::SpecLevelXP(Lv + 1)) : TEXT(", max")) : TEXT("")));
+			Lines.Add(FString(TEXT("      ")) + HUProgress::SpecPerk(C->Specialty));
+			const int32 Rk = HUProgress::RankOf(C->SquadXP);
+			Lines.Add(FString::Printf(TEXT("   RANK:  %s   (%d XP%s)"), HUProgress::RankName(Rk), C->SquadXP, Rk < HUProgress::RankCount - 1 ? *FString::Printf(TEXT(", next at %d"), HUProgress::RankXP(Rk + 1)) : TEXT("")));
 			Lines.Add(FString::Printf(TEXT("   CASES CLOSED:  %d"), C->CasesSolved));
 			Lines.Add(FString::Printf(TEXT("   CASH:  $%d"), C->Cash));
 			FString Kit;

@@ -1,4 +1,4 @@
-﻿// The case in play: loads cases, tracks evidence found, lies broken and the accusation.
+// The case in play: loads cases, tracks evidence found, lies broken and the accusation.
 // One per game instance, so it survives level changes (precinct -> scene -> precinct).
 // In Blueprints: Get Game Instance Subsystem (HUCaseSubsystem).
 #pragma once
@@ -133,6 +133,17 @@ public:
 	// the microphone to talk to suspects with, by name (empty: Windows' default input)
 	UPROPERTY(BlueprintReadWrite, Category = "Player") FString MicDevice;
 	UPROPERTY() FString VoiceKey;
+	// ---- progression (saved; see HUProgress) ----
+	UPROPERTY(BlueprintReadOnly, Category = "Progress") int32 SquadXP = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Progress") uint8 Specialty = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Progress") TArray<int32> SpecXP;
+	UPROPERTY(BlueprintReadOnly, Category = "Progress") int32 Upgrades = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Progress") TArray<FString> CaseWall;
+	int32 SpecXPOf(uint8 Spec) const { return SpecXP.IsValidIndex(Spec) ? SpecXP[Spec] : 0; }
+	void SetSpecialty(uint8 Spec);
+	bool BuyUpgrade(int32 Index);
+	// interview moves are scaled by this while one is applied (perks, upgrades, tag-team)
+	float PressureScale = 1.f;
 	UFUNCTION(BlueprintPure, Category = "Kit") bool HasTool(EHUTool Tool) const { return Tool == EHUTool::Handcuffs || (OwnedTools & (1 << (int32)Tool)) != 0; }
 	// false if you can't afford it or already own it
 	UFUNCTION(BlueprintCallable, Category = "Kit") bool BuyTool(EHUTool Tool);
@@ -176,7 +187,7 @@ public:
 
 private:
 	TSet<FString> BrokenKeys;
-	void AddPressure(const FString& Id, float Amount) { Pressure.FindOrAdd(Id) = FMath::Clamp(Pressure.FindRef(Id) + Amount, 0.f, 100.f); }
+	void AddPressure(const FString& Id, float Amount) { Pressure.FindOrAdd(Id) = FMath::Clamp(Pressure.FindRef(Id) + (Amount > 0.f ? Amount * PressureScale : Amount), 0.f, 100.f); }
 	FString CheckBreaking(const FString& Id, const FString& Line);
 	void AssignProfiles();
 };

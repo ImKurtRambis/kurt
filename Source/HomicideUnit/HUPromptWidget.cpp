@@ -172,13 +172,19 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			}
 			const int32 Lw = Ly + 6;
 			const float TB = 34.f;
+			// clickable spots, in absolute screen coords (the desk tests the cursor against them)
+			Desk->Hits.Reset();
+			auto Hit = [&](FVector2D Pos, FVector2D Size, AHUCaseDesk::EHit Kind, int32 Arg = 0)
+			{ Desk->Hits.Add({ G.LocalToAbsolute(Pos), G.LocalToAbsolute(Pos + Size), Kind, Arg }); };
 			TextCentered(Out, Lw, G, FString(AHUCaseDesk::OSName) + TEXT("  Squad Edition"), Font("Italic", 11), M + FVector2D(MW - 110, MH - TB - 16), FLinearColor(1, 1, 1, 0.55f));
 			// the desktop shortcuts
 			const bool bPeekNow = Desk->bPeek;
 			for (int32 i = 0; i < AHUCaseDesk::AppCount() && !bPeekNow; i++)
 			{
-				const FVector2D IP = M + FVector2D(22, 20 + i * 92);
+				const int32 PerCol = FMath::Max(1, FMath::FloorToInt((MH - TB - 30) / 92.f)); // icons run down, then wrap into the next column
+				const FVector2D IP = M + FVector2D(22 + (i / PerCol) * 96, 20 + (i % PerCol) * 92);
 				const FLinearColor AC = AHUCaseDesk::AppColor(i);
+				Hit(IP - FVector2D(8, 6), FVector2D(86, 86), AHUCaseDesk::EHit::Icon, i);
 				if (Desk->IsOnDesktop() && Desk->Sel == i) Box(Out, Lw, G, IP - FVector2D(8, 6), FVector2D(86, 86), FLinearColor(0.16f, 0.32f, 0.78f, 0.6f), 6.f);
 				Box(Out, Lw + 1, G, IP + FVector2D(16, 2), FVector2D(40, 48), FLinearColor(0, 0, 0, 0.25f), 4.f);           // shadow
 				Box(Out, Lw + 1, G, IP + FVector2D(14, 0), FVector2D(40, 48), FLinearColor(0.97f, 0.97f, 0.93f), 4.f);       // the page
@@ -199,6 +205,11 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			{
 				const FVector2D WP = M + FVector2D(bPeekNow ? MW * 0.08f : MW * 0.2f, 26), WS(bPeekNow ? MW * 0.84f : MW * 0.75f, MH - TB - 46);
 				Box(Out, Lw + 4, G, WP + FVector2D(4, 5), WS, FLinearColor(0, 0, 0, 0.3f), 10.f);
+				// the window body swallows clicks (so icons behind it don't fire); its top and bottom halves scroll
+				Hit(WP, FVector2D(WS.X, WS.Y * 0.5f), AHUCaseDesk::EHit::ScrollUp);
+				Hit(WP + FVector2D(0, WS.Y * 0.5f), FVector2D(WS.X, WS.Y * 0.5f), AHUCaseDesk::EHit::ScrollDown);
+				if (!bPeekNow) Hit(WP + FVector2D(WS.X - 62, 5), FVector2D(24, 20), AHUCaseDesk::EHit::Minimise);
+				Hit(WP + FVector2D(WS.X - 33, 5), FVector2D(24, 20), AHUCaseDesk::EHit::Close);
 				Box(Out, Lw + 5, G, WP, WS, FLinearColor(0.0f, 0.3f, 0.86f), 10.f);
 				Box(Out, Lw + 6, G, WP, FVector2D(WS.X, 30), FLinearColor(0.05f, 0.4f, 0.96f), 10.f);
 				Box(Out, Lw + 7, G, WP + FVector2D(5, 3), FVector2D(WS.X - 10, 9), FLinearColor(1, 1, 1, 0.2f), 5.f); // gloss
@@ -234,6 +245,7 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			// the taskbar: the green button, a button per open window, and the tray clock
 			const FVector2D TBP = M + FVector2D(0, MH - TB);
 			Box(Out, Lw + 10, G, TBP, FVector2D(MW, TB), FLinearColor(0.11f, 0.32f, 0.86f), 0.f);
+			Hit(TBP, FVector2D(118, TB), AHUCaseDesk::EHit::Start);
 			Box(Out, Lw + 11, G, TBP, FVector2D(MW, 3), FLinearColor(0.35f, 0.58f, 1.f), 0.f);
 			Box(Out, Lw + 11, G, TBP, FVector2D(118, TB), FLinearColor(0.2f, 0.6f, 0.22f), 12.f);
 			Box(Out, Lw + 12, G, TBP + FVector2D(4, 3), FVector2D(110, 10), FLinearColor(1, 1, 1, 0.18f), 6.f);
@@ -243,6 +255,7 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			for (int32 w : Desk->OpenWins)
 			{
 				const bool bFront = w == Desk->Active && !Desk->IsOnDesktop();
+				if (!bPeekNow) Hit(TBP + FVector2D(BX, 4), FVector2D(150, TB - 8), AHUCaseDesk::EHit::Task, w);
 				Box(Out, Lw + 11, G, TBP + FVector2D(BX, 4), FVector2D(150, TB - 8), bFront ? FLinearColor(0.06f, 0.2f, 0.62f) : FLinearColor(0.22f, 0.46f, 0.95f), 4.f);
 				Box(Out, Lw + 12, G, TBP + FVector2D(BX + 6, 10), FVector2D(12, 12), AHUCaseDesk::AppColor(w), 6.f);
 				Text(Out, Lw + 12, G, AHUCaseDesk::AppName(w), Font("Regular", 10), TBP + FVector2D(BX + 24, 9), FLinearColor::White);
@@ -253,8 +266,8 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 90, 12), FVector2D(10, 10), FLinearColor(0.4f, 0.9f, 0.45f), 2.f);
 			TextCentered(Out, Lw + 12, G, FDateTime::Now().ToString(TEXT("%I:%M %p")), Font("Regular", 11), TBP + FVector2D(MW - 42, TB * 0.5f), FLinearColor::White);
 			const FString Keys = bPeekNow ? FString::Printf(TEXT("Looking over Det. %s's shoulder     [W] [S] scroll     [Q] step back"), *Desk->OwnerName())
-				: Desk->IsOnDesktop() ? FString(TEXT("[W] [S] pick an icon     [E] open     [Tab] switch window     [Q] log off"))
-				: FString(TEXT("[W] [S] scroll     [Tab] switch window     [M] minimise     [F] send to the squad     [Q] close window"));
+				: Desk->IsOnDesktop() ? FString(TEXT("Mouse: double-click an icon     [W] [S] pick     [E] open     [Tab] switch window     [Q] / start button: log off"))
+				: FString(TEXT("Mouse: wheel scrolls, _ minimise, x close, taskbar switches     [Tab] switch     [F] send to the squad     [Q] close window"));
 			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
 			Prompt(Out, Lw + 13, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 40), Dim, 1.f, true);
 			return Lw + 14;

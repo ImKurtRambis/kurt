@@ -173,7 +173,7 @@ private:
 	void UpdateBeam();
 	void BuildHand();
 	void UsePrimary() { BeginUse(false); }
-	void UseSecondary() { BeginUse(true); }
+	void UseSecondary(); // in an interview Q always walks you out
 	void ReleasePrimary() { if (bHolding && !bHoldSecondary) CancelHold(); }
 	void ReleaseSecondary() { if (bHolding && bHoldSecondary) CancelHold(); }
 	void BeginUse(bool bSecondary);

@@ -1,4 +1,4 @@
-﻿// What carries over between play sessions: your cash and the tools you've bought.
+// What carries over between play sessions: your cash and the tools you've bought.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -22,5 +22,11 @@ public:
 	UPROPERTY() FString VoiceKey;
 	UPROPERTY() bool bVoiceQuestions = false;
 	UPROPERTY() FHULook Look; // how your detective looks (the name plate)
-	UPROPERTY() FString MicDevice; // the microphone picked in Settings (empty: Windows' default)
+	UPROPERTY() FString MicDevice;
+	// progression (see HUProgress)
+	UPROPERTY() int32 SquadXP = 0;
+	UPROPERTY() uint8 Specialty = 0;
+	UPROPERTY() TArray<int32> SpecXP;
+	UPROPERTY() int32 Upgrades = 0;
+	UPROPERTY() TArray<FString> CaseWall; // newest last // the microphone picked in Settings (empty: Windows' default)
 };

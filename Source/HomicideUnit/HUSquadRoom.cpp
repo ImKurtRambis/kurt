@@ -1,4 +1,6 @@
 #include "HUSquadRoom.h"
+#include "HUSquadBoards.h"
+#include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
@@ -96,7 +98,7 @@ bool AHUSquadRoom::IsHost() const { return GetNetMode() != NM_Client; }
 void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset();
+	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); ChairParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset();
 	for (UTextRenderComponent* Sign : RoomSigns) if (Sign) Sign->DestroyComponent();
 	RoomSigns.Reset();
 	USceneComponent* R = RootComponent;
@@ -379,8 +381,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			Detail(FVector(X - 73.f + Mark * 28.f, Y - 45.6f, 77.05f), FVector(8.f + (Mark % 2) * 7.f, 0.35f, 0.12f), FLinearColor(0.36f, 0.23f, 0.12f), FRotator(0, 0, (Mark % 3) - 1));
 		// Upholstered chair, steel column, five-spoke base, and low-profile casters.
 		const FVector Chair(X - 132.f, Y, 0);
-		Detail(Chair + FVector(0, 0, 48), FVector(44, 46, 10), FLinearColor(0.07f, 0.09f, 0.11f));
-		Detail(Chair + FVector(-17, 0, 78), FVector(9, 45, 52), FLinearColor(0.06f, 0.08f, 0.1f), FRotator(0, 0, -4));
+		ChairParts.Add(Block(this, R, Blocks, EShape::Cube, Chair + FVector(0, 0, 48), FVector(44, 46, 10), FLinearColor(0.07f, 0.09f, 0.11f)));
+		ChairParts.Add(Block(this, R, Blocks, EShape::Cube, Chair + FVector(-17, 0, 78), FVector(9, 45, 52), FLinearColor(0.06f, 0.08f, 0.1f), FRotator(0, 0, -4)));
 		Detail(Chair + FVector(0, 0, 24), FVector(4, 4, 36), FLinearColor(0.25f, 0.27f, 0.28f));
 		for (int32 Spoke = 0; Spoke < 5; ++Spoke)
 		{
@@ -535,6 +537,11 @@ void AHUSquadRoom::BeginPlay()
 		SP.Name = TEXT("HU_CaseBoard");
 		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		GetWorld()->SpawnActor<AHUCaseBoard>(AHUCaseBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(-150, -PY, 0)) * GetActorTransform(), SP);
+		// the UPGRADES board beside it, and the CASE WALL across the room (see HUProgress)
+		SP.Name = TEXT("HU_UpgradeBoard");
+		GetWorld()->SpawnActor<AHUUpgradeBoard>(AHUUpgradeBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(250, -PY, 0)) * GetActorTransform(), SP);
+		SP.Name = TEXT("HU_CaseWall");
+		GetWorld()->SpawnActor<AHUCaseWall>(AHUCaseWall::StaticClass(), FTransform(FRotator(0, -90, 0), FVector(-250, PY, 0)) * GetActorTransform(), SP);
 		SP.Name = TEXT("HU_MotorPoolDoor");
 		GetWorld()->SpawnActor<AHUMotorPoolDoor>(AHUMotorPoolDoor::StaticClass(), FTransform(FRotator(0, 0, 0), FVector(-PX, 0, 0)) * GetActorTransform(), SP);
 	}
@@ -676,6 +683,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 		}
 	}
 	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee  (faster work for a while)"));
+	if (ChairParts.Contains(I->FocusPart)) { const AHUCharacter* Ch = Cast<AHUCharacter>(User); return FText::FromString(Ch && Ch->bSeated ? TEXT("[E] Stand up") : TEXT("[E] Sit down")); }
 	if (ShiftParts.Contains(I->FocusPart))
 	{
 		const UHUCaseSubsystem* SC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
@@ -687,9 +695,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 		for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
 			if (FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation()) < 120.f * 120.f && !It->CanUse(User))
 				return FText::FromString(It->bOwnerOn ? FString::Printf(TEXT("[E] Look over Det. %s's shoulder"), *It->OwnerName()) : FString::Printf(TEXT("Det. %s's computer"), *It->OwnerName()));
-		const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case tools: records, alibis, profile"), TC->TapeCams()));
-		return FText::FromString(TEXT("[E] Case tools: records, alibi check, profile  ·  [Q] Your service record"));
+		return FText::FromString(TEXT("[E] Log on: records, suspects, phones, security footage  ·  [Q] Your service record"));
 	}
 	if (LaptopParts.Contains(I->FocusPart))
 		return FText::FromString(IsHost() ? FString::Printf(TEXT("Location: %s  ·  [E] next  ·  [Q] previous"), *PlaceLabel()) : FString::Printf(TEXT("Location: %s  (the host picks)"), *PlaceLabel()));
@@ -720,13 +726,22 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		if (LaptopParts.Contains(I->FocusPart))
 		{
 			const int32 N = HUCaseGen::Places().Num() + 1; // + random
-			PlaceChoice = ((PlaceChoice + 1 + Dir + N) % N) - 1;
-			I->Say(TEXT("Location: ") + PlaceLabel());
+			// the big places (the hotel) open once someone in the squad is a full Detective
+			const bool bBigOk = HUProgress::BestRank(GetWorld()) >= HUProgress::BigPlaceRank;
+			for (int32 Tries = 0; Tries < N; Tries++)
+			{
+				PlaceChoice = ((PlaceChoice + 1 + Dir + N) % N) - 1;
+				if (bBigOk || !PlaceLabel().Contains(TEXT("HOTEL"))) break;
+			}
+			I->Say(TEXT("Location: ") + PlaceLabel() + (bBigOk ? FString() : FString::Printf(TEXT("   (the hotel opens at %s)"), HUProgress::RankName(HUProgress::BigPlaceRank))));
 		}
 		else
 		{
+			// Veteran opens once someone in the squad reaches Detective II
+			const bool bVetOk = HUProgress::BestRank(GetWorld()) >= HUProgress::VeteranRank;
 			DifficultyChoice = ((DifficultyChoice + 1 + Dir + 4) % 4) - 1;
-			I->Say(FString(TEXT("Difficulty: ")) + DifficultyName(DifficultyChoice));
+			if (DifficultyChoice == 2 && !bVetOk) DifficultyChoice = ((DifficultyChoice + 1 + Dir + 4) % 4) - 1;
+			I->Say(FString(TEXT("Difficulty: ")) + DifficultyName(DifficultyChoice) + (bVetOk ? FString() : FString::Printf(TEXT("   (Veteran opens at %s)"), HUProgress::RankName(HUProgress::VeteranRank))));
 		}
 		return;
 	}
@@ -770,6 +785,21 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		else UGameplayStatics::OpenLevel(this, TEXT("L_Lobby"));
 		return;
 	}
+	if (ChairParts.Contains(I->FocusPart))
+	{
+		// every machine seats them (the squad sees it); WASD or E stands back up
+		if (AHUCharacter* Ch = Cast<AHUCharacter>(User))
+		{
+			if (Ch->bSeated) Ch->StandUp();
+			else
+			{
+				const int32 k = ChairParts.IndexOfByKey(I->FocusPart) / 2;
+				const FVector2D DS = DeskSpots[FMath::Clamp(k, 0, 3)];
+				Ch->SitDown(GetActorTransform().TransformPosition(FVector(DS.X - 112, DS.Y, 50)), GetActorRotation().Yaw);
+			}
+		}
+		return;
+	}
 	if (CoffeeParts.Contains(I->FocusPart))
 	{
 		const TCHAR* L[] = { TEXT("Burnt, bitter, hot. It does the job."), TEXT("Somebody made a fresh pot. A miracle."), TEXT("You top off the cup. Long night ahead.") };
@@ -794,16 +824,9 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 			if (User->IsLocallyControlled()) I->Say(FString::Printf(TEXT("That's Det. %s's computer. Use your own desk."), *Best->OwnerName()));
 			return;
 		}
-		// the security tapes from the scene: E plays them (on this player's own screen)
-		if (const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); TC && TC->bTapesPulled && !bSecondary)
-		{
-			if (User->IsLocallyControlled())
-				for (TActorIterator<AHUSecurityDesk> It(GetWorld()); It; ++It) if (It->bAtPrecinct) { It->OpenFor(User); break; }
-			return;
-		}
-		// the case tools: this desk's terminal, on this player's own screen
+		// E: log on (the tapes are the Security Footage icon on the desktop); Q: your service record
 		const UHUCaseSubsystem* TC2 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-		if ((TC2 && TC2->bTapesPulled) == bSecondary)
+		if (!bSecondary)
 		{
 			if (User->IsLocallyControlled() && Best) Best->OpenTerminal(User);
 			return;
@@ -845,7 +868,7 @@ void AHUSquadRoom::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 }
 void AHUSquadRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const
 {
-	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &CoffeeParts, &ClockParts, &CounterParts, &TrayParts, &ShiftParts })
+	for (const TArray<UPrimitiveComponent*>* G : { &BoardParts, &DoorParts, &LaptopParts, &FolderParts, &ChairParts, &CoffeeParts, &ClockParts, &CounterParts, &TrayParts, &ShiftParts })
 		if (G->Contains(Part)) { Out.Append(*G); return; }
 	if (ComputerParts.Contains(Part)) Out.Add(Part); // just the one computer
 }
