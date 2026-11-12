@@ -395,6 +395,8 @@ void AHUSuspectActor::Think(const FString& Said, const FString& Situation, const
 	FString Sit = Situation;
 	if (!OpenedWith.IsEmpty()) Sit += (Sit.IsEmpty() ? TEXT("") : TEXT(" ")) + FString::Printf(TEXT("You have already started your answer out loud with \"%s\" - carry straight on from there; don't repeat it."), *OpenedWith);
 	OpenedWith.Reset();
+	// a question every detective asks: written ahead of time, no wait (a premade opener still plays first)
+	if (FHUReaction Pre; Situation.IsEmpty() && B && B->TakeReady(SuspectId, Said, Pre)) { Deliver(Pre); return; }
 	if (B && B->IsReady()) B->React(SuspectId, Said, Sit, FHUBrainReact::CreateLambda(Deliver));
 	else { if (B) B->WarmUp(); Deliver(FHUReaction()); }
 }

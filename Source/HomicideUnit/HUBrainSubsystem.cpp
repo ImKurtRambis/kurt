@@ -94,10 +94,106 @@ FString UHUBrainSubsystem::SystemPrompt(const FString& Id) const
 	return P;
 }
 
+// ---------- prewritten answers ----------
+namespace
+{
+	struct FTopic { const TCHAR* Ask; const TCHAR* Keys[6]; };
+	// the questions every detective asks; a question matches a topic if it contains one of its keys
+	const FTopic Topics[] = {
+		{ TEXT("Did you do it?"), { TEXT("did you do it"), TEXT("did you kill"), TEXT("you did it"), TEXT("was it you"), TEXT("did you hurt"), TEXT("are you responsible") } },
+		{ TEXT("Who do you think did this?"), { TEXT("who did"), TEXT("who do you think"), TEXT("who would"), TEXT("anyone want"), TEXT("any idea who"), nullptr } },
+		{ TEXT("Can anyone vouch for you?"), { TEXT("vouch"), TEXT("alibi"), TEXT("prove it"), TEXT("anyone see you"), TEXT("who were you with"), TEXT("witness") } },
+		{ TEXT("Did you see or hear anything tonight?"), { TEXT("see anything"), TEXT("hear anything"), TEXT("notice anything"), TEXT("did you see"), TEXT("did you hear"), TEXT("what did you see") } },
+		{ TEXT("How did you know the victim?"), { TEXT("know the victim"), TEXT("know him"), TEXT("know her"), TEXT("relationship"), TEXT("how do you know"), TEXT("how did you know") } },
+		{ TEXT("Where were you when it happened?"), { TEXT("where were you"), TEXT("where was you"), TEXT("when it happened"), TEXT("at the time"), TEXT("what were you doing"), nullptr } },
+	};
+	int32 TopicOf(const FString& Said)
+	{
+		const FString L = Said.ToLower();
+		for (int32 t = 0; t < UE_ARRAY_COUNT(Topics); t++)
+			for (const TCHAR* K : Topics[t].Keys) if (K && L.Contains(K)) return t;
+		return INDEX_NONE;
+	}
+}
+
+// what the answer depends on: their mood, which of their lies are broken, a confession
+uint32 UHUBrainSubsystem::StateOf(const FString& Id) const
+{
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	FHUSuspect S;
+	if (!C || !C->GetSuspect(Id, S)) return 0;
+	uint32 H = (uint32)C->MoodOf(Id) * 7 + (C->Confessed == Id ? 1000 : 0);
+	for (int32 i = 0; i < S.Statements.Num(); i++) if (C->IsBroken(Id, i)) H += 1u << (i + 4);
+	return H;
+}
+
+void UHUBrainSubsystem::StartPrewrite()
+{
+	Pre.Reset(); PreQueue.Reset();
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C || !IsInstalled()) return;
+	// topic by topic across everyone, so the likeliest questions are ready for everybody first
+	for (int32 t = UE_ARRAY_COUNT(Topics) - 1; t >= 0; t--)
+		for (const FHUSuspect& S : C->Current.Suspects) PreQueue.Add({ S.Id, t });
+	WarmUp();
+	GetGameInstance()->GetTimerManager().SetTimer(PumpTimer, FTimerDelegate::CreateUObject(this, &UHUBrainSubsystem::Pump), 0.5f, true);
+}
+
+// one answer at a time, never while a detective is waiting on a live one
+void UHUBrainSubsystem::Pump()
+{
+	if (!bReady || bPreBusy || LiveBusy > 0) return;
+	while (PreQueue.Num())
+	{
+		const TPair<FString, int32> Job = PreQueue[0];
+		PreQueue.RemoveAt(0);
+		const FString Key = FString::Printf(TEXT("%s|%d"), *Job.Key, Job.Value);
+		const uint32 State = StateOf(Job.Key);
+		if (const FPre* Have = Pre.Find(Key); Have && Have->State == State) continue; // still good
+		bPreBusy = true;
+		TWeakObjectPtr<UHUBrainSubsystem> Self(this);
+		Send(Job.Key, Topics[Job.Value].Ask, FString(), false, FHUBrainReact::CreateLambda([Self, Key, State](const FHUReaction& R)
+		{
+			if (!Self.IsValid()) return;
+			Self->bPreBusy = false;
+			if (!R.Say.IsEmpty()) Self->Pre.Add(Key, { R, State });
+			UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: prewrote %s (%d ready, %d to go): %s"), *Key, Self->Pre.Num(), Self->PreQueue.Num(), *R.Say);
+		}));
+		return;
+	}
+}
+
+bool UHUBrainSubsystem::TakeReady(const FString& SuspectId, const FString& Said, FHUReaction& Out)
+{
+	const int32 T = TopicOf(Said);
+	if (T == INDEX_NONE) return false;
+	const FString Key = FString::Printf(TEXT("%s|%d"), *SuspectId, T);
+	FPre Got;
+	const bool bHave = Pre.RemoveAndCopyValue(Key, Got);
+	PreQueue.Insert({ SuspectId, T }, 0); // used or stale: write the next one (it'll know this conversation)
+	if (!bHave || Got.State != StateOf(SuspectId)) return false;
+	Out = Got.R;
+	TArray<TPair<FString, FString>>& H = History.FindOrAdd(SuspectId);
+	H.Add({ TEXT("The detective says: \"") + Said + TEXT("\""), Out.Say });
+	if (H.Num() > 6) H.RemoveAt(0);
+	return true;
+}
+
 // ---------- the thinking brain: words + emotion + body action, as JSON ----------
 void UHUBrainSubsystem::React(const FString& SuspectId, const FString& Said, const FString& Situation, FHUBrainReact Done)
 {
 	if (!bReady) { WarmUp(); Done.ExecuteIfBound(FHUReaction()); return; }
+	LiveBusy++;
+	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
+	Send(SuspectId, Said, Situation, true, FHUBrainReact::CreateLambda([Self, Done](const FHUReaction& R)
+	{
+		if (Self.IsValid()) Self->LiveBusy = FMath::Max(0, Self->LiveBusy - 1);
+		Done.ExecuteIfBound(R);
+	}));
+}
+
+void UHUBrainSubsystem::Send(const FString& SuspectId, const FString& Said, const FString& Situation, bool bRemember, FHUBrainReact Done)
+{
 	FString Emotions, Actions;
 	for (uint8 i = 0; i < HUReact::EmotionCount; i++) Emotions += (i ? TEXT(", ") : TEXT("")) + FString(HUReact::EmotionName(i));
 	for (uint8 i = 0; i < HUReact::ActionCount; i++) Actions += (i ? TEXT(", ") : TEXT("")) + FString(HUReact::ActionName(i));
@@ -129,7 +225,7 @@ void UHUBrainSubsystem::React(const FString& SuspectId, const FString& Said, con
 	Req->SetTimeout(40.f);
 	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
 	const FString Key = Said;
-	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Key, Done](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Key, Done, bRemember](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
 		FHUReaction R;
 		FString Content;
@@ -155,7 +251,7 @@ void UHUBrainSubsystem::React(const FString& SuspectId, const FString& Said, con
 		R.Say.ReplaceInline(TEXT("\""), TEXT(""));
 		R.Say.TrimStartAndEndInline();
 		if (R.Say.Len() > 320) R.Say = R.Say.Left(320) + TEXT("...");
-		if (Self.IsValid() && !R.Say.IsEmpty())
+		if (bRemember && Self.IsValid() && !R.Say.IsEmpty())
 		{
 			TArray<TPair<FString, FString>>& H = Self->History.FindOrAdd(SuspectId);
 			H.Add({ TEXT("The detective says: \"") + Key + TEXT("\""), R.Say });

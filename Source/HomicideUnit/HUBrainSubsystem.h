@@ -43,6 +43,15 @@ public:
 	// forget every conversation (a new case)
 	void ResetConversations() { History.Reset(); }
 
+	// PREWRITTEN ANSWERS: once a case starts, the brain quietly writes every suspect's answers to the questions every
+	// detective asks (where were you, how did you know the victim, what did you see, who did it, who can vouch, did
+	// you do it) - one at a time, and only while nobody's waiting on a live answer. Asking one of those is instant.
+	// An answer is thrown out (and written again) once that suspect's situation changes: a lie broken, their mood.
+	void StartPrewrite();
+	// a prewritten answer for this question, if there's a fresh one (it's then used up, remembered, and rewritten)
+	bool TakeReady(const FString& SuspectId, const FString& Said, FHUReaction& Out);
+	int32 ReadyCount() const { return Pre.Num(); }
+
 	UPROPERTY(EditAnywhere, Category = "Brain") int32 Port = 8089;
 
 private:
@@ -51,6 +60,15 @@ private:
 	bool bReady = false;
 	double StartedAt = 0.0;
 	TMap<FString, TArray<TPair<FString, FString>>> History; // suspect -> (question, answer)
+	struct FPre { FHUReaction R; uint32 State = 0; };
+	TMap<FString, FPre> Pre;                 // "suspect|topic" -> a prewritten answer
+	TArray<TPair<FString, int32>> PreQueue;  // (suspect, topic) still to write
+	bool bPreBusy = false;
+	int32 LiveBusy = 0;                      // live answers in flight: they go first
+	FTimerHandle PumpTimer;
+	void Pump();
+	uint32 StateOf(const FString& SuspectId) const;
+	void Send(const FString& SuspectId, const FString& Said, const FString& Situation, bool bRemember, FHUBrainReact Done);
 	FString Root() const;
 	FString SystemPrompt(const FString& SuspectId) const;
 	void Ping();

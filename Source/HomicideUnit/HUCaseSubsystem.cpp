@@ -129,7 +129,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	BoardMarks.Reset();
 	BodyLeads.Reset();
 	Pressure.Reset(); Misses.Reset(); Lawyered.Reset(); Confessed.Reset(); PressCount.Reset(); RecordRaised.Reset();
-	if (UHUBrainSubsystem* Brain = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) Brain->ResetConversations();
+	if (UHUBrainSubsystem* Brain = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) { Brain->ResetConversations(); Brain->StartPrewrite(); }
 	Found.Reset();
 	BrokenKeys.Reset();
 	Breaks = 0;
