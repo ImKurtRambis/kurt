@@ -15,6 +15,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Framework/Application/SlateApplication.h"
 
 using namespace HUBuild;
 
@@ -242,8 +243,16 @@ void AHUCaseDesk::Open(APawn* User, bool bTerm, int32 K)
 		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AHUCaseDesk::KeyE);
 		InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AHUCaseDesk::KeyM);
 		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AHUCaseDesk::KeyTab);
-		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &AHUCaseDesk::KeyF);
+			InputComponent->BindKey(EKeys::F, IE_Pressed, this, &AHUCaseDesk::KeyF);
+			InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &AHUCaseDesk::MouseClick);
 	}
+		// the computer takes the mouse: a free cursor over the screen (folders keep the keys)
+		if (bTerm)
+		{
+			FInputModeGameAndUI Mode; Mode.SetHideCursorDuringCapture(false); Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			PC->SetInputMode(Mode);
+			PC->bShowMouseCursor = true;
+		}
 	if (bTerm && CanUse(User)) Broadcast(); // (someone looking over a shoulder never speaks for the screen)
 }
 
@@ -325,6 +334,36 @@ void AHUCaseDesk::KeyF()
 	if (UHUInteractComponent* I = Viewer.IsValid() ? Viewer->FindComponentByClass<UHUInteractComponent>() : nullptr) I->SendDeskShare(DeskIndex, Active);
 }
 
+// a click: whatever the screen drew under the cursor (icons: click picks, double-click opens)
+void AHUCaseDesk::MouseClick()
+{
+	if (!bReading || !bTerminal || !FSlateApplication::IsInitialized()) return;
+	const FVector2D At = FSlateApplication::Get().GetCursorPos();
+	const FHit* Hit = nullptr;
+	for (int32 i = Hits.Num() - 1; i >= 0; i--) // topmost drawn last
+		if (At.X >= Hits[i].Min.X && At.Y >= Hits[i].Min.Y && At.X <= Hits[i].Max.X && At.Y <= Hits[i].Max.Y) { Hit = &Hits[i]; break; }
+	if (!Hit) return;
+	const FHit H = *Hit;
+	if (bPeek) { if (H.Kind == EHit::ScrollUp) ScrollUp(); else if (H.Kind == EHit::ScrollDown) ScrollDown(); else if (H.Kind == EHit::Close || H.Kind == EHit::Start) Close(); return; }
+	const double Now = FPlatformTime::Seconds();
+	switch (H.Kind)
+	{
+	case EHit::Icon:
+		if (H.Arg == LastClickIcon && Now - LastClickT < 0.45) { OpenApp(H.Arg); LastClickIcon = -1; }
+		else { Sel = H.Arg; LastClickIcon = H.Arg; LastClickT = Now; }
+		return;
+	case EHit::Close: CloseWindow(); return;
+	case EHit::Minimise: KeyM(); return;
+	case EHit::Task:
+		if (H.Arg == Active && !IsOnDesktop()) KeyM();
+		else { Active = H.Arg; Minimised.Remove(Active); Scroll = 0; Rebuild(); Broadcast(); }
+		return;
+	case EHit::Start: Close(); return;
+	case EHit::ScrollUp: ScrollUp(); return;
+	case EHit::ScrollDown: ScrollDown(); return;
+	}
+}
+
 void AHUCaseDesk::OpenApp(int32 A)
 {
 	if (A < 0 || A >= AppCount()) return;
@@ -388,7 +427,9 @@ void AHUCaseDesk::Close()
 		PC->SetIgnoreMoveInput(false);
 		PC->SetIgnoreLookInput(false);
 		DisableInput(PC);
+		if (PC->bShowMouseCursor) { PC->bShowMouseCursor = false; PC->SetInputMode(FInputModeGameOnly()); }
 	}
+	Hits.Reset();
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (I) I->Reading = nullptr;
 	// put the folder back on the desk, for the whole squad
