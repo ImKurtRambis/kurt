@@ -26,6 +26,9 @@ namespace HUOffender
 	struct FSpots
 	{
 		TArray<FString> Entries, KillSpots, Exits, Dumps, Cameras;
+		FString Office;            // where the safe is / where a fire gets set
+		TArray<FString> Public;    // where people see you: where the culprit goes back to, to build an alibi
+		TArray<FString> Stashes;   // where stolen money can hide inside the building
 	};
 	HOMICIDEUNIT_API FSpots SpotsFor(const FString& Place);
 
@@ -56,6 +59,9 @@ namespace HUOffender
 		int32 Care = 50;                      // 0..100: how careful they are
 		FString KillerId, KillerName, VictimName;
 		FString Relationship, Motive;
+		FString Crime;                        // homicide, assault, robbery, missing, arson
+		FString Stash;                        // robbery: where the money is hidden
+		FString Public;                       // the room they go back to, to be seen (nobody leaves: the squad holds everyone)
 		FString Weapon, WeaponSource;
 		FString Entry, KillSpot, Exit, WeaponDump;
 		FString AlibiStory, AlibiTruth;

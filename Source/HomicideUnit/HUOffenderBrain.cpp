@@ -46,13 +46,19 @@ HUOffender::FSpots HUOffender::SpotsFor(const FString& Place)
 		S.Exits = { TEXT("the front doors through the lobby"), TEXT("the basement service door"), TEXT("down the fire escape into the alley"), TEXT("the stairs to the bar, blending in") };
 		S.Dumps = { TEXT("the basement furnace"), TEXT("the laundry chute"), TEXT("the alley dumpster under the fire escape"), TEXT("the roof water tank"), TEXT("their own coat, carried out") };
 		S.Cameras = { TEXT("the lobby"), TEXT("the bar"), TEXT("the second-floor hallway"), TEXT("the basement service door") };
+		S.Office = TEXT("the manager's office behind the front desk");
+		S.Public = { TEXT("the bar"), TEXT("the lobby") };
+		S.Stashes = { TEXT("behind a ceiling tile in a third-floor room"), TEXT("in the bar's ice chest"), TEXT("in the roof water tank"), TEXT("in a laundry cart in the basement") };
 		return S;
 	}
 	S.Entries = { TEXT("the front door"), TEXT("the back door"), TEXT("a side window") };
 	S.KillSpots = { TEXT("the back office"), TEXT("the storeroom"), TEXT("the main room after closing") };
 	S.Exits = { TEXT("the front door"), TEXT("the back door into the alley") };
-	S.Dumps = { TEXT("a dumpster out back"), TEXT("the river"), TEXT("their own car") };
+	S.Dumps = { TEXT("a dumpster out back"), TEXT("the trunk of their own car, parked outside"), TEXT("a storm drain in the alley") };
 	S.Cameras = { TEXT("the front door"), TEXT("the main room") };
+	S.Office = TEXT("the back office");
+	S.Public = { TEXT("the main room") };
+	S.Stashes = { TEXT("behind a loose ceiling tile"), TEXT("under the floorboards in the storeroom"), TEXT("inside a coat in the cloakroom") };
 	return S;
 }
 
@@ -61,7 +67,9 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	FPlan P;
 	const FHUSuspect* K = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == Case.Solution.Killer; });
 	if (!K) return P;
-	if (!Case.Crime.IsEmpty() && Case.Crime != TEXT("homicide")) return P; // robberies, fires, missing persons: not planned yet
+	if (Case.Victim.Contains(TEXT(", age "))) return P; // a missing child: not planned yet (the profiles behind those need their own types)
+	const FString Crime = Case.Crime.IsEmpty() ? FString(TEXT("homicide")) : Case.Crime;
+	const bool bRob = Crime == TEXT("robbery"), bFire = Crime == TEXT("arson"), bGone = Crime == TEXT("missing"), bHurt = Crime == TEXT("assault");
 	FRandomStream R(Case.MapSeed * 31 + Case.Number * 7919 + 17);
 	const FSpots Sp = SpotsFor(Case.Place);
 
@@ -80,7 +88,10 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	if (bDom)
 	{
 		P.Relationship = Pick<FString>({ TEXT("married to the victim"), TEXT("the victim's partner of six years"), TEXT("the victim's brother-in-law"), TEXT("the victim's business partner and old friend") }, R);
-		P.Motive = Pick<FString>({ TEXT("found out about the affair tonight"), TEXT("the victim was leaving and taking the money"), TEXT("an old fight about the will boiled over"), TEXT("the victim laughed at them in front of the whole bar") }, R);
+		P.Motive = bRob ? Pick<FString>({ TEXT("owes a bookie, and the victim wouldn't lend a cent"), TEXT("the victim cut them out of the business money"), TEXT("knew the safe combination, and a debt was due Friday") }, R)
+			: bFire ? Pick<FString>({ TEXT("wanted the insurance on a business that was going under"), TEXT("the victim was about to find the books they'd cooked - the fire was for the books") }, R)
+			: bGone ? Pick<FString>({ TEXT("the victim was leaving them, tonight"), TEXT("the victim found out about the money and was going to the police") }, R)
+			: Pick<FString>({ TEXT("found out about the affair tonight"), TEXT("the victim was leaving and taking the money"), TEXT("an old fight about the will boiled over"), TEXT("the victim laughed at them in front of the whole bar") }, R);
 		P.WeaponSource = P.Weapon.Contains(TEXT("revolver")) ? TEXT("the victim's own, from the nightstand drawer")
 			: P.Weapon.Contains(TEXT("drink")) ? TEXT("sleeping pills from the victim's toiletry bag, crushed into a drink on impulse")
 			: TEXT("grabbed on the spot - it was just there");
@@ -88,26 +99,35 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	else
 	{
 		P.Relationship = Pick<FString>({ TEXT("barely knew the victim - or so it looks"), TEXT("an old employee the victim fired"), TEXT("a former friend nobody's seen with the victim in years") }, R);
-		P.Motive = Pick<FString>({ TEXT("the victim's testimony put them away for four years"), TEXT("the victim ruined their business and walked away clean"), TEXT("the victim was driving the night their brother died, and was never charged"), TEXT("the victim took everything in a crooked deal") }, R);
+		P.Motive = bRob ? Pick<FString>({ TEXT("the victim's company stiffed them for a year's wages - this was collecting"), TEXT("the victim cheated them out of their half of the business") }, R)
+			: bFire ? Pick<FString>({ TEXT("the victim's place put their family business under; now it burns"), TEXT("the victim got them fired and blacklisted") }, R)
+			: Pick<FString>({ TEXT("the victim's testimony put them away for four years"), TEXT("the victim ruined their business and walked away clean"), TEXT("the victim was driving the night their brother died, and was never charged"), TEXT("the victim took everything in a crooked deal") }, R);
 		P.WeaponSource = P.Weapon.Contains(TEXT("drink")) ? TEXT("rat poison, bought two weeks ago and measured out at home")
 			: P.Weapon.Contains(TEXT("revolver")) ? TEXT("bought off the books from a pawnbroker three weeks ago")
 			: TEXT("bought at a hardware store across town and brought in a bag");
 	}
 	P.Entry = bDom ? Sp.Entries[0] : Pick(Sp.Entries, R);           // domestic: already inside, came in the normal way
-	P.KillSpot = Pick(Sp.KillSpots, R);
+	P.KillSpot = (bRob || bFire) ? Sp.Office : Pick(Sp.KillSpots, R);
 	P.Exit = Pick(Sp.Exits, R);
 	P.WeaponDump = Pick(Sp.Dumps, R);
+	if (bRob) P.Stash = Pick(Sp.Stashes, R);
+	P.Public = Pick(Sp.Public, R);
 
 	// the alibi: domestic make one up afterwards; revenge built it in advance and leaned on someone
 	TArray<const FHUSuspect*> Others; for (const FHUSuspect& S : Case.Suspects) if (S.Id != K->Id) Others.Add(&S);
 	if (!bDom && Others.Num() && R.FRand() < 0.7f) { const FHUSuspect* L = Others[R.RandRange(0, Others.Num() - 1)]; P.LeanedOnId = L->Id; P.LeanedOnName = L->Name; }
-	P.AlibiStory = bDom ? Pick<FString>({ TEXT("\"I was at the bar the whole night.\""), TEXT("\"I was asleep - I didn't hear a thing.\""), TEXT("\"I went out for cigarettes and came back to find them.\"") }, R)
-		: P.LeanedOnName.IsEmpty() ? TEXT("\"I was across town at the pictures. I've got the ticket stub.\"")
+	P.AlibiStory = bDom ? Pick<FString>({ FString::Printf(TEXT("\"I was in %s the whole night.\""), *P.Public), FString(TEXT("\"I was asleep upstairs - I didn't hear a thing.\"")), FString(TEXT("\"I stepped out for cigarettes and came back to all this.\"")) }, R)
+		: P.LeanedOnName.IsEmpty() ? FString::Printf(TEXT("\"I was in %s all evening. I checked my coat at eight and never left.\""), *P.Public)
 		: FString::Printf(TEXT("\"I was with %s all evening. Ask them.\""), *P.LeanedOnName);
 
 	// 3. THE NIGHT
 	const int32 T = Minutes(Case.Time);
-	const TMap<FString, FString> V = { { TEXT("{V}"), P.VictimName }, { TEXT("{K}"), P.KillerName }, { TEXT("{W}"), P.Weapon }, { TEXT("{E}"), P.Entry }, { TEXT("{S}"), P.KillSpot }, { TEXT("{X}"), P.Exit }, { TEXT("{D}"), P.WeaponDump } };
+	const TCHAR* Act = bRob ? TEXT("{K} empties the safe and knocks {V} cold with {W}.")
+		: bFire ? TEXT("{K} hits {V} with {W} and sets the fire, with {V} still inside.")
+		: bGone ? TEXT("{K} overpowers {V} with {W}.")
+		: bHurt ? TEXT("{K} attacks {V} with {W} and leaves them for dead.")
+		: TEXT("{K} kills {V} with {W}.");
+	const TMap<FString, FString> V = { { TEXT("{V}"), P.VictimName }, { TEXT("{M}"), P.Stash }, { TEXT("{U}"), P.Public }, { TEXT("{K}"), P.KillerName }, { TEXT("{W}"), P.Weapon }, { TEXT("{E}"), P.Entry }, { TEXT("{S}"), P.KillSpot }, { TEXT("{X}"), P.Exit }, { TEXT("{D}"), P.WeaponDump } };
 	auto Step = [&](int32 Day, int32 Min, const FString& Where, const TCHAR* What, const FString& Trace = FString())
 	{ FStep S; S.Day = Day; S.Minute = Min; S.Where = Where; S.What = F(What, V); S.Trace = Trace; P.Timeline.Add(S); };
 	if (bDom)
@@ -115,10 +135,12 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 		Step(0, T - 120, TEXT("the bar"), TEXT("{K} and {V} drink together. It's fine, at first."));
 		Step(0, T - 45, TEXT("the bar"), TEXT("The fight starts. Voices raised; {V} storms off."), TEXT("the bartender remembers the argument"));
 		Step(0, T - 10, P.KillSpot, TEXT("{K} follows {V} to finish it - {S}."));
-		Step(0, T, P.KillSpot, TEXT("{K} kills {V} with {W}."));
+		Step(0, T, P.KillSpot, Act);
+		if (bGone) Step(0, T + 2, P.Exit, TEXT("{K} gets {V} out by {X}, to their car."));
+		if (bRob) Step(0, T + 8, P.Stash, TEXT("Too risky to walk out with it: {K} stashes the money {M}."));
 		Step(0, T + 4, P.KillSpot, TEXT("Panic. {K} wipes what they touched - not everything."));
 		Step(0, T + 15, P.WeaponDump, TEXT("{K} gets rid of {W}: {D}."));
-		Step(0, T + 30, P.Exit, TEXT("{K} leaves by {X} and starts telling everyone their story."));
+		Step(0, T + 30, P.Public, TEXT("{K} goes back to {U} and starts telling everyone their story."));
 	}
 	else
 	{
@@ -127,11 +149,12 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 		Step(-3, 21 * 60, Case.Place.ToLower(), TEXT("{K} scouts the place: the way in ({E}) and out ({X})."));
 		if (!P.LeanedOnName.IsEmpty()) Step(-1, 19 * 60, TEXT("a diner"), *FString::Printf(TEXT("{K} asks %s to say they spent tonight together. Calls it a favour."), *P.LeanedOnName));
 		Step(0, T - 40, P.Entry, TEXT("{K} comes in by {E}."));
-		Step(0, T - 25, P.KillSpot, TEXT("{K} lies in wait for {V} - {S}."));
-		Step(0, T, P.KillSpot, TEXT("{K} kills {V} with {W}."));
-		Step(0, T + 6, P.Exit, TEXT("{K} leaves by {X}."));
+		Step(0, T - 25, P.KillSpot, bRob || bFire ? TEXT("{K} waits for {V} to open up {S}.") : TEXT("{K} lies in wait for {V} - {S}."));
+		Step(0, T, P.KillSpot, Act);
+		if (bRob) Step(0, T + 3, P.Stash, TEXT("{K} stashes the money {M}, to collect when it's quiet."));
+		Step(0, T + 6, P.Exit, bGone ? TEXT("{K} takes {V} out by {X}, to their car.") : TEXT("{K} gets away from {S} by {X}."));
 		Step(0, T + 20, P.WeaponDump, TEXT("{K} disposes of {W}: {D}."));
-		Step(0, T + 45, TEXT("across town"), TEXT("{K} turns up where the alibi says they were, and makes sure they're seen."));
+		Step(0, T + 25, P.Public, TEXT("{K} slips back into {U}, where the alibi says they were all along, and makes sure they're seen."));
 	}
 
 	// 4. SLIPS: careless types slip more, everyone slips at least three times (every case stays solvable).
@@ -140,16 +163,16 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	using EK = ESlipKind;
 	TArray<FSlip> Pool = bDom
 		? TArray<FSlip>{
-			{ TEXT("blood"), EK::Scene, 1, TEXT("Cut their hand in the struggle"), TEXT("a blood drop that isn't the victim's, near the body"), 1,
+			{ TEXT("blood"), EK::Scene, 1, TEXT("Cut their hand in the struggle"), TEXT("a blood drop that isn't the victim's, at the scene"), 1,
 				TEXT("Blood Drop"), TEXT("A drop of blood by the door that isn't {V}'s. {K} has a fresh cut across the palm.") },
 			{ TEXT("camera"), EK::Tape, 0, TEXT("Walked past a camera on the way out"), TEXT("tape: the killer leaving minutes after the time of death"), 28, nullptr, nullptr },
 			{ TEXT("calldead"), EK::Phone, 0, TEXT("Called the victim's phone afterwards, to look worried"), TEXT("call log: a call to a phone they knew was dead"), 50, nullptr, nullptr },
 			{ TEXT("key"), EK::Scene, 2, TEXT("Kept the victim's key without thinking"), TEXT("the victim's room key in the killer's pocket"), 5,
 				TEXT("Victim's Key"), TEXT("{V}'s key, found in {K}'s coat. {V} still had it when the two of them split up - {K} saw them after that.") },
 			{ TEXT("witness"), EK::Scene, 2, TEXT("A guest heard them through the wall"), TEXT("a witness: raised voices, then a thud, at the time of death"), 0,
-				TEXT("Noise Complaint"), TEXT("A complaint slip from the front desk, logged at {T}: raised voices, then a thud. The caller describes {K}'s voice.") },
+				TEXT("Noise Complaint"), TEXT("A complaint slip from the front desk, logged at {T}: raised voices, then {NOISE}. The caller describes {K}'s voice.") },
 			{ TEXT("shirt"), EK::Scene, 1, TEXT("Changed shirts and stuffed the old one in a bag"), TEXT("a stained shirt in the killer's bag"), 12,
-				TEXT("Stained Shirt"), TEXT("A shirt balled up in {K}'s bag, spotted with {V}'s blood.") },
+				TEXT("Stained Shirt"), TEXT("A shirt balled up in {K}'s bag, {STAIN}.") },
 			{ TEXT("tab"), EK::Scene, 2, TEXT("Their story doesn't match the bar tab"), TEXT("the bar tab closed an hour before they say they left"), 35,
 				TEXT("Bar Tab"), TEXT("{K}'s tab, closed out and paid well before {T}. Their story doesn't fit the time on it.") } }
 		: TArray<FSlip>{
@@ -163,8 +186,8 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 			{ TEXT("friend"), EK::Witness, 0, TEXT("The friend they leaned on is a bad liar"), TEXT("the alibi witness's story falls apart under pressure"), 0, nullptr, nullptr },
 			{ TEXT("souvenir"), EK::Scene, 1, TEXT("Kept a souvenir"), TEXT("something of the victim's, hidden in the killer's things"), 8,
 				TEXT("Keepsake"), TEXT("{V}'s wristwatch, wrapped in a handkerchief in {K}'s things.") },
-			{ TEXT("stub"), EK::Scene, 2, TEXT("The ticket stub alibi is for the early show"), TEXT("their alibi stub is for a show that let out hours before"), -200,
-				TEXT("Ticket Stub"), TEXT("{K}'s 'alibi' stub is for the seven o'clock show. It let out long before {T}.") },
+			{ TEXT("stub"), EK::Scene, 2, TEXT("Took their coat back out of the coat check"), TEXT("a coat-check ticket stamped out before the crime"), -45,
+				TEXT("Coat-Check Ticket"), TEXT("{K}'s coat-check ticket: the coat went out before {T} and came back after. Somebody needed their coat - and their gloves.") },
 			{ TEXT("parking"), EK::Scene, 2, TEXT("Parked close and got a ticket"), TEXT("a parking ticket two streets from the scene"), -10,
 				TEXT("Parking Ticket"), TEXT("A parking ticket on {K}'s car, written two streets from {P} ten minutes before {T}.") } };
 	Pool.RemoveAll([&](const FSlip& S) {
@@ -176,14 +199,22 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 		if (const int32 At = Pool.IndexOfByPredicate([&](const FSlip& S) { return S.Breaks == Need; }); At != INDEX_NONE) Pool.Swap(Need - 1, At);
 	const int32 Extra = FMath::RoundToInt((100 - P.Care) / 30.f);   // careful = 3, careless = up to 6
 	const int32 NSlips = FMath::Min(3 + Extra, Pool.Num());
-	P.MeansLie = bDom ? FString::Printf(TEXT("I never went near %s after the bar. Never laid a hand on them."), *P.VictimName)
+	P.MeansLie = bRob ? FString(TEXT("I never went near the office. I don't even know where the safe is."))
+		: bFire ? FString(TEXT("I never set foot in that office tonight."))
+		: bDom ? FString::Printf(TEXT("I never went near %s after the bar. Never laid a hand on them."), *P.VictimName)
 		: FString::Printf(TEXT("I had nothing to do with %s. Haven't laid eyes on them in years."), *P.VictimName);
 	P.AlibiLie = P.AlibiStory.TrimChar(TEXT('"'));
 	for (int32 i = 0; i < NSlips; i++)
 	{
 		const FSlip& S = Pool[i];
 		FSlipInfo Info; Info.Tag = S.Tag; Info.Kind = S.Kind; Info.Breaks = S.Breaks;
-		if (S.ClueName) { Info.ClueName = S.ClueName; Info.ClueDetail = F(S.ClueDetail, V).Replace(TEXT("{T}"), *Case.Time).Replace(TEXT("{P}"), *Case.Place); }
+		if (S.ClueName)
+		{
+			const FString Stain = bFire ? FString(TEXT("reeking of lighter fluid")) : bGone ? FString::Printf(TEXT("torn at the collar, %s's hair on it"), *P.VictimName) : FString::Printf(TEXT("spotted with %s's blood"), *P.VictimName);
+			const FString Noise = bFire ? TEXT("the smell of smoke") : bGone ? TEXT("a door slamming and footsteps on the stairs") : TEXT("a thud");
+			Info.ClueName = S.ClueName;
+			Info.ClueDetail = F(S.ClueDetail, V).Replace(TEXT("{T}"), *Case.Time).Replace(TEXT("{P}"), *Case.Place).Replace(TEXT("{STAIN}"), *Stain).Replace(TEXT("{NOISE}"), *Noise);
+		}
 		P.SlipInfo.Add(Info);
 		P.Slips.Add(S.What);
 		FStep St; St.Trace = S.Trace; St.What = FString::Printf(TEXT("SLIP: %s."), S.What);
@@ -197,6 +228,9 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	P.CoverUp.Add(FString::Printf(TEXT("Tells the squad: %s"), *P.AlibiStory));
 	P.AlibiTruth = FString::Printf(TEXT("Was at %s at %s."), *P.KillSpot, *Clock(T));
 	P.CoverUp.Add(FString::Printf(TEXT("The weapon went into %s."), *P.WeaponDump));
+	if (bRob) P.CoverUp.Add(FString::Printf(TEXT("The money is still in the building, %s."), *P.Stash));
+	if (bGone) P.CoverUp.Add(FString::Printf(TEXT("%s is alive, in the trunk of %s's car - for now."), *P.VictimName, *P.KillerName));
+	P.Crime = Crime;
 	if (!bDom) P.CoverUp.Add(TEXT("Deleted the texts and calls from the last month - the phone company still has the call records."));
 	else P.CoverUp.Add(TEXT("Wiped the handle and the door; forgot the glass."));
 	if (!P.LeanedOnName.IsEmpty()) P.CoverUp.Add(FString::Printf(TEXT("%s will back the alibi - until they're pushed."), *P.LeanedOnName));
@@ -251,7 +285,7 @@ TArray<FString> HUOffender::Describe(const FPlan& P)
 {
 	TArray<FString> L;
 	if (!P.bValid) { L.Add(TEXT("No plan: the case has no culprit on file.")); return L; }
-	L.Add(FString::Printf(TEXT("TYPE: %s    CARE: %d/100"), TypeName(P.Type), P.Care));
+	L.Add(FString::Printf(TEXT("CRIME: %s    TYPE: %s    CARE: %d/100"), *P.Crime.ToUpper(), TypeName(P.Type), P.Care));
 	L.Add(FString::Printf(TEXT("OFFENDER: %s, %s"), *P.KillerName, *P.Relationship));
 	L.Add(FString::Printf(TEXT("VICTIM: %s"), *P.VictimName));
 	L.Add(FString::Printf(TEXT("MOTIVE: %s"), *P.Motive));
