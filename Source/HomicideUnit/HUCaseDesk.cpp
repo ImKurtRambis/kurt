@@ -24,6 +24,22 @@ static const FLinearColor FolderColors[] = {
 	FLinearColor(0.55f, 0.55f, 0.58f), // grey
 };
 
+// ---- PRECINCTOS: the desktop shortcuts. Add, remove or reorder them here. ----
+// Tool = which case tool the window shows: 0 records, 1 alibi check, 2 offender profile, 3 tape flags, 4 case status.
+struct FDeskApp { const TCHAR* Name; const TCHAR* Glyph; FLinearColor Color; int32 Tool; };
+static const FDeskApp DeskApps[] = {
+	{ TEXT("Records Search"),   TEXT("R"), FLinearColor(0.93f, 0.68f, 0.18f), 0 },
+	{ TEXT("Alibi Check"),      TEXT("A"), FLinearColor(0.3f, 0.66f, 0.3f),   1 },
+	{ TEXT("Offender Profile"), TEXT("P"), FLinearColor(0.62f, 0.38f, 0.82f), 2 },
+	{ TEXT("Tape Flags"),       TEXT("T"), FLinearColor(0.25f, 0.5f, 0.88f),  3 },
+	{ TEXT("Case Status"),      TEXT("C"), FLinearColor(0.84f, 0.32f, 0.26f), 4 },
+};
+const TCHAR* AHUCaseDesk::OSName = TEXT("PrecinctOS");
+int32 AHUCaseDesk::AppCount() { return UE_ARRAY_COUNT(DeskApps); }
+FString AHUCaseDesk::AppName(int32 A) { return A >= 0 && A < AppCount() ? FString(DeskApps[A].Name) : FString(); }
+FString AHUCaseDesk::AppGlyph(int32 A) { return A >= 0 && A < AppCount() ? FString(DeskApps[A].Glyph) : FString(); }
+FLinearColor AHUCaseDesk::AppColor(int32 A) { return A >= 0 && A < AppCount() ? DeskApps[A].Color : FLinearColor::Gray; }
+
 const TCHAR* AHUCaseDesk::FolderName(int32 K)
 {
 	switch (K) { case 0: return TEXT("SCENE REPORT"); case 1: return TEXT("EVIDENCE LOG"); case 2: return TEXT("SUSPECT FILES"); case 3: return TEXT("AUTOPSY"); case 4: return TEXT("TAPE NOTES"); default: return TEXT("CASE FILE"); }
@@ -192,26 +208,146 @@ void AHUCaseDesk::Open(APawn* User, bool bTerm, int32 K)
 	if (!PC || !I || bReading) return;
 	Viewer = User;
 	bReading = true; bTerminal = bTerm; Folder = K; Page = 0; Scroll = 0;
+	bPeek = false; Active = -1; OpenWins.Reset(); Minimised.Reset(); Sel = FMath::Clamp(Sel, 0, AppCount() - 1);
 	Rebuild();
 	PC->SetIgnoreMoveInput(true);
 	PC->SetIgnoreLookInput(true);
 	I->Reading = this;
-	I->Say(bTerm ? TEXT("The terminal hums awake. Green letters on black.") : FString::Printf(TEXT("You flip open the %s."), *FString(FolderName(K)).ToLower()));
+	I->Say(bTerm ? FString::Printf(TEXT("%s boots up with a chime. Your desktop."), OSName) : FString::Printf(TEXT("You flip open the %s."), *FString(FolderName(K)).ToLower()));
 	EnableInput(PC);
 	if (InputComponent && InputComponent->KeyBindings.Num() == 0)
 	{
-		InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AHUCaseDesk::NextPage);
-		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AHUCaseDesk::NextPage);
-		InputComponent->BindKey(EKeys::A, IE_Pressed, this, &AHUCaseDesk::PrevPage);
-		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AHUCaseDesk::PrevPage);
-		InputComponent->BindKey(EKeys::S, IE_Pressed, this, &AHUCaseDesk::ScrollDown);
-		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AHUCaseDesk::ScrollDown);
-		InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AHUCaseDesk::ScrollDown);
-		InputComponent->BindKey(EKeys::W, IE_Pressed, this, &AHUCaseDesk::ScrollUp);
-		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AHUCaseDesk::ScrollUp);
-		InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AHUCaseDesk::ScrollUp);
-		InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &AHUCaseDesk::CloseKey);
-		InputComponent->BindKey(EKeys::E, IE_Pressed, this, &AHUCaseDesk::CloseKey);
+		InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AHUCaseDesk::KeyRight);
+		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AHUCaseDesk::KeyRight);
+		InputComponent->BindKey(EKeys::A, IE_Pressed, this, &AHUCaseDesk::KeyLeft);
+		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AHUCaseDesk::KeyLeft);
+		InputComponent->BindKey(EKeys::S, IE_Pressed, this, &AHUCaseDesk::KeyDown);
+		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AHUCaseDesk::KeyDown);
+		InputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AHUCaseDesk::KeyDown);
+		InputComponent->BindKey(EKeys::W, IE_Pressed, this, &AHUCaseDesk::KeyUp);
+		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AHUCaseDesk::KeyUp);
+		InputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &AHUCaseDesk::KeyUp);
+		InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &AHUCaseDesk::KeyQ);
+		InputComponent->BindKey(EKeys::E, IE_Pressed, this, &AHUCaseDesk::KeyE);
+		InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AHUCaseDesk::KeyE);
+		InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AHUCaseDesk::KeyM);
+		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AHUCaseDesk::KeyTab);
+		InputComponent->BindKey(EKeys::F, IE_Pressed, this, &AHUCaseDesk::KeyF);
+	}
+	if (bTerm && CanUse(User)) Broadcast(); // (someone looking over a shoulder never speaks for the screen)
+}
+
+void AHUCaseDesk::OpenPeek(APawn* User)
+{
+	if (!User || !User->IsLocallyControlled() || !bOwnerOn) return;
+	Open(User, true, -1);
+	if (!bReading) return;
+	bPeek = true;
+	Active = OwnerApp;
+	if (Active >= 0) OpenWins.Add(Active);
+	Rebuild();
+	if (UHUInteractComponent* I = User->FindComponentByClass<UHUInteractComponent>()) I->Say(FString::Printf(TEXT("You lean over Det. %s's shoulder."), *OwnerName()));
+}
+
+// ---- PrecinctOS keys (the folders keep their own: A / D pages, W / S scroll, E / Q put it down) ----
+void AHUCaseDesk::KeyLeft()
+{
+	if (!bReading) return;
+	if (!bTerminal) { PrevPage(); return; }
+	if (bPeek) return;
+	if (IsOnDesktop()) { Sel = (Sel + AppCount() - 1) % AppCount(); return; }
+	const int32 i = OpenWins.Find(Active);
+	if (OpenWins.Num() > 1) { Active = OpenWins[(i + OpenWins.Num() - 1) % OpenWins.Num()]; Minimised.Remove(Active); Scroll = 0; Rebuild(); Broadcast(); }
+}
+void AHUCaseDesk::KeyRight()
+{
+	if (!bReading) return;
+	if (!bTerminal) { NextPage(); return; }
+	if (bPeek) return;
+	if (IsOnDesktop()) { Sel = (Sel + 1) % AppCount(); return; }
+	KeyTab();
+}
+void AHUCaseDesk::KeyUp()
+{
+	if (!bReading) return;
+	if (bTerminal && !bPeek && IsOnDesktop()) { Sel = (Sel + AppCount() - 1) % AppCount(); return; }
+	ScrollUp();
+}
+void AHUCaseDesk::KeyDown()
+{
+	if (!bReading) return;
+	if (bTerminal && !bPeek && IsOnDesktop()) { Sel = (Sel + 1) % AppCount(); return; }
+	ScrollDown();
+}
+void AHUCaseDesk::KeyE()
+{
+	if (!bReading) return;
+	if (!bTerminal) { Close(); return; }
+	if (!bPeek && IsOnDesktop()) OpenApp(Sel);
+}
+void AHUCaseDesk::KeyQ()
+{
+	if (!bReading) return;
+	if (!bTerminal || bPeek || IsOnDesktop()) { Close(); return; }
+	CloseWindow();
+}
+void AHUCaseDesk::KeyM()
+{
+	if (!bReading || !bTerminal || bPeek || IsOnDesktop()) return;
+	Minimised.Add(Active);
+	Active = -1;
+	Broadcast();
+}
+void AHUCaseDesk::KeyTab()
+{
+	if (!bReading || !bTerminal || bPeek || OpenWins.Num() == 0) return;
+	const int32 i = OpenWins.Find(Active);
+	Active = OpenWins[(i + 1) % OpenWins.Num()];
+	Minimised.Remove(Active);
+	Scroll = 0;
+	Rebuild();
+	Broadcast();
+}
+// F: send the window in front to the squad
+void AHUCaseDesk::KeyF()
+{
+	if (!bReading || !bTerminal || bPeek || IsOnDesktop()) return;
+	if (UHUInteractComponent* I = Viewer.IsValid() ? Viewer->FindComponentByClass<UHUInteractComponent>() : nullptr) I->SendDeskShare(DeskIndex, Active);
+}
+
+void AHUCaseDesk::OpenApp(int32 A)
+{
+	if (A < 0 || A >= AppCount()) return;
+	OpenWins.AddUnique(A);
+	Minimised.Remove(A);
+	SharedFrom.Remove(A);
+	Active = A; Scroll = 0;
+	Rebuild();
+	Broadcast();
+}
+
+void AHUCaseDesk::CloseWindow()
+{
+	OpenWins.Remove(Active);
+	Minimised.Remove(Active);
+	Active = -1;
+	for (int32 i = OpenWins.Num() - 1; i >= 0; i--) if (!Minimised.Contains(OpenWins[i])) { Active = OpenWins[i]; break; }
+	Scroll = 0;
+	Rebuild();
+	Broadcast();
+}
+
+// tell the squad what this screen shows (only when it changes)
+void AHUCaseDesk::Broadcast()
+{
+	if (bPeek) return;
+	const bool bOn = bReading && bTerminal;
+	const int32 App = bOn && !IsOnDesktop() ? Active : -1;
+	if (bOn == bSentOn && App == SentApp) return;
+	if (UHUInteractComponent* I = Viewer.IsValid() ? Viewer->FindComponentByClass<UHUInteractComponent>() : nullptr)
+	{
+		bSentOn = bOn; SentApp = App;
+		I->SendDeskView(DeskIndex, bOn, App);
 	}
 }
 
@@ -220,6 +356,8 @@ void AHUCaseDesk::Close()
 	APawn* User = Viewer.Get();
 	const int32 K = Folder;
 	const bool bWasFolder = !bTerminal;
+	if (bTerminal && !bPeek) { bReading = false; Broadcast(); } // the screen goes dark for anyone looking on
+	bPeek = false;
 	bReading = false; Folder = -1; Viewer = nullptr;
 	if (APlayerController* PC = User ? Cast<APlayerController>(User->GetController()) : nullptr)
 	{
@@ -236,7 +374,7 @@ void AHUCaseDesk::Close()
 void AHUCaseDesk::CloseKey() { if (bReading) Close(); }
 void AHUCaseDesk::NextPage() { if (!bReading) return; Rebuild(); Page = FMath::Min(Page + 1, Pages.Num() - 1); Scroll = 0; }
 void AHUCaseDesk::PrevPage() { if (!bReading) return; Rebuild(); Page = FMath::Max(Page - 1, 0); Scroll = 0; }
-void AHUCaseDesk::ScrollDown() { if (bReading && Pages.IsValidIndex(Page)) Scroll = FMath::Min(Scroll + 3, FMath::Max(0, Pages[Page].Lines.Num() - 4)); }
+void AHUCaseDesk::ScrollDown() { if (bReading && Pages.IsValidIndex(Page)) Scroll = FMath::Min(Scroll + 3, Pages[Page].Lines.Num() * 3); } // (lines wrap into rows: the screen clamps)
 void AHUCaseDesk::ScrollUp() { if (bReading) Scroll = FMath::Max(Scroll - 3, 0); }
 
 void AHUCaseDesk::Tick(float DeltaSeconds)
@@ -253,6 +391,13 @@ void AHUCaseDesk::Tick(float DeltaSeconds)
 	for (int32 K = 0; K < FolderCount; K++)
 		if (!Holder[K].IsValid() && FolderParts.IsValidIndex(K) && !FolderParts[K]->IsVisible() && !(bReading && Folder == K)) SetOnDesk(K, true);
 	if (bReading && !Viewer.IsValid()) Close();
+	// looking over someone's shoulder: follow their screen, and step back when they log off
+	if (bReading && bPeek)
+	{
+		if (!bOwnerOn) { if (UHUInteractComponent* I = Viewer->FindComponentByClass<UHUInteractComponent>()) I->Say(TEXT("They log off. You step back.")); Close(); }
+		else if (Active != OwnerApp) { Active = OwnerApp; OpenWins.Reset(); if (Active >= 0) OpenWins.Add(Active); Scroll = 0; Rebuild(); }
+		else Rebuild();
+	}
 }
 
 // ---------------- what's written in the file ----------------
@@ -346,6 +491,13 @@ void AHUCaseDesk::Rebuild()
 			for (const FString& Id : C->Arrested) P.Lines.Add(FString::Printf(TEXT("  %s - %s"), *SuspectName(Id), C->IsBooked(Id) ? TEXT("booked") : TEXT("awaiting booking")));
 			if (C->bAwaitingCaptain) P.Lines.Add(C->UnbookedCount() > 0 ? FString(TEXT("Book everyone, then submit at the Captain's in-tray.")) : FString(TEXT("Ready for the Captain's in-tray.")));
 			Pages.Add(P);
+		}
+		// the window in front shows its tool's page (Pages holds every tool, in Tool order, until here)
+		{
+			const int32 Tool = Active >= 0 && Active < AppCount() ? DeskApps[Active].Tool : -1;
+			TArray<FPage> All = MoveTemp(Pages);
+			Pages.Reset();
+			if (All.IsValidIndex(Tool)) Pages.Add(All[Tool]);
 		}
 		return;
 	}

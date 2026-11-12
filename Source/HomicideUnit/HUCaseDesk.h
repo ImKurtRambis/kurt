@@ -11,7 +11,12 @@
 //     TAPE NOTES    - what the squad flagged on the security tapes
 //   While a detective has a folder it's gone from the desk for everyone ("Det. Reyes has it").
 //   Reading: A / D turn the page, W / S scroll.
-// THE COMPUTER (Q at the desk computer; E there plays the tapes once they're pulled) - each player's own screen:
+// THE COMPUTER runs PRECINCTOS, a desktop with a shortcut per case tool (the list is DeskApps in HUCaseDesk.cpp):
+//   W / S pick an icon, E opens it in a window; in a window W / S scroll, A / D or Tab switch windows,
+//   M minimises to the taskbar, Q closes it (Q on the desktop logs off).
+//   CO-OP: F sends the window in front to the squad (it turns up on each partner's desktop with a NEW badge), and a
+//   partner at your computer while you're on it can look over your shoulder (they see your screen, live, read-only).
+// The tools (E at the desk computer before the tapes are pulled; Q after, when E plays the tapes):
 //     RECORDS     - each suspect's criminal record, and what kind of offender it fits
 //     ALIBI CHECK - every statement against the evidence you've bagged: what contradicts what
 //     PROFILE     - which kind of offender the evidence points at
@@ -56,6 +61,26 @@ public:
 	// the desk computer's case tools (called by the precinct when Q is pressed at this desk's computer)
 	void OpenTerminal(APawn* User);
 
+	// ---- PrecinctOS ----
+	static const TCHAR* OSName;
+	static int32 AppCount();
+	static FString AppName(int32 A);
+	static FString AppGlyph(int32 A);
+	static FLinearColor AppColor(int32 A);
+	int32 Sel = 0;                     // the highlighted desktop icon
+	TArray<int32> OpenWins;            // open windows (apps), in taskbar order
+	TSet<int32> Minimised;
+	int32 Active = -1;                 // the window in front (-1: the desktop)
+	bool bPeek = false;                // looking over the owner's shoulder (read-only, follows their screen)
+	TMap<int32, FString> SharedFrom;   // app -> the partner who sent it to you (a NEW badge on the icon)
+	bool IsOnDesktop() const { return Active < 0 || Minimised.Contains(Active); }
+	// what the owner's screen shows, known on every machine (sent by the owner as it changes)
+	bool bOwnerOn = false;
+	int32 OwnerApp = -1;
+	void SetOwnerView(bool bOn, int32 App) { bOwnerOn = bOn; OwnerApp = App; }
+	void ReceiveShare(int32 App, const FString& From) { SharedFrom.Add(App, From); }
+	void OpenPeek(APawn* User);
+
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual void HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const override;
@@ -77,5 +102,10 @@ private:
 	void Close();
 	void Rebuild();       // fill Pages from the case
 	void NextPage(); void PrevPage(); void ScrollDown(); void ScrollUp(); void CloseKey();
+	void KeyLeft(); void KeyRight(); void KeyUp(); void KeyDown(); void KeyE(); void KeyQ(); void KeyM(); void KeyTab(); void KeyF();
+	void OpenApp(int32 A);
+	void CloseWindow();
+	void Broadcast();   // tell the squad what this screen shows (for looking over your shoulder)
+	bool bSentOn = false; int32 SentApp = -2;
 	class UHUCaseSubsystem* Cases() const;
 };

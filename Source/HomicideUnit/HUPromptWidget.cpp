@@ -138,6 +138,127 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 	if (const AHUCaseDesk* Desk = Owner->Reading.Get(); Desk && Desk->bReading)
 	{
 		const bool bTerm = Desk->bTerminal;
+		// ---- PRECINCTOS: the desk computer's desktop ----
+		if (bTerm)
+		{
+			const float MH = L.Y * 0.84f, MW = FMath::Min(L.X - 60.f, MH * 4.f / 3.f);
+			const FVector2D M((L.X - MW) * 0.5f, (L.Y - MH) * 0.4f);
+			Box(Out, Ly, G, FVector2D(0, 0), L, FLinearColor(0, 0, 0, 0.86f), 0.f);
+			Box(Out, Ly + 1, G, M - FVector2D(16, 16), FVector2D(MW + 32, MH + 32), FLinearColor(0.8f, 0.78f, 0.72f), 16.f); // the beige monitor
+			Box(Out, Ly + 1, G, FVector2D(M.X + MW - 40, M.Y + MH + 4), FVector2D(10, 5), FLinearColor(0.3f, 0.85f, 0.35f), 2.f); // power light
+			// the wallpaper: a hand-drawn sky over rolling green hills
+			const int32 Bands = 28;
+			for (int32 b = 0; b < Bands; b++)
+			{
+				const float t = (float)b / (Bands - 1);
+				Box(Out, Ly + 2, G, M + FVector2D(0, MH * b / Bands), FVector2D(MW, MH / Bands + 1.f), FMath::Lerp(FLinearColor(0.13f, 0.36f, 0.82f), FLinearColor(0.66f, 0.83f, 0.98f), t), 0.f);
+			}
+			FRandomStream Cloud(11);
+			for (int32 c = 0; c < 7; c++)
+			{
+				const FVector2D CP = M + FVector2D(Cloud.FRandRange(0.05f, 0.85f) * MW, Cloud.FRandRange(0.06f, 0.36f) * MH);
+				const float CW = Cloud.FRandRange(70.f, 150.f);
+				Box(Out, Ly + 3, G, CP, FVector2D(CW, CW * 0.28f), FLinearColor(1, 1, 1, 0.5f), CW * 0.14f);
+				Box(Out, Ly + 3, G, CP + FVector2D(CW * 0.2f, -CW * 0.1f), FVector2D(CW * 0.5f, CW * 0.26f), FLinearColor(1, 1, 1, 0.45f), CW * 0.13f);
+			}
+			for (float X = 0; X < MW; X += 4.f)
+			{
+				const float u = X / MW;
+				const float Back = MH * (0.6f - 0.08f * FMath::Sin(u * PI * 1.4f + 0.5f));
+				const float Front = MH * (0.72f - 0.1f * FMath::Sin(u * PI * 0.95f + 2.3f));
+				Box(Out, Ly + 4, G, M + FVector2D(X, Back), FVector2D(4.5f, MH - Back), FLinearColor(0.36f, 0.66f, 0.26f), 0.f);
+				Box(Out, Ly + 5, G, M + FVector2D(X, Front), FVector2D(4.5f, MH - Front), FLinearColor(0.22f, 0.54f, 0.14f), 0.f);
+				Box(Out, Ly + 5, G, M + FVector2D(X, Front), FVector2D(4.5f, 5.f), FLinearColor(0.42f, 0.74f, 0.3f), 0.f); // sunlit crest
+			}
+			const int32 Lw = Ly + 6;
+			const float TB = 34.f;
+			TextCentered(Out, Lw, G, FString(AHUCaseDesk::OSName) + TEXT("  Squad Edition"), Font("Italic", 11), M + FVector2D(MW - 110, MH - TB - 16), FLinearColor(1, 1, 1, 0.55f));
+			// the desktop shortcuts
+			const bool bPeekNow = Desk->bPeek;
+			for (int32 i = 0; i < AHUCaseDesk::AppCount() && !bPeekNow; i++)
+			{
+				const FVector2D IP = M + FVector2D(22, 20 + i * 92);
+				const FLinearColor AC = AHUCaseDesk::AppColor(i);
+				if (Desk->IsOnDesktop() && Desk->Sel == i) Box(Out, Lw, G, IP - FVector2D(8, 6), FVector2D(86, 86), FLinearColor(0.16f, 0.32f, 0.78f, 0.6f), 6.f);
+				Box(Out, Lw + 1, G, IP + FVector2D(16, 2), FVector2D(40, 48), FLinearColor(0, 0, 0, 0.25f), 4.f);           // shadow
+				Box(Out, Lw + 1, G, IP + FVector2D(14, 0), FVector2D(40, 48), FLinearColor(0.97f, 0.97f, 0.93f), 4.f);       // the page
+				Box(Out, Lw + 2, G, IP + FVector2D(14, 0), FVector2D(40, 11), AC, 4.f);
+				for (int32 k = 0; k < 3; k++) Box(Out, Lw + 2, G, IP + FVector2D(19, 17 + k * 7), FVector2D(24 - k * 5, 3), FLinearColor(0.6f, 0.6f, 0.6f), 1.f);
+				Box(Out, Lw + 3, G, IP + FVector2D(34, 26), FVector2D(26, 26), AC, 13.f);
+				TextCentered(Out, Lw + 4, G, AHUCaseDesk::AppGlyph(i), Font("Bold", 12), IP + FVector2D(47, 39), FLinearColor::White);
+				TextCentered(Out, Lw + 2, G, AHUCaseDesk::AppName(i), Font("Regular", 10), IP + FVector2D(35, 66), FLinearColor(0, 0, 0, 0.7f));
+				TextCentered(Out, Lw + 3, G, AHUCaseDesk::AppName(i), Font("Regular", 10), IP + FVector2D(34, 65), FLinearColor::White);
+				if (const FString* From = Desk->SharedFrom.Find(i))
+				{
+					Box(Out, Lw + 4, G, IP + FVector2D(48, -6), FVector2D(34, 16), FLinearColor(0.88f, 0.2f, 0.15f), 8.f);
+					TextCentered(Out, Lw + 5, G, TEXT("NEW"), Font("Bold", 8), IP + FVector2D(65, 2), FLinearColor::White);
+				}
+			}
+			// the window in front
+			if (!Desk->IsOnDesktop() && Desk->Pages.Num() > 0)
+			{
+				const FVector2D WP = M + FVector2D(bPeekNow ? MW * 0.08f : MW * 0.2f, 26), WS(bPeekNow ? MW * 0.84f : MW * 0.75f, MH - TB - 46);
+				Box(Out, Lw + 4, G, WP + FVector2D(4, 5), WS, FLinearColor(0, 0, 0, 0.3f), 10.f);
+				Box(Out, Lw + 5, G, WP, WS, FLinearColor(0.0f, 0.3f, 0.86f), 10.f);
+				Box(Out, Lw + 6, G, WP, FVector2D(WS.X, 30), FLinearColor(0.05f, 0.4f, 0.96f), 10.f);
+				Box(Out, Lw + 7, G, WP + FVector2D(5, 3), FVector2D(WS.X - 10, 9), FLinearColor(1, 1, 1, 0.2f), 5.f); // gloss
+				Box(Out, Lw + 7, G, WP + FVector2D(10, 8), FVector2D(14, 14), AHUCaseDesk::AppColor(Desk->Active), 7.f);
+				const FString Title = AHUCaseDesk::AppName(Desk->Active) + (bPeekNow ? FString::Printf(TEXT("   -   Det. %s's screen"), *Desk->OwnerName()) : FString());
+				Text(Out, Lw + 8, G, Title, Font("Bold", 12), WP + FVector2D(32, 6), FLinearColor::White);
+				if (!bPeekNow)
+				{
+					Box(Out, Lw + 8, G, WP + FVector2D(WS.X - 62, 5), FVector2D(24, 20), FLinearColor(0.15f, 0.5f, 1.f), 4.f);
+					Box(Out, Lw + 9, G, WP + FVector2D(WS.X - 56, 18), FVector2D(12, 3), FLinearColor::White, 1.f);
+				}
+				Box(Out, Lw + 8, G, WP + FVector2D(WS.X - 33, 5), FVector2D(24, 20), FLinearColor(0.86f, 0.3f, 0.2f), 4.f);
+				TextCentered(Out, Lw + 9, G, TEXT("x"), Font("Bold", 12), WP + FVector2D(WS.X - 21, 14), FLinearColor::White);
+				Box(Out, Lw + 6, G, WP + FVector2D(4, 30), WS - FVector2D(8, 34), FLinearColor(0.98f, 0.98f, 0.96f), 3.f);
+				const AHUCaseDesk::FPage& Pg = Desk->Pages[0];
+				const FSlateFontInfo WF = Font("Regular", 12);
+				Text(Out, Lw + 7, G, Pg.Title, Font("Bold", 13), WP + FVector2D(16, 40), FLinearColor(0.05f, 0.2f, 0.55f));
+				TArray<FString> Rows;
+				for (const FString& Line : Pg.Lines) { TArray<FString> Wr = Wrap(Line, WF, WS.X - 40); if (Wr.Num() == 0) Rows.Add(FString()); else Rows.Append(Wr); }
+				const float RowH = 18.f;
+				const int32 Fit = FMath::Max(1, FMath::FloorToInt((WS.Y - 84.f) / RowH));
+				const int32 First = FMath::Clamp(Desk->Scroll, 0, FMath::Max(0, Rows.Num() - Fit));
+				for (int32 r = 0; r < Fit && First + r < Rows.Num(); r++) Text(Out, Lw + 7, G, Rows[First + r], WF, WP + FVector2D(16, 66 + r * RowH), FLinearColor(0.1f, 0.1f, 0.12f));
+				// the scroll bar
+				if (Rows.Num() > Fit)
+				{
+					const float BarH = WS.Y - 44.f, KnobH = FMath::Max(24.f, BarH * Fit / Rows.Num());
+					const float KnobY = (BarH - KnobH) * First / FMath::Max(1, Rows.Num() - Fit);
+					Box(Out, Lw + 7, G, WP + FVector2D(WS.X - 20, 36), FVector2D(12, BarH), FLinearColor(0.88f, 0.9f, 0.95f), 3.f);
+					Box(Out, Lw + 8, G, WP + FVector2D(WS.X - 20, 36 + KnobY), FVector2D(12, KnobH), FLinearColor(0.55f, 0.68f, 0.95f), 3.f);
+				}
+			}
+			// the taskbar: the green button, a button per open window, and the tray clock
+			const FVector2D TBP = M + FVector2D(0, MH - TB);
+			Box(Out, Lw + 10, G, TBP, FVector2D(MW, TB), FLinearColor(0.11f, 0.32f, 0.86f), 0.f);
+			Box(Out, Lw + 11, G, TBP, FVector2D(MW, 3), FLinearColor(0.35f, 0.58f, 1.f), 0.f);
+			Box(Out, Lw + 11, G, TBP, FVector2D(118, TB), FLinearColor(0.2f, 0.6f, 0.22f), 12.f);
+			Box(Out, Lw + 12, G, TBP + FVector2D(4, 3), FVector2D(110, 10), FLinearColor(1, 1, 1, 0.18f), 6.f);
+			Box(Out, Lw + 12, G, TBP + FVector2D(12, 10), FVector2D(14, 14), Gold, 7.f); // the precinct badge
+			Text(Out, Lw + 12, G, TEXT("precinct"), Font("BoldItalic", 13), TBP + FVector2D(32, 7), FLinearColor::White);
+			float BX = 128.f;
+			for (int32 w : Desk->OpenWins)
+			{
+				const bool bFront = w == Desk->Active && !Desk->IsOnDesktop();
+				Box(Out, Lw + 11, G, TBP + FVector2D(BX, 4), FVector2D(150, TB - 8), bFront ? FLinearColor(0.06f, 0.2f, 0.62f) : FLinearColor(0.22f, 0.46f, 0.95f), 4.f);
+				Box(Out, Lw + 12, G, TBP + FVector2D(BX + 6, 10), FVector2D(12, 12), AHUCaseDesk::AppColor(w), 6.f);
+				Text(Out, Lw + 12, G, AHUCaseDesk::AppName(w), Font("Regular", 10), TBP + FVector2D(BX + 24, 9), FLinearColor::White);
+				BX += 156.f;
+			}
+			Box(Out, Lw + 11, G, TBP + FVector2D(MW - 112, 0), FVector2D(112, TB), FLinearColor(0.07f, 0.55f, 0.93f), 0.f);
+			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 104, 12), FVector2D(10, 10), FLinearColor(0.95f, 0.8f, 0.3f), 5.f);
+			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 90, 12), FVector2D(10, 10), FLinearColor(0.4f, 0.9f, 0.45f), 2.f);
+			TextCentered(Out, Lw + 12, G, FDateTime::Now().ToString(TEXT("%I:%M %p")), Font("Regular", 11), TBP + FVector2D(MW - 42, TB * 0.5f), FLinearColor::White);
+			const FString Keys = bPeekNow ? FString::Printf(TEXT("Looking over Det. %s's shoulder     [W] [S] scroll     [Q] step back"), *Desk->OwnerName())
+				: Desk->IsOnDesktop() ? FString(TEXT("[W] [S] pick an icon     [E] open     [Tab] switch window     [Q] log off"))
+				: FString(TEXT("[W] [S] scroll     [Tab] switch window     [M] minimise     [F] send to the squad     [Q] close window"));
+			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
+			Prompt(Out, Lw + 13, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 40), Dim, 1.f, true);
+			return Lw + 14;
+		}
 		const float PH = L.Y * 0.8f, PW = FMath::Min(L.X - 80.f, PH * 0.95f);
 		const FVector2D P((L.X - PW) * 0.5f, (L.Y - PH) * 0.42f);
 		const FLinearColor Paper = bTerm ? FLinearColor(0.01f, 0.03f, 0.015f) : FLinearColor(0.93f, 0.9f, 0.82f);

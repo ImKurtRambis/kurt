@@ -125,6 +125,14 @@ public:
 
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
+	// PrecinctOS on the desk computers: what your screen shows (so partners can look over your shoulder),
+	// and sending a window to the squad (it lands on each partner's own desktop)
+	void SendDeskView(int32 Desk, bool bOn, int32 App);
+	UFUNCTION(Server, Reliable) void ServerDeskView(int32 Desk, bool bOn, int32 App);
+	UFUNCTION(NetMulticast, Reliable) void MulticastDeskView(int32 Desk, bool bOn, int32 App);
+	void SendDeskShare(int32 Desk, int32 App);
+	UFUNCTION(Server, Reliable) void ServerDeskShare(int32 Desk, int32 App);
+	UFUNCTION(NetMulticast, Reliable) void MulticastDeskShare(int32 Desk, int32 App);
 	// the desk folder or desk computer you're reading (the HUD shows it)
 	TWeakObjectPtr<class AHUCaseDesk> Reading;
 	// use a particular part of something as if you were looking at it (sent to the squad like any use)

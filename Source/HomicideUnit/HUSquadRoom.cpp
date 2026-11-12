@@ -348,7 +348,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 	{
 		for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
 			if (FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation()) < 120.f * 120.f && !It->CanUse(User))
-				return FText::FromString(FString::Printf(TEXT("Det. %s's computer"), *It->OwnerName()));
+				return FText::FromString(It->bOwnerOn ? FString::Printf(TEXT("[E] Look over Det. %s's shoulder"), *It->OwnerName()) : FString::Printf(TEXT("Det. %s's computer"), *It->OwnerName()));
 		const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case tools: records, alibis, profile"), TC->TapeCams()));
 		return FText::FromString(TEXT("[E] Case tools: records, alibi check, profile  ·  [Q] Your service record"));
@@ -451,6 +451,8 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 			}
 		if (Best && !Best->CanUse(User))
 		{
+			// they're on it: look over their shoulder (their screen, live, read-only)
+			if (Best->bOwnerOn) { if (!bSecondary) Best->OpenPeek(User); return; }
 			if (User->IsLocallyControlled()) I->Say(FString::Printf(TEXT("That's Det. %s's computer. Use your own desk."), *Best->OwnerName()));
 			return;
 		}

@@ -21,6 +21,8 @@
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h"
+#include "HUCaseDesk.h"
+#include "HUPlayerState.h"
 
 // the beam: how far it reaches and how wide (half-angle, degrees)
 static const float BeamRange = 1100.f, BeamCone = 22.f;
@@ -888,6 +890,44 @@ void UHUInteractComponent::Use(bool bSecondary)
 	const FName Part = FocusPart ? FocusPart->GetFName() : NAME_None;
 	if (GetOwner()->HasAuthority()) MulticastUse(Path, Part, bSecondary, Held); // the host: straight out to everyone
 	else ServerUse(Path, Part, bSecondary, Held);                              // a squadmate: ask the host
+}
+
+// ---- PrecinctOS: screens and shared windows ----
+static AHUCaseDesk* DeskByIndex(UWorld* W, int32 Desk)
+{
+	for (TActorIterator<AHUCaseDesk> It(W); It; ++It) if (It->DeskIndex == Desk) return *It;
+	return nullptr;
+}
+void UHUInteractComponent::SendDeskView(int32 Desk, bool bOn, int32 App)
+{
+	if (GetWorld()->GetNetMode() == NM_Standalone) { MulticastDeskView_Implementation(Desk, bOn, App); return; }
+	if (GetOwner()->HasAuthority()) MulticastDeskView(Desk, bOn, App); else ServerDeskView(Desk, bOn, App);
+}
+void UHUInteractComponent::ServerDeskView_Implementation(int32 Desk, bool bOn, int32 App) { MulticastDeskView(Desk, bOn, App); }
+void UHUInteractComponent::MulticastDeskView_Implementation(int32 Desk, bool bOn, int32 App)
+{
+	if (AHUCaseDesk* D = DeskByIndex(GetWorld(), Desk)) D->SetOwnerView(bOn, App);
+}
+void UHUInteractComponent::SendDeskShare(int32 Desk, int32 App)
+{
+	if (GetWorld()->GetNetMode() == NM_Standalone) { MulticastDeskShare_Implementation(Desk, App); return; }
+	if (GetOwner()->HasAuthority()) MulticastDeskShare(Desk, App); else ServerDeskShare(Desk, App);
+}
+void UHUInteractComponent::ServerDeskShare_Implementation(int32 Desk, int32 App) { MulticastDeskShare(Desk, App); }
+void UHUInteractComponent::MulticastDeskShare_Implementation(int32 Desk, int32 App)
+{
+	APawn* User = Cast<APawn>(GetOwner());
+	APlayerController* Local = GetWorld()->GetFirstPlayerController();
+	APawn* Me = Local ? Local->GetPawn() : nullptr;
+	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!Mine) return;
+	const FString AppName = AHUCaseDesk::AppName(App);
+	if (User == Me) { Mine->Say(FString::Printf(TEXT("You send %s to the squad's desks."), *AppName)); return; }
+	const FString Who = User && User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName().Replace(TEXT("_"), TEXT(" ")) : FString(TEXT("Your partner"));
+	// it lands on your own desk (or, with no desk of your own, any free one)
+	for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
+		if (It->OwnerState() && (APlayerState*)It->OwnerState() == Me->GetPlayerState()) { It->ReceiveShare(App, Who); break; }
+	Mine->Notify(AHUCaseDesk::OSName, FString::Printf(TEXT("%s sent you %s - it's waiting on your desktop"), *Who, *AppName), FLinearColor(0.3f, 0.55f, 0.95f));
 }
 
 void UHUInteractComponent::SendUseOn(AActor* Target, UPrimitiveComponent* Part, bool bSecondary)
