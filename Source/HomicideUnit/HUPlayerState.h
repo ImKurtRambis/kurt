@@ -11,6 +11,8 @@ class HOMICIDEUNIT_API AHUPlayerState : public APlayerState
 	GENERATED_BODY()
 public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") bool bReady = false;
+	// your own desk at the precinct (0..3; -1 = none yet). Handed out by the host as you arrive.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") int32 Desk = -1;
 
 	// ask the host to mark you ready / not ready (works from any player's machine)
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Squad") void ServerSetReady(bool bNewReady);

@@ -10,4 +10,5 @@ void AHUPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AHUPlayerState, bReady);
+	DOREPLIFETIME(AHUPlayerState, Desk);
 }

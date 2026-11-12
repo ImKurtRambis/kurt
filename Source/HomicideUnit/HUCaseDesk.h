@@ -1,4 +1,6 @@
 // A detective's DESK at the precinct: the case file, in folders you pick up, and the desk computer's case tools.
+// Each player in the squad gets their OWN desk (claimed as they arrive, name plate on the front): only they can
+// use its folders and computer; a desk nobody has is free for anyone.
 // One per squad desk (spawned by the precinct; every machine spawns the same ones with the same names, and replays
 // the same uses, so the squad sees one desk).
 //   THE FOLDERS (E picks one up, Q / E puts it back down):
@@ -30,6 +32,13 @@ public:
 	AHUCaseDesk();
 
 	static constexpr int32 FolderCount = 5;
+	// which desk this is (0..3): each player is given one as they arrive (AHUPlayerState::Desk)
+	int32 DeskIndex = 0;
+	// the detective whose desk it is (null: nobody's - anyone can use it)
+	class AHUPlayerState* OwnerState() const;
+	// may this player use the folders and computer here? (their own desk, or one nobody has)
+	bool CanUse(const APawn* User) const;
+	FString OwnerName() const;
 	static const TCHAR* FolderName(int32 K);
 
 	// one page of what's on screen
@@ -58,6 +67,8 @@ private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	UPROPERTY() TArray<UStaticMeshComponent*> FolderParts;        // one per folder
 	UPROPERTY() TArray<class UTextRenderComponent*> FolderLabels; // the tab on each
+	UPROPERTY() class UTextRenderComponent* NamePlate = nullptr;   // DET. NAME on the desk's front edge
+	void AssignDesks(); // the host: everyone without a desk gets the lowest free one
 	TWeakObjectPtr<APawn> Holder[FolderCount];                    // who has each folder (null: on the desk)
 	TWeakObjectPtr<APawn> Viewer;                                 // this machine's player, while reading
 	int32 FolderOf(const UPrimitiveComponent* Part) const;

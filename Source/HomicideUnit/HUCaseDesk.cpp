@@ -3,6 +3,8 @@
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUProfiles.h"
+#include "HUPlayerState.h"
+#include "GameFramework/GameStateBase.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InputComponent.h"
@@ -10,6 +12,7 @@
 #include "GameFramework/PlayerState.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 
 using namespace HUBuild;
 
@@ -64,6 +67,51 @@ void AHUCaseDesk::OnConstruction(const FTransform& Transform)
 		T->RegisterComponent();
 		FolderLabels.Add(T);
 	}
+	// the name plate on the front edge, facing the chair
+	Block(this, Root, Blocks, EShape::Cube, FVector(-72, 0, 81), FVector(4, 46, 8), FLinearColor(0.12f, 0.1f, 0.08f), FRotator(0, 0, 0), false);
+	if (NamePlate) NamePlate->DestroyComponent();
+	NamePlate = NewObject<UTextRenderComponent>(this);
+	NamePlate->SetupAttachment(Root);
+	NamePlate->SetRelativeLocation(FVector(-74.5f, 0, 81));
+	NamePlate->SetRelativeRotation(FRotator(0, 180, 0));
+	NamePlate->SetHorizontalAlignment(EHTA_Center);
+	NamePlate->SetVerticalAlignment(EVRTA_TextCenter);
+	NamePlate->SetWorldSize(4.5f);
+	NamePlate->SetTextRenderColor(FColor(235, 200, 110));
+	NamePlate->RegisterComponent();
+}
+
+AHUPlayerState* AHUCaseDesk::OwnerState() const
+{
+	if (const AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+		for (APlayerState* P : GS->PlayerArray) if (AHUPlayerState* HP = Cast<AHUPlayerState>(P)) if (HP->Desk == DeskIndex) return HP;
+	return nullptr;
+}
+
+bool AHUCaseDesk::CanUse(const APawn* User) const
+{
+	const AHUPlayerState* O = OwnerState();
+	return !O || (User && User->GetPlayerState() == O);
+}
+
+FString AHUCaseDesk::OwnerName() const
+{
+	const AHUPlayerState* O = OwnerState();
+	return O ? O->GetPlayerName().Replace(TEXT("_"), TEXT(" ")) : FString();
+}
+
+// the host hands out desks: anyone without one gets the lowest free desk (kept while they're here)
+void AHUCaseDesk::AssignDesks()
+{
+	const AGameStateBase* GS = GetWorld()->GetGameState();
+	if (!GS) return;
+	int32 DeskCount = 0;
+	for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It) DeskCount++;
+	TSet<int32> Taken;
+	for (APlayerState* P : GS->PlayerArray) if (const AHUPlayerState* HP = Cast<AHUPlayerState>(P)) if (HP->Desk >= 0) Taken.Add(HP->Desk);
+	for (APlayerState* P : GS->PlayerArray)
+		if (AHUPlayerState* HP = Cast<AHUPlayerState>(P); HP && HP->Desk < 0)
+			for (int32 D = 0; D < DeskCount; D++) if (!Taken.Contains(D)) { HP->Desk = D; Taken.Add(D); break; }
 }
 
 int32 AHUCaseDesk::FolderOf(const UPrimitiveComponent* Part) const
@@ -97,6 +145,7 @@ FText AHUCaseDesk::GetPrompt_Implementation(APawn* User) const
 	const int32 K = I ? FolderOf(I->FocusPart) : -1;
 	if (K < 0) return FText::GetEmpty();
 	if (Holder[K].IsValid()) return FText::FromString(FString::Printf(TEXT("%s has the %s"), *WhoIs(Holder[K].Get()), FolderName(K)));
+	if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("%s  —  Det. %s's desk"), FolderName(K), *OwnerName()));
 	const UHUCaseSubsystem* C = Cases();
 	if (!C || !C->bCaseActive) return FText::FromString(FString::Printf(TEXT("%s  —  empty, no case open"), FolderName(K)));
 	return FText::FromString(FString::Printf(TEXT("[E] Pick up the %s"), FolderName(K)));
@@ -112,6 +161,11 @@ void AHUCaseDesk::Interact_Implementation(APawn* User, bool bSecondary)
 	{
 		// putting it back (sent when the reader closes)
 		if (Holder[K].Get() == User) { Holder[K] = nullptr; SetOnDesk(K, true); }
+		return;
+	}
+	if (!CanUse(User))
+	{
+		if (User->IsLocallyControlled()) I->Say(FString::Printf(TEXT("That's Det. %s's desk. Yours has your name on it."), *OwnerName()));
 		return;
 	}
 	const UHUCaseSubsystem* C = Cases();
@@ -188,6 +242,13 @@ void AHUCaseDesk::ScrollUp() { if (bReading) Scroll = FMath::Max(Scroll - 3, 0);
 void AHUCaseDesk::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (DeskIndex == 0 && HasAuthority()) AssignDesks(); // the host's job (desk 0 does it for all of them)
+	if (NamePlate)
+	{
+		const FString Name = OwnerName();
+		const FString Want = Name.IsEmpty() ? FString(TEXT("OPEN DESK")) : TEXT("DET. ") + Name.ToUpper();
+		if (NamePlate->Text.ToString() != Want) NamePlate->SetText(FText::FromString(Want));
+	}
 	// a squadmate who left (or fell out of the game) drops what they were holding back on the desk
 	for (int32 K = 0; K < FolderCount; K++)
 		if (!Holder[K].IsValid() && FolderParts.IsValidIndex(K) && !FolderParts[K]->IsVisible() && !(bReading && Folder == K)) SetOnDesk(K, true);

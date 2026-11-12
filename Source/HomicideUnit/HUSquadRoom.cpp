@@ -207,9 +207,10 @@ void AHUSquadRoom::BeginPlay()
 		for (float X : { -350.f, -50.f }) for (float Y : { -170.f, 170.f })
 		{
 			FActorSpawnParameters SP;
-			SP.Name = *FString::Printf(TEXT("HU_CaseDesk%d"), N++);
+			SP.Name = *FString::Printf(TEXT("HU_CaseDesk%d"), N);
 			SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			GetWorld()->SpawnActor<AHUCaseDesk>(AHUCaseDesk::StaticClass(), FTransform(FRotator::ZeroRotator, FVector(X, Y, 0)) * GetActorTransform(), SP);
+			if (AHUCaseDesk* D = GetWorld()->SpawnActor<AHUCaseDesk>(AHUCaseDesk::StaticClass(), FTransform(FRotator::ZeroRotator, FVector(X, Y, 0)) * GetActorTransform(), SP)) D->DeskIndex = N;
+			N++;
 		}
 	}
 	// the TAPE PLAYER behind the desk computers: plays the security tapes pulled at the scene (each player's own)
@@ -345,6 +346,9 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 	}
 	if (ComputerParts.Contains(I->FocusPart))
 	{
+		for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
+			if (FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation()) < 120.f * 120.f && !It->CanUse(User))
+				return FText::FromString(FString::Printf(TEXT("Det. %s's computer"), *It->OwnerName()));
 		const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		if (TC && TC->bTapesPulled) return FText::FromString(FString::Printf(TEXT("[E] Watch the security tapes (%d cameras)  ·  [Q] Case tools: records, alibis, profile"), TC->TapeCams()));
 		return FText::FromString(TEXT("[E] Case tools: records, alibi check, profile  ·  [Q] Your service record"));
@@ -437,6 +441,19 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 	}
 	if (ComputerParts.Contains(I->FocusPart))
 	{
+		// whose desk this computer is on: only they use it (a desk nobody has is free)
+		AHUCaseDesk* Best = nullptr; float BestD = 1e12f;
+		if (I->FocusPart)
+			for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
+			{
+				const float Dist = FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation());
+				if (Dist < BestD) { BestD = Dist; Best = *It; }
+			}
+		if (Best && !Best->CanUse(User))
+		{
+			if (User->IsLocallyControlled()) I->Say(FString::Printf(TEXT("That's Det. %s's computer. Use your own desk."), *Best->OwnerName()));
+			return;
+		}
 		// the security tapes from the scene: E plays them (on this player's own screen)
 		if (const UHUCaseSubsystem* TC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); TC && TC->bTapesPulled && !bSecondary)
 		{
@@ -448,16 +465,7 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		const UHUCaseSubsystem* TC2 = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		if ((TC2 && TC2->bTapesPulled) == bSecondary)
 		{
-			if (User->IsLocallyControlled() && I->FocusPart)
-			{
-				AHUCaseDesk* Best = nullptr; float BestD = 1e12f;
-				for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
-				{
-					const float Dist = FVector::DistSquared(It->GetActorLocation(), I->FocusPart->GetComponentLocation());
-					if (Dist < BestD) { BestD = Dist; Best = *It; }
-				}
-				if (Best) Best->OpenTerminal(User);
-			}
+			if (User->IsLocallyControlled() && Best) Best->OpenTerminal(User);
 			return;
 		}
 		if (const UHUCaseSubsystem* C = TC2; C && User->IsLocallyControlled())
