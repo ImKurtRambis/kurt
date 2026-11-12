@@ -77,6 +77,21 @@ void AHUCaseDesk::OnConstruction(const FTransform& Transform)
 		if (F) F->SetMaterial(0, HUBuild::PropSurface(this, FolderSurface,
 			TEXT("/Game/Art/Materials/Textures/M_ManilaFolder_BaseColor.M_ManilaFolder_BaseColor"), FolderColors[K] * 1.35f, 24.f, 1.f));
 		FolderParts.Add(F);
+		// The file is in active use: a ruled report sheet and a small index tab peek from its back edge.
+		const FVector PaperAt = At + FVector(0, -8.3f, 0.92f);
+		UStaticMeshComponent* Paper = Block(this, Root, Blocks, EShape::Cube, PaperAt, FVector(25, 7.2f, 0.22f),
+			(K % 2 == 0) ? FLinearColor(0.78f, 0.76f, 0.67f) : FLinearColor(0.84f, 0.82f, 0.73f), Turn);
+		if (Paper) Paper->SetMaterial(0, HUBuild::PropSurface(this, FolderSurface,
+			TEXT("/Game/Art/Materials/Textures/M_ManilaFolder_BaseColor.M_ManilaFolder_BaseColor"), FLinearColor(1.22f, 1.2f, 1.08f), 30.f, 1.05f));
+		for (int32 Line = 0; Line < 4; ++Line)
+		{
+			const float Length = 10.f + ((K + Line) % 3) * 3.5f;
+			UStaticMeshComponent* Rule = Block(this, Root, Blocks, EShape::Cube,
+				PaperAt + FVector(-2.f, 1.f + Line * 1.1f, 0.16f), FVector(0.18f, Length, 0.035f), FLinearColor(0.22f, 0.3f, 0.34f), Turn, false);
+			(void)Rule;
+		}
+		Block(this, Root, Blocks, EShape::Cube, PaperAt + FVector(5.4f, -0.4f, 0.17f), FVector(0.35f, 1.6f, 0.08f),
+			(K % 2 == 0) ? FLinearColor(0.47f, 0.16f, 0.12f) : FLinearColor(0.18f, 0.3f, 0.34f), Turn, false); // file stamp
 		UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
 		T->SetupAttachment(Root);
 		T->SetRelativeLocation(At + FVector(0, 0, 1.6f));

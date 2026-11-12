@@ -301,6 +301,37 @@ void AHUCrimeScene::Build()
 		{
 			Seg(Cursor, Dc - 90, 0, H);
 			Seg(Dc - 90, Dc + 90, 250, H); // over the door
+			const bool bHingePositive = FMath::Fmod(FMath::Abs(Dc - S.From), 2.f) > 0.8f; // stable per map seed
+			const float HingeSide = bHingePositive ? 1.f : -1.f;
+			const float FrameDepth = 18.f;
+			const FLinearColor DoorMetal(0.42f, 0.36f, 0.23f), DoorInset(0.16f, 0.1f, 0.055f);
+			if (S.bAtX)
+			{
+				for (float Side : { -1.f, 1.f })
+					HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(S.At, Dc + Side * 86.f, 125), FVector(FrameDepth, 8, 250), T.Trim * 1.35f, FRotator::ZeroRotator, false);
+				HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(S.At, Dc, 247), FVector(FrameDepth, 180, 8), T.Trim * 1.35f, FRotator::ZeroRotator, false);
+			}
+			else
+			{
+				for (float Side : { -1.f, 1.f })
+					HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(Dc + Side * 86.f, S.At, 125), FVector(8, FrameDepth, 250), T.Trim * 1.35f, FRotator::ZeroRotator, false);
+				HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(Dc, S.At, 247), FVector(180, FrameDepth, 8), T.Trim * 1.35f, FRotator::ZeroRotator, false);
+			}
+			// Show a door resting open against the jamb, with an inset panel and brass hardware.
+			const FRotator DoorRot(0, S.bAtX ? HingeSide * 70.f : -HingeSide * 70.f, 0);
+			const FVector DoorAt = S.bAtX ? FVector(S.At + 38.f, Dc + HingeSide * 76.f, 119.f) : FVector(Dc + HingeSide * 76.f, S.At + 38.f, 119.f);
+			const FVector DoorSize = S.bAtX ? FVector(5, 78, 226) : FVector(78, 5, 226);
+			UStaticMeshComponent* Leaf = HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, DoorAt, DoorSize, T.Trim * 1.3f, DoorRot, false);
+			if (Leaf && WoodMaterial) Leaf->SetMaterial(0, WoodMaterial);
+			const FVector InsetOffset = DoorRot.RotateVector(S.bAtX ? FVector(3.2f, 0, 0) : FVector(0, 3.2f, 0));
+			HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, DoorAt + InsetOffset, DoorSize * FVector(0.35f, 0.72f, 0.56f), DoorInset, DoorRot, false);
+			const FVector HandleAt = DoorAt + DoorRot.RotateVector(S.bAtX ? FVector(4.2f, -HingeSide * 27.f, -6.f) : FVector(-HingeSide * 27.f, 4.2f, -6.f));
+			HUBuild::Block(this, RootComponent, Blocks, EShape::Cylinder, HandleAt, FVector(1.8f, 1.8f, 2.3f), DoorMetal, FRotator(90, 0, 0), false);
+			for (float HingeZ : { 35.f, 119.f, 203.f })
+			{
+				const FVector HingeAt = DoorAt + DoorRot.RotateVector(S.bAtX ? FVector(3.2f, HingeSide * 33.f, HingeZ - 119.f) : FVector(-HingeSide * 33.f, 3.2f, HingeZ - 119.f));
+				HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, HingeAt, FVector(1.4f, 4.f, 12.f), DoorMetal, DoorRot, false);
+			}
 			Cursor = Dc + 90;
 			if (S.bAtX) Keep.Add({ S.At - 200, Dc - 120, S.At + 200, Dc + 120 }); else Keep.Add({ Dc - 120, S.At - 200, Dc + 120, S.At + 200 });
 		}

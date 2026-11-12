@@ -58,6 +58,7 @@ protected:
 
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() TArray<UTextRenderComponent*> RoomSigns;
 	UPROPERTY() TArray<UPrimitiveComponent*> BoardParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> DoorParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> LaptopParts;

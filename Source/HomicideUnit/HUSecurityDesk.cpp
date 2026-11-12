@@ -11,6 +11,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
+#include "Materials/MaterialInterface.h"
 
 using namespace HUBuild;
 
@@ -47,17 +48,55 @@ void AHUSecurityDesk::OnConstruction(const FTransform& Transform)
 	if (bAtPrecinct) return; // the precinct copy is just the player: the squad desk computers are its screens
 	USceneComponent* R = RootComponent;
 	const FLinearColor Desk(0.18f, 0.12f, 0.07f), Beige(0.55f, 0.52f, 0.44f), Steel(0.25f, 0.27f, 0.3f);
+	UMaterialInterface* Wood = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Walnut.MI_HU_Walnut"));
+	UMaterialInterface* PropParent = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Props/M_HU_PropWorldAlignedSurface.M_HU_PropWorldAlignedSurface"));
+	auto ApplyProp = [this, PropParent](UStaticMeshComponent* Part, const TCHAR* Texture, FLinearColor Tint, float Tile, float Roughness = 0.9f)
+	{
+		if (Part && PropParent) if (UMaterialInterface* Surface = HUBuild::PropSurface(this, PropParent, Texture, Tint, Tile, Roughness)) Part->SetMaterial(0, Surface);
+	};
+	const TCHAR* PlasticTexture = TEXT("/Game/Art/Materials/Textures/M_ComputerPlastic_BaseColor.M_ComputerPlastic_BaseColor");
 	// a desk with a bank of two small CRT monitors and a tape recorder; +X faces the person sitting at it
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 37), FVector(70, 140, 6), Desk);
-	for (float Y : { -62.f, 62.f }) Block(this, R, Blocks, EShape::Cube, FVector(0, Y, 17), FVector(64, 6, 34), Desk * 0.7f);
+	UStaticMeshComponent* Desktop = Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 37), FVector(70, 140, 6), Desk);
+	if (Desktop && Wood) Desktop->SetMaterial(0, Wood);
+	for (float Y : { -62.f, 62.f })
+	{
+		UStaticMeshComponent* SidePanel = Block(this, R, Blocks, EShape::Cube, FVector(0, Y, 17), FVector(64, 6, 34), Desk * 0.7f);
+		if (SidePanel && Wood) SidePanel->SetMaterial(0, Wood);
+	}
+	for (float Y : { -24.f, 24.f })
+	{
+		UStaticMeshComponent* Drawer = Block(this, R, Blocks, EShape::Cube, FVector(32.f, Y, 25.f), FVector(2, 39, 12), Desk * 0.82f, FRotator::ZeroRotator, false);
+		if (Drawer && Wood) Drawer->SetMaterial(0, Wood);
+		Block(this, R, Blocks, EShape::Cylinder, FVector(33.4f, Y, 25.f), FVector(2.f, 2.f, 3.f), FLinearColor(0.52f, 0.43f, 0.27f), FRotator(90, 0, 0), false);
+	}
 	for (float Y : { -34.f, 34.f })
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(-10, Y, 59), FVector(34, 40, 38), Beige);
-		Block(this, R, Blocks, EShape::Cube, FVector(7.5f, Y, 61), FVector(1, 32, 26), FLinearColor(0.25f, 0.3f, 0.32f));
+		UStaticMeshComponent* RearCase = Block(this, R, Blocks, EShape::Cube, FVector(-10, Y, 59), FVector(28, 36, 33), Beige);
+		ApplyProp(RearCase, PlasticTexture, FLinearColor(0.94f, 0.91f, 0.81f), 42.f);
+		UStaticMeshComponent* Bezel = Block(this, R, Blocks, EShape::Cube, FVector(5, Y, 59), FVector(8, 42, 38), Beige * 0.96f, FRotator::ZeroRotator, false);
+		ApplyProp(Bezel, PlasticTexture, FLinearColor(0.97f, 0.94f, 0.84f), 42.f, 0.82f);
+		Block(this, R, Blocks, EShape::Cube, FVector(9.4f, Y, 60), FVector(0.6f, 33, 27), FLinearColor(0.025f, 0.06f, 0.08f), FRotator::ZeroRotator, false);
+		// Tape stills rendered into the glass as subdued scan bars until a case recording is played.
+		for (int32 Scan = 0; Scan < 5; ++Scan)
+			Block(this, R, Blocks, EShape::Cube, FVector(9.8f, Y, 51.f + Scan * 3.4f), FVector(0.16f, 24.f - (Scan % 2) * 4.f, 0.18f), FLinearColor(0.12f, 0.2f, 0.22f), FRotator::ZeroRotator, false);
+		Block(this, R, Blocks, EShape::Cube, FVector(9.8f, Y, 42.5f), FVector(0.22f, 7.f, 1.4f), FLinearColor(0.34f, 0.3f, 0.23f), FRotator::ZeroRotator, false); // lower model plaque
+		Block(this, R, Blocks, EShape::Cube, FVector(9.9f, Y + 14.5f, 43.f), FVector(0.28f, 1.3f, 1.3f), FLinearColor(0.9f, 0.08f, 0.04f), FRotator::ZeroRotator, false); // recording light
+		UStaticMeshComponent* Pedestal = Block(this, R, Blocks, EShape::Cube, FVector(-4, Y, 38), FVector(12, 17, 6), Beige * 0.82f, FRotator::ZeroRotator, false);
+		ApplyProp(Pedestal, PlasticTexture, FLinearColor(0.9f, 0.87f, 0.78f), 42.f);
 	}
-	Block(this, R, Blocks, EShape::Cube, FVector(18, 0, 42), FVector(22, 50, 8), Steel);                                          // the VCR
-	Block(this, R, Blocks, EShape::Cube, FVector(29.5f, 14, 43), FVector(1, 6, 2), FLinearColor(2.f, 0.1f, 0.1f), FRotator::ZeroRotator, false); // its REC light
-	Block(this, R, Blocks, EShape::Cube, FVector(55, 0, 24), FVector(40, 40, 6), Steel);                                          // a stool
+	Block(this, R, Blocks, EShape::Cube, FVector(-27.f, 0.f, 39.f), FVector(3.f, 3.f, 2.f), FLinearColor(0.08f, 0.08f, 0.075f), FRotator::ZeroRotator, false); // tucked-away power cable
+	UStaticMeshComponent* VCR = Block(this, R, Blocks, EShape::Cube, FVector(18, 0, 42), FVector(22, 50, 8), Steel); // VHS recorder
+	Block(this, R, Blocks, EShape::Cube, FVector(29.5f, 0, 43), FVector(0.8f, 34, 5), FLinearColor(0.14f, 0.15f, 0.15f), FRotator::ZeroRotator, false); // tape bay
+	Block(this, R, Blocks, EShape::Cube, FVector(30.f, -14.f, 43), FVector(1.1f, 6, 2), FLinearColor(2.f, 0.08f, 0.035f), FRotator::ZeroRotator, false); // REC lamp
+	for (int32 Button = 0; Button < 5; ++Button)
+		Block(this, R, Blocks, EShape::Cylinder, FVector(30.f, 8.f + Button * 6.f, 43.f), FVector(2.f, 2.f, 1.2f),
+			(Button == 0) ? FLinearColor(0.55f, 0.44f, 0.27f) : Steel * 1.25f, FRotator(90, 0, 0), false); // deck controls
+	if (VCR) Block(this, R, Blocks, EShape::Cube, FVector(30.f, 0, 45.1f), FVector(0.25f, 18.f, 0.7f), FLinearColor(0.35f, 0.72f, 0.44f), FRotator::ZeroRotator, false); // tape counter
+	UStaticMeshComponent* StoolSeat = Block(this, R, Blocks, EShape::Cylinder, FVector(55, 0, 31), FVector(18, 18, 5), Steel * 0.8f);
+	Block(this, R, Blocks, EShape::Cylinder, FVector(55, 0, 14), FVector(3, 3, 30), Steel);
+	for (int32 Spoke = 0; Spoke < 4; ++Spoke)
+		Block(this, R, Blocks, EShape::Cube, FVector(55.f + FMath::Cos(Spoke * PI / 2.f) * 12.f, FMath::Sin(Spoke * PI / 2.f) * 12.f, 3), FVector(15, 3, 2), Steel, FRotator(0, Spoke * 90.f, 0), false);
+	(void)StoolSeat;
 }
 
 void AHUSecurityDesk::BeginPlay()
