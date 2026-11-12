@@ -1,4 +1,5 @@
 #include "HUCharacter.h"
+#include "HUProgress.h"
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
 #include "HUSquadSubsystem.h"
@@ -119,7 +120,7 @@ void AHUCharacter::Tick(float DeltaSeconds)
 	// the pushable furniture lowers MaxWalkSpeed while you drag it - only change speed when not dragging
 	UCharacterMovementComponent* M = GetCharacterMovement();
 	const float Boost = IsCaffeinated() ? 1.2f : 1.f; // coffee: quicker on your feet
-	if (M->MaxWalkSpeed >= WalkSpeed - 1.f) M->MaxWalkSpeed = (PC->IsInputKeyDown(EKeys::LeftShift) ? RunSpeed : WalkSpeed) * Boost;
+	if (M->MaxWalkSpeed >= WalkSpeed - 1.f) M->MaxWalkSpeed = (PC->IsInputKeyDown(EKeys::LeftShift) ? RunSpeed * HUProgress::RunMult(this) : WalkSpeed) * Boost;
 }
 
 void AHUCharacter::SitDown(FVector SeatTop, float Yaw)

@@ -1,4 +1,5 @@
-﻿#include "HUSuspectActor.h"
+#include "HUSuspectActor.h"
+#include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
@@ -425,7 +426,10 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 	const int32 BreaksBefore = C->Breaks;
 	const bool bConfessedBefore = !C->Confessed.IsEmpty();
 	const bool bWasBroken = S.Statements.IsValidIndex(Statement) && C->IsBroken(SuspectId, Statement);
+	bool bTagTeam = false;
+	C->PressureScale = HUProgress::PressureMult(User, this, &bTagTeam); // specialty, Interview Suite, tag-team
 	const FString Reply = Action == 1 ? C->RaiseRecord(SuspectId) : !ClueId.IsEmpty() ? C->Confront(SuspectId, Statement, ClueId) : C->Press(SuspectId, Statement);
+	C->PressureScale = 1.f;
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I) return;
 	if (bVoice)

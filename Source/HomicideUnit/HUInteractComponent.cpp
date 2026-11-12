@@ -1,4 +1,5 @@
-﻿#include "HUInteractComponent.h"
+#include "HUInteractComponent.h"
+#include "HUProgress.h"
 #include "HUInteractable.h"
 #include "HUPromptWidget.h"
 #include "HUCaseSubsystem.h"
@@ -983,6 +984,7 @@ void UHUInteractComponent::BeginUse(bool bSecondary)
 	APawn* Pawn = Cast<APawn>(GetOwner());
 	float T = II ? II->UseTime(Pawn, bSecondary) : 0.f;
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn)) T /= Ch->TaskSpeed();
+	T /= HUProgress::TaskMult(Pawn, Focus); // specialty perks and precinct upgrades
 	if (T <= 0.05f) { Use(bSecondary); return; }
 	bHolding = true; bHoldSecondary = bSecondary; HoldTotal = T; HoldProgress = 0.f;
 	HoldTarget = Focus; HoldPart = FocusPart;

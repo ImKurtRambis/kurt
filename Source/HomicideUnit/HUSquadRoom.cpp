@@ -1,4 +1,6 @@
-﻿#include "HUSquadRoom.h"
+#include "HUSquadRoom.h"
+#include "HUSquadBoards.h"
+#include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
@@ -198,6 +200,11 @@ void AHUSquadRoom::BeginPlay()
 		SP.Name = TEXT("HU_CaseBoard");
 		SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		GetWorld()->SpawnActor<AHUCaseBoard>(AHUCaseBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(-150, -PY, 0)) * GetActorTransform(), SP);
+		// the UPGRADES board beside it, and the CASE WALL across the room (see HUProgress)
+		SP.Name = TEXT("HU_UpgradeBoard");
+		GetWorld()->SpawnActor<AHUUpgradeBoard>(AHUUpgradeBoard::StaticClass(), FTransform(FRotator(0, 90, 0), FVector(250, -PY, 0)) * GetActorTransform(), SP);
+		SP.Name = TEXT("HU_CaseWall");
+		GetWorld()->SpawnActor<AHUCaseWall>(AHUCaseWall::StaticClass(), FTransform(FRotator(0, -90, 0), FVector(-250, PY, 0)) * GetActorTransform(), SP);
 		SP.Name = TEXT("HU_MotorPoolDoor");
 		GetWorld()->SpawnActor<AHUMotorPoolDoor>(AHUMotorPoolDoor::StaticClass(), FTransform(FRotator(0, 0, 0), FVector(-PX, 0, 0)) * GetActorTransform(), SP);
 	}
@@ -382,13 +389,22 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		if (LaptopParts.Contains(I->FocusPart))
 		{
 			const int32 N = HUCaseGen::Places().Num() + 1; // + random
-			PlaceChoice = ((PlaceChoice + 1 + Dir + N) % N) - 1;
-			I->Say(TEXT("Location: ") + PlaceLabel());
+			// the big places (the hotel) open once someone in the squad is a full Detective
+			const bool bBigOk = HUProgress::BestRank(GetWorld()) >= HUProgress::BigPlaceRank;
+			for (int32 Tries = 0; Tries < N; Tries++)
+			{
+				PlaceChoice = ((PlaceChoice + 1 + Dir + N) % N) - 1;
+				if (bBigOk || !PlaceLabel().Contains(TEXT("HOTEL"))) break;
+			}
+			I->Say(TEXT("Location: ") + PlaceLabel() + (bBigOk ? FString() : FString::Printf(TEXT("   (the hotel opens at %s)"), HUProgress::RankName(HUProgress::BigPlaceRank))));
 		}
 		else
 		{
+			// Veteran opens once someone in the squad reaches Detective II
+			const bool bVetOk = HUProgress::BestRank(GetWorld()) >= HUProgress::VeteranRank;
 			DifficultyChoice = ((DifficultyChoice + 1 + Dir + 4) % 4) - 1;
-			I->Say(FString(TEXT("Difficulty: ")) + DifficultyName(DifficultyChoice));
+			if (DifficultyChoice == 2 && !bVetOk) DifficultyChoice = ((DifficultyChoice + 1 + Dir + 4) % 4) - 1;
+			I->Say(FString(TEXT("Difficulty: ")) + DifficultyName(DifficultyChoice) + (bVetOk ? FString() : FString::Printf(TEXT("   (Veteran opens at %s)"), HUProgress::RankName(HUProgress::VeteranRank))));
 		}
 		return;
 	}
