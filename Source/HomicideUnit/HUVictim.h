@@ -38,6 +38,7 @@ public:
 
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() class UMaterialInterface* ClothingSurface = nullptr;
 	bool bSearched = false;
 	// the body's parts: 0 head, 1 neck, 2 hands & arms, 3 torso, 4 legs & shoes
 	UPROPERTY() TMap<UPrimitiveComponent*, int32> Spots;

@@ -26,6 +26,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals") class UMaterialInterface* FloorSurface = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals") class UMaterialInterface* WallSurface = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals") class UMaterialInterface* WoodSurface = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals") class UMaterialInterface* PropSurfaceParent = nullptr;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* BoardTitle;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* BoardCode;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* BoardRoster;

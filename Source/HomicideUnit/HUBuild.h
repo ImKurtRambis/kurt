@@ -5,6 +5,7 @@
 
 class UStaticMeshComponent;
 class UStaticMesh;
+class UMaterialInterface;
 
 namespace HUBuild
 {
@@ -15,6 +16,10 @@ namespace HUBuild
 		EShape Shape, FVector Pos, FVector SizeCm, FLinearColor Color, FRotator Rot = FRotator::ZeroRotator, bool bCollide = true);
 
 	HOMICIDEUNIT_API void Clear(TArray<UStaticMeshComponent*>& Out);
+
+	// Create a per-prop instance of the shared world-aligned material, using imported texture assets.
+	HOMICIDEUNIT_API UMaterialInterface* PropSurface(AActor* Owner, UMaterialInterface* Parent,
+		const TCHAR* BaseColorPath, FLinearColor Tint, float TileSizeCm, float RoughnessScale = 1.f);
 
 	// a wall along X or Y with a doorway cut in it (DoorAt = where along the wall, 0 = middle)
 	HOMICIDEUNIT_API void WallWithDoor(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out,

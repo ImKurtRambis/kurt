@@ -2,6 +2,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "Engine/Texture.h"
 
 namespace HUBuild
 {
@@ -40,6 +42,25 @@ namespace HUBuild
 	{
 		for (UStaticMeshComponent* C : Out) if (C) C->DestroyComponent();
 		Out.Reset();
+	}
+
+	UMaterialInterface* PropSurface(AActor* Owner, UMaterialInterface* Parent,
+		const TCHAR* BaseColorPath, FLinearColor Tint, float TileSizeCm, float RoughnessScale)
+	{
+		if (!Owner || !Parent || !BaseColorPath) return nullptr;
+		UTexture* BaseColor = LoadObject<UTexture>(nullptr, BaseColorPath);
+		static UTexture* Normal = LoadObject<UTexture>(nullptr, TEXT("/Game/Art/Materials/Textures/M_Plaster_Normal.M_Plaster_Normal"));
+		static UTexture* Roughness = LoadObject<UTexture>(nullptr, TEXT("/Game/Art/Materials/Textures/M_Plaster_Roughness.M_Plaster_Roughness"));
+		if (!BaseColor || !Normal || !Roughness) return nullptr;
+		UMaterialInstanceDynamic* Surface = UMaterialInstanceDynamic::Create(Parent, Owner);
+		if (!Surface) return nullptr;
+		Surface->SetTextureParameterValue(TEXT("BaseColor"), BaseColor);
+		Surface->SetTextureParameterValue(TEXT("NormalMap"), Normal);
+		Surface->SetTextureParameterValue(TEXT("RoughnessMap"), Roughness);
+		Surface->SetScalarParameterValue(TEXT("TileSizeCm"), TileSizeCm);
+		Surface->SetScalarParameterValue(TEXT("RoughnessScale"), RoughnessScale);
+		Surface->SetVectorParameterValue(TEXT("SurfaceTint"), Tint);
+		return Surface;
 	}
 
 	void WallWithDoor(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out,

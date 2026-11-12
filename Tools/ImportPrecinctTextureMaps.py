@@ -7,12 +7,13 @@ ASSETS = [
     "M_Plaster_BaseColor.png", "M_Plaster_Normal.png", "M_Plaster_Roughness.png",
     "M_Linoleum_BaseColor.png", "M_Linoleum_Normal.png", "M_Linoleum_Roughness.png",
     "M_Walnut_BaseColor.png", "M_Walnut_Normal.png", "M_Walnut_Roughness.png",
+    "M_ComputerPlastic_BaseColor.png", "M_ManilaFolder_BaseColor.png", "M_VictimWool_BaseColor.png",
 ]
 
 tasks = []
 for filename in ASSETS:
     name = filename[:-4]
-    if unreal.EditorAssetLibrary.load_asset(DESTINATION + "/" + name):
+    if unreal.EditorAssetLibrary.does_asset_exist(DESTINATION + "/" + name):
         continue
     task = unreal.AssetImportTask()
     task.filename = SOURCE_DIR + filename

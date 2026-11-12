@@ -13,6 +13,8 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 
 using namespace HUBuild;
 
@@ -51,6 +53,8 @@ AHUCaseDesk::AHUCaseDesk()
 	PrimaryActorTick.TickInterval = 0.25f;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FolderF(TEXT("/Game/Art/Materials/Props/M_HU_PropWorldAlignedSurface.M_HU_PropWorldAlignedSurface"));
+	FolderSurface = FolderF.Object;
 }
 
 UHUCaseSubsystem* AHUCaseDesk::Cases() const
@@ -70,6 +74,8 @@ void AHUCaseDesk::OnConstruction(const FTransform& Transform)
 		const FVector At(-42 + (K % 2) * 6, -44 + K * 22, 78.f + K * 0.6f);
 		const FRotator Turn(0, -8 + K * 4, 0);
 		UStaticMeshComponent* F = Block(this, Root, Blocks, EShape::Cube, At, FVector(30, 21, 1.4f), FolderColors[K], Turn);
+		if (F) F->SetMaterial(0, HUBuild::PropSurface(this, FolderSurface,
+			TEXT("/Game/Art/Materials/Textures/M_ManilaFolder_BaseColor.M_ManilaFolder_BaseColor"), FolderColors[K] * 1.35f, 24.f, 1.f));
 		FolderParts.Add(F);
 		UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
 		T->SetupAttachment(Root);

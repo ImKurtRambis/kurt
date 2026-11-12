@@ -19,6 +19,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
@@ -55,9 +56,11 @@ AHUSquadRoom::AHUSquadRoom()
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FloorF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Linoleum.MI_HU_Linoleum"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WallF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Plaster.MI_HU_Plaster"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodF(TEXT("/Game/Art/Materials/Precinct/MI_HU_Walnut.MI_HU_Walnut"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> PropF(TEXT("/Game/Art/Materials/Props/M_HU_PropWorldAlignedSurface.M_HU_PropWorldAlignedSurface"));
 	FloorSurface = FloorF.Object;
 	WallSurface = WallF.Object;
 	WoodSurface = WoodF.Object;
+	PropSurfaceParent = PropF.Object;
 	VisualGrade = CreateDefaultSubobject<UPostProcessComponent>(TEXT("VisualGrade"));
 	VisualGrade->SetupAttachment(RootComponent);
 	VisualGrade->bUnbound = true;
@@ -99,6 +102,11 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		if (Part && Surface) Part->SetMaterial(0, Surface);
 		return Part;
 	};
+	auto ApplyPropSurface = [this](UStaticMeshComponent* Component, const TCHAR* BaseColor, FLinearColor Tint, float Tile, float Roughness)
+	{
+		if (!Component) return;
+		if (UMaterialInterface* Surface = HUBuild::PropSurface(this, PropSurfaceParent, BaseColor, Tint, Tile, Roughness)) Component->SetMaterial(0, Surface);
+	};
 	TexturedBlock(FVector(0, 0, -5), FVector(W * 2, D * 2, 10), Floor, FloorSurface);
 	TexturedBlock(FVector(0, 0, RH + 5), FVector(W * 2, D * 2, 10), Wall * 0.6f, WallSurface);
 	for (float S : { -1.f, 1.f })
@@ -134,8 +142,12 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
-		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0)));
-		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f)));
+		UStaticMeshComponent* CaseFolder = Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0));
+		ApplyPropSurface(CaseFolder, TEXT("/Game/Art/Materials/Textures/M_ManilaFolder_BaseColor.M_ManilaFolder_BaseColor"), FLinearColor::White, 24.f, 1.f);
+		FolderParts.Add(CaseFolder);
+		UStaticMeshComponent* FolderTab = Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f));
+		ApplyPropSurface(FolderTab, TEXT("/Game/Art/Materials/Textures/M_ManilaFolder_BaseColor.M_ManilaFolder_BaseColor"), FLinearColor::White, 24.f, 1.f);
+		FolderParts.Add(FolderTab);
 		return;
 	}
 
@@ -146,7 +158,30 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		TexturedBlock(FVector(X, Y, 74), FVector(150, 90, 6), Desk, WoodSurface);
 		for (float DX : { -65.f, 65.f }) for (float DY : { -38.f, 38.f }) TexturedBlock(FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f, WoodSurface);
 		Block(this, R, Blocks, EShape::Cube, FVector(X - 10, Y + (Y > 0 ? 70.f : -70.f), 45), FVector(45, 45, 6), Steel);
-		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(X + 30, Y, 90), FVector(30, 34, 26), FLinearColor(0.6f, 0.57f, 0.48f)));
+		const FLinearColor Plastic(0.72f, 0.67f, 0.55f);
+		const FVector Monitor(X + 30, Y, 90);
+		const TCHAR* ComputerTexture = TEXT("/Game/Art/Materials/Textures/M_ComputerPlastic_BaseColor.M_ComputerPlastic_BaseColor");
+		UStaticMeshComponent* MonitorShell = TexturedBlock(Monitor, FVector(30, 34, 26), Plastic, nullptr);
+		ApplyPropSurface(MonitorShell, ComputerTexture, FLinearColor::White, 45.f, 0.82f);
+		ComputerParts.Add(MonitorShell); // rounded-era CRT shell
+		UStaticMeshComponent* Bezel = TexturedBlock(Monitor + FVector(15.3f, 0, 0), FVector(1.2f, 30, 22), Plastic * 0.92f, nullptr);
+		ApplyPropSurface(Bezel, ComputerTexture, FLinearColor(0.92f, 0.92f, 0.92f), 45.f, 0.82f);
+		ComputerParts.Add(Bezel); // thick bezel
+		ComputerParts.Add(Block(this, R, Blocks, EShape::Cube, Monitor + FVector(16.1f, 0, 1), FVector(0.7f, 25, 17), FLinearColor(0.035f, 0.10f, 0.13f)));
+		UStaticMeshComponent* Pedestal = TexturedBlock(Monitor + FVector(0, 0, -16.5f), FVector(7, 8, 7), Plastic * 0.85f, nullptr);
+		ApplyPropSurface(Pedestal, ComputerTexture, FLinearColor(0.85f, 0.85f, 0.85f), 45.f, 0.82f);
+		ComputerParts.Add(Pedestal); // pedestal
+		UStaticMeshComponent* Foot = TexturedBlock(Monitor + FVector(0, 0, -23), FVector(17, 20, 2), Plastic, nullptr);
+		ApplyPropSurface(Foot, ComputerTexture, FLinearColor::White, 45.f, 0.82f);
+		ComputerParts.Add(Foot); // weighted foot
+		UStaticMeshComponent* Keyboard = TexturedBlock(FVector(X - 10, Y, 78), FVector(13, 30, 1.5f), FLinearColor(0.58f, 0.54f, 0.45f), nullptr);
+		ApplyPropSurface(Keyboard, ComputerTexture, FLinearColor(0.82f, 0.78f, 0.68f), 45.f, 0.82f);
+		ComputerParts.Add(Keyboard);
+		for (int32 Row = 0; Row < 4; Row++) for (int32 Key = 0; Key < 9; Key++)
+			Block(this, R, Blocks, EShape::Cube, FVector(X - 14.f + Row * 2.5f, Y - 12.f + Key * 3.f, 79.1f), FVector(1.6f, 2.f, 0.45f), FLinearColor(0.72f, 0.68f, 0.57f), FRotator::ZeroRotator, false);
+		UStaticMeshComponent* Tower = TexturedBlock(FVector(X + 53, Y + 31, 53), FVector(14, 12, 34), Plastic, nullptr);
+		ApplyPropSurface(Tower, ComputerTexture, FLinearColor::White, 45.f, 0.82f);
+		ComputerParts.Add(Tower); // beige PC tower
 	}
 	// HOLDING: a barred cell in the far corner where the van's prisoners wait to be booked
 	const float CY0 = PY - 200.f; // the bars, facing the room

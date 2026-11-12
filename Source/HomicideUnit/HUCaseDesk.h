@@ -90,6 +90,7 @@ public:
 private:
 	UPROPERTY() USceneComponent* Root;
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() class UMaterialInterface* FolderSurface = nullptr;
 	UPROPERTY() TArray<UStaticMeshComponent*> FolderParts;        // one per folder
 	UPROPERTY() TArray<class UTextRenderComponent*> FolderLabels; // the tab on each
 	UPROPERTY() class UTextRenderComponent* NamePlate = nullptr;   // DET. NAME on the desk's front edge

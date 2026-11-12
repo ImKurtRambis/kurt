@@ -5,6 +5,8 @@
 #include "HUInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 
 using namespace HUBuild;
 
@@ -12,6 +14,8 @@ AHUVictim::AHUVictim()
 {
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ClothingF(TEXT("/Game/Art/Materials/Props/M_HU_PropWorldAlignedSurface.M_HU_PropWorldAlignedSurface"));
+	ClothingSurface = ClothingF.Object;
 }
 
 UHUCaseSubsystem* AHUVictim::Cases() const { return GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr; }
@@ -38,14 +42,32 @@ void AHUVictim::OnConstruction(const FTransform& Transform)
 		Block(this, R, Blocks, EShape::Cylinder, FVector(62, 30, 0.3f), FVector(26, 18, 0.6f), Blood);
 		// the body, face up, one arm flung out, one knee bent - each part examinable: head, neck, hands, torso, legs
 		Spots.Reset();
-		auto Part = [&](int32 Spot, EShape S, FVector P, FVector Sz, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator) { if (UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Sz, Col, Rot)) Spots.Add(M, Spot); };
-		Part(3, EShape::Cube, FVector(0, 0, 10), FVector(62, 36, 18), Coat);
+		auto Part = [&](int32 Spot, EShape S, FVector P, FVector Sz, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator)
+		{
+			if (UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Sz, Col, Rot))
+			{
+				Spots.Add(M, Spot);
+				if (ClothingSurface && (Spot == 2 || Spot == 3 || Spot == 4))
+				{
+					const FLinearColor Tint(FMath::Min(Col.R * 3.0f, 1.8f), FMath::Min(Col.G * 3.0f, 1.8f), FMath::Min(Col.B * 3.0f, 1.8f), 1.0f);
+					if (UMaterialInterface* Surface = HUBuild::PropSurface(this, ClothingSurface,
+						TEXT("/Game/Art/Materials/Textures/M_VictimWool_BaseColor.M_VictimWool_BaseColor"), Tint, 28.f, 1.05f)) M->SetMaterial(0, Surface);
+				}
+			}
+		};
+		// Soft cloth silhouette under the coat panels, with separate lapels and a row of buttons.
+		Part(3, EShape::Sphere, FVector(0, 0, 10), FVector(60, 35, 21), Coat);
 		Part(3, EShape::Cube, FVector(-30, 0, 9), FVector(10, 34, 16), Coat * 0.8f);
+		Part(3, EShape::Cube, FVector(25, 0, 20), FVector(13, 4, 3), Coat * 0.72f, FRotator(0, 0, 16));
+		Part(3, EShape::Cube, FVector(25, 0, 15), FVector(13, 4, 3), Coat * 0.72f, FRotator(0, 0, -16));
+		Part(3, EShape::Cube, FVector(7, 0, 21), FVector(1.2f, 1.2f, 7), FLinearColor(0.42f, 0.31f, 0.19f));
 		Part(1, EShape::Cylinder, FVector(33, 2, 10), FVector(11, 11, 12), Skin, AlongX);
 		Part(0, EShape::Sphere, FVector(43, 2, 11), FVector(21, 19, 20), Skin);
 		Part(0, EShape::Sphere, FVector(46, 2, 14), FVector(19, 18, 12), FLinearColor(0.08f, 0.06f, 0.04f));
 		Part(4, EShape::Cylinder, FVector(-68, 9, 7), FVector(13, 13, 72), Pants, AlongX);
 		Part(4, EShape::Cylinder, FVector(-60, -14, 9), FVector(13, 13, 70), Pants, FRotator(90, -14, 0));
+		Part(4, EShape::Cylinder, FVector(-38, 9, 8), FVector(15, 15, 36), Pants, AlongX);
+		Part(4, EShape::Cylinder, FVector(-35, -14, 9), FVector(15, 15, 34), Pants, FRotator(90, -14, 0));
 		Part(4, EShape::Cube, FVector(-108, 9, 6), FVector(12, 10, 10), Shoe);
 		Part(4, EShape::Cube, FVector(-98, -24, 6), FVector(12, 10, 10), Shoe);
 		Part(2, EShape::Cylinder, FVector(18, 38, 6), FVector(10, 10, 54), Coat, FRotator(90, 55, 0));   // flung out
