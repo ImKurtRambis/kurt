@@ -98,8 +98,8 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!Cases || !Cases->GetSuspect(SuspectId, S) || !I) return;
 
+	if (bSecondary && bInterviewing && Interviewer.Get() == User && !bTyping) { bThinking = false; CloseInterview(); return; } // Q leaves, even mid-answer
 	if (bInterviewing && Interviewer.Get() == User && (bTyping || bThinking)) return; // typing / waiting on an answer
-	if (bSecondary && bInterviewing && Interviewer.Get() == User) { CloseInterview(); return; }
 	if (bCuffed)
 	{
 		if (bSecondary)

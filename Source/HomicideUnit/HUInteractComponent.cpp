@@ -1044,3 +1044,9 @@ void UHUInteractComponent::MulticastInterrogate_Implementation(const FString& Su
 {
 	if (AHUSuspectActor* S = FindObject<AHUSuspectActor>(nullptr, *SuspectPath)) S->ApplyInterrogation(Cast<APawn>(GetOwner()), Action, Statement, ClueId);
 }
+void UHUInteractComponent::UseSecondary()
+{
+	// in an interview Q walks you out straight away - no need to be looking at them, no hold
+	if (AHUSuspectActor* S = Interviewing.Get()) { if (!S->bTyping) SendUseOn(S, nullptr, true); return; }
+	BeginUse(true);
+}
