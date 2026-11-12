@@ -1,9 +1,9 @@
 // Human-sounding voices. With a key pasted on the desk computer (Settings), lines are spoken by a neural voice:
 //   OpenAI      - gpt-4o-mini-tts, which takes an acting direction ("panicked, breathless...")
 //   ElevenLabs  - eleven_v3, the most expressive model available: emotion tags, a voice per speaker  (recommended)
-// LOCAL EMOTIONAL (free, strong GPUs): Chatterbox, via Chatterbox-TTS-Server in AI\chatterbox (port 8004). Started on
-//   first use; while it isn't up, Kokoro speaks. Emotion (0..1) sets Chatterbox's exaggeration.
-// LOCAL (free, offline - preferred when installed): Kokoro, run by sherpa-onnx on this PC. Files in AI\voice\ (see AI\README.txt).
+// LOCAL (free, offline, no keys - preferred when installed): Tools\VoiceServer.py on port 8005, started as the game starts.
+//   Orpheus 3B speaks phone lines (the 911 call, tape audio); Sesame CSM-1B speaks suspects and everyone else.
+//   Models in AI\orpheus, AI\snac, AI\csm; its Python in AI\python (see AI\README.txt). Needs a strong GPU.
 // Without a local voice or a key (or if a request fails) the line shows as a caption only - no robotic voice.
 // Audio comes back as raw 24 kHz PCM and plays as a procedural sound; "phone" lines go through a telephone
 // band-pass so a 911 call sounds like a recording.
@@ -34,20 +34,20 @@ public:
 	// Ask for a line. Voice: 0..n picks one of the provider's voices (same number = same voice).
 	// Direction: how to say it (OpenAI only). bPhone: telephone band-pass.
 	// Speed: 1 normal, >1 faster (nerves), <1 slower (worn out) - the local voice only.
-	void Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed = 1.f, float Emotion = 0.5f);
-	UFUNCTION(BlueprintPure, Category = "Voice") bool HasChatterbox() const;
-	UFUNCTION(BlueprintPure, Category = "Voice") bool IsChatterboxReady() const { return bCbReady; }
-	void WarmUpChatterbox();
+	// bBackground: not needed right now (premade lines) - kept on disk once made, and waits behind real answers.
+	void Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed = 1.f, float Emotion = 0.5f, bool bBackground = false);
+	// start loading the local voices (done as the game starts; about a minute)
+	void WarmUp();
+	UFUNCTION(BlueprintPure, Category = "Voice") bool IsLocalVoiceReady() const { return bOrpheusReady || bCsmReady; }
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	// the free offline voice is installed
+	// the free offline voices are installed
 	UFUNCTION(BlueprintPure, Category = "Voice") bool HasLocalVoice() const;
 
 private:
 	UPROPERTY() TArray<class USoundWaveProcedural*> Keep; // stop the GC taking sounds while they play
 	class USoundWave* MakeSound(TArray<uint8>& Pcm16, bool bPhone, float& OutSeconds);
-	void SynthesizeLocal(const FString& Text, int32 Voice, float Speed, bool bPhone, FHUVoiceReady Done);
-	int32 LineCounter = 0;
-	FProcHandle CbProc; bool bCbStarting = false, bCbReady = false; double CbStartedAt = 0.0;
-	void PingChatterbox();
-	void SynthesizeChatterbox(const FString& Text, int32 Voice, float Speed, float Emotion, bool bPhone, FHUVoiceReady Done, int32 Fallback);
+	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries);
+	FProcHandle ServerProc; bool bStarting = false, bOrpheusReady = false, bCsmReady = false; double StartedAt = 0.0;
+	void Ping(bool bFirst);
 };

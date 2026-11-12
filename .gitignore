@@ -20,3 +20,8 @@ AI/chatterbox-install.log
 AI/*.err
 AI/*.out
 AI/stt/
+AI/orpheus/
+AI/csm/
+AI/snac/
+AI/python/
+AI/voices/

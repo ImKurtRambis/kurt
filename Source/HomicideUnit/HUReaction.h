@@ -1,5 +1,5 @@
 // What a suspect does when you talk to them: the THINKING brain (the local language model) picks the words,
-// the emotion and a body action; the VOICE (Chatterbox / Kokoro) speaks the words with that emotion, and the
+// the emotion and a body action; the VOICE (Sesame CSM, local) speaks the words with that emotion, and the
 // figure acts it out. Shared by HUBrainSubsystem (which asks for it) and HUSuspectActor (which performs it).
 #pragma once
 

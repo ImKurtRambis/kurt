@@ -15,6 +15,7 @@
 #include "HAL/PlatformFileManager.h"
 #include "Async/Async.h"
 #include "TimerManager.h"
+#include "Misc/App.h"
 
 static const int32 Rate = 24000;
 // OpenAI voices, and ElevenLabs premade voices (Rachel, Adam, Antoni, Bella, Arnold, Josh, Elli, Sam)
@@ -52,11 +53,9 @@ bool UHUVoiceSubsystem::HasNeuralVoice() const
 	return HasLocalVoice() || (Provider() != EHUVoiceProvider::Windows && Key().Len() > 10);
 }
 
-void UHUVoiceSubsystem::Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed, float Emotion)
+void UHUVoiceSubsystem::Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed, float Emotion, bool bBackground)
 {
-	if (bCbReady) { SynthesizeChatterbox(Text, Voice, Speed, Emotion, bPhone, Done, Voice); return; }
-	if (HasChatterbox()) WarmUpChatterbox();
-	if (HasLocalVoice()) { SynthesizeLocal(Text, Voice, Speed, bPhone, Done); return; }
+	if (HasLocalVoice()) { SynthesizeLocal(Text, Voice, bPhone, bBackground, Done, 0); return; }
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	if (!HasNeuralVoice() || !C) { Done.ExecuteIfBound(nullptr, 0.f); return; }
 	const EHUVoiceProvider P = Provider();
@@ -147,16 +146,7 @@ USoundWave* UHUVoiceSubsystem::MakeSound(TArray<uint8>& Pcm16, bool bPhone, floa
 	return W;
 }
 
-// ---------- the free offline voice: Kokoro (Apache-2.0) via sherpa-onnx (Apache-2.0) ----------
-static FString VoiceDir() { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI/voice")); }
-
-bool UHUVoiceSubsystem::HasLocalVoice() const
-{
-	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
-	return F.FileExists(*(VoiceDir() / TEXT("bin/sherpa-onnx-offline-tts.exe"))) && F.FileExists(*(VoiceDir() / TEXT("kokoro/model.onnx")));
-}
-
-// a .wav file -> 16-bit mono samples (Kokoro writes 24 kHz, the rate we play at)
+// a .wav file -> 16-bit mono samples (the local voices write 24 kHz, the rate we play at)
 static bool WavToPcm16(const TArray<uint8>& Wav, TArray<uint8>& Out)
 {
 	if (Wav.Num() < 44 || FMemory::Memcmp(Wav.GetData(), "RIFF", 4) != 0) return false;
@@ -191,118 +181,121 @@ static bool WavToPcm16(const TArray<uint8>& Wav, TArray<uint8>& Out)
 	return false;
 }
 
-void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, float Speed, bool bPhone, FHUVoiceReady Done)
-{
-	// Kokoro v0.19's 11 speakers: 0 af, 1 af_bella, 2 af_nicole, 3 af_sarah, 4 af_sky, 5 am_adam, 6 am_michael,
-	// 7 bf_emma, 8 bf_isabella, 9 bm_george, 10 bm_lewis
-	const int32 Sid = FMath::Abs(Voice) % 11;
-	FString Clean = Text.Replace(TEXT("\""), TEXT("")).Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
-	Clean.TrimStartAndEndInline();
-	if (Clean.IsEmpty()) { Done.ExecuteIfBound(nullptr, 0.f); return; }
-	const FString Dir = VoiceDir();
-	const FString OutWav = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / FString::Printf(TEXT("Voice/line_%d.wav"), LineCounter++ % 16));
-	IFileManager::Get().MakeDirectory(*FPaths::GetPath(OutWav), true);
-	const FString Exe = Dir / TEXT("bin/sherpa-onnx-offline-tts.exe");
-	const FString Args = FString::Printf(TEXT("--kokoro-model=\"%s/kokoro/model.onnx\" --kokoro-voices=\"%s/kokoro/voices.bin\" --kokoro-tokens=\"%s/kokoro/tokens.txt\" --kokoro-data-dir=\"%s/kokoro/espeak-ng-data\" --kokoro-length-scale=%.2f --num-threads=2 --sid=%d --output-filename=\"%s\" \"%s\""),
-		*Dir, *Dir, *Dir, *Dir, 1.f / FMath::Clamp(Speed, 0.6f, 1.6f), Sid, *OutWav, *Clean);
-	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
-	Async(EAsyncExecution::Thread, [Self, Exe, Args, OutWav, bPhone, Done]()
-	{
-		int32 Code = -1; FString StdOut, StdErr;
-		FPlatformProcess::ExecProcess(*Exe, *Args, &Code, &StdOut, &StdErr, *FPaths::GetPath(Exe));
-		TArray<uint8> Wav, Pcm;
-		const bool bOk = Code == 0 && FFileHelper::LoadFileToArray(Wav, *OutWav) && WavToPcm16(Wav, Pcm);
-		if (!bOk) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: local Kokoro failed (%d) %s"), Code, *StdErr.Right(200));
-		AsyncTask(ENamedThreads::GameThread, [Self, Pcm = MoveTemp(Pcm), bOk, bPhone, Done]() mutable
-		{
-			if (!Self.IsValid() || !bOk) { Done.ExecuteIfBound(nullptr, 0.f); return; }
-			float Seconds = 0.f;
-			USoundWave* S = Self->MakeSound(Pcm, bPhone, Seconds);
-			Done.ExecuteIfBound(S, Seconds);
-		});
-	});
-}
-// ---------- Chatterbox (MIT): emotional voices on a strong GPU, via its local server ----------
-static FString CbDir() { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI/chatterbox")); }
-static const TCHAR* CbVoices[] = { TEXT("Henry.wav"), TEXT("Elena.wav"), TEXT("Connor.wav"), TEXT("Layla.wav"), TEXT("Thomas.wav"), TEXT("Olivia.wav"),
-	TEXT("Jeremiah.wav"), TEXT("Abigail.wav"), TEXT("Miles.wav"), TEXT("Cora.wav"), TEXT("Everett.wav") };
+// ---------- the local voices (free, offline, no keys): Tools\VoiceServer.py on port 8005 ----------
+//   Orpheus 3B - the 911 call and tape audio (phone lines); Sesame CSM-1B - suspects and everyone else.
+static FString ProjectFile(const TCHAR* Rel) { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / Rel); }
 
-bool UHUVoiceSubsystem::HasChatterbox() const
+bool UHUVoiceSubsystem::HasLocalVoice() const
 {
-	return FPlatformFileManager::Get().GetPlatformFile().FileExists(*(CbDir() / TEXT("python_embedded/python.exe")))
-		&& FPlatformFileManager::Get().GetPlatformFile().FileExists(*(CbDir() / TEXT("server.py")));
+	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
+	return F.FileExists(*ProjectFile(TEXT("AI/python/python.exe"))) && F.FileExists(*ProjectFile(TEXT("Tools/VoiceServer.bat")))
+		&& (F.FileExists(*ProjectFile(TEXT("AI/orpheus/orpheus-3b-q4_k_m.gguf"))) || F.FileExists(*ProjectFile(TEXT("AI/csm/model/model.safetensors"))));
+}
+
+void UHUVoiceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	// load the voices as the game starts, so they're warm by the first 911 call
+	if (!IsRunningCommandlet() && !FApp::IsUnattended()) WarmUp();
 }
 
 void UHUVoiceSubsystem::Deinitialize()
 {
-	if (CbProc.IsValid()) { FPlatformProcess::TerminateProc(CbProc, true); FPlatformProcess::CloseProc(CbProc); }
+	if (ServerProc.IsValid()) { FPlatformProcess::TerminateProc(ServerProc, true); FPlatformProcess::CloseProc(ServerProc); }
 	Super::Deinitialize();
 }
 
-void UHUVoiceSubsystem::WarmUpChatterbox()
+void UHUVoiceSubsystem::WarmUp()
 {
-	if (bCbReady || bCbStarting || !HasChatterbox()) return;
-	bCbStarting = true; CbStartedAt = FPlatformTime::Seconds();
-	FPlatformMisc::SetEnvironmentVar(TEXT("HU_NO_BROWSER"), TEXT("1"));
-	CbProc = FPlatformProcess::CreateProc(*(CbDir() / TEXT("python_embedded/python.exe")), TEXT("server.py"), false, true, true, nullptr, 0, *CbDir(), nullptr);
-	UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: starting Chatterbox (%s)"), CbProc.IsValid() ? TEXT("ok") : TEXT("failed"));
-	PingChatterbox();
+	if (bStarting || (bOrpheusReady && bCsmReady) || !HasLocalVoice()) return;
+	bStarting = true; StartedAt = FPlatformTime::Seconds();
+	Ping(true);
 }
 
-void UHUVoiceSubsystem::PingChatterbox()
+// ask the server what's loaded; the first time nobody answers, start it
+void UHUVoiceSubsystem::Ping(bool bFirst)
 {
-	if (bCbReady) return;
-	if (FPlatformTime::Seconds() - CbStartedAt > 240.0) { bCbStarting = false; UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: Chatterbox never answered")); return; }
+	if (FPlatformTime::Seconds() - StartedAt > 300.0) { bStarting = false; UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: the local voices never loaded")); return; }
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
-	Req->SetURL(TEXT("http://127.0.0.1:8004/api/ui/initial-data"));
+	Req->SetURL(TEXT("http://127.0.0.1:8005/health"));
 	Req->SetVerb(TEXT("GET"));
-	Req->SetTimeout(3.f);
+	Req->SetTimeout(2.f);
 	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
-	Req->OnProcessRequestComplete().BindLambda([Self](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	Req->OnProcessRequestComplete().BindLambda([Self, bFirst](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
 		if (!Self.IsValid()) return;
-		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200) { Self->bCbReady = true; Self->bCbStarting = false; UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: Chatterbox ready")); return; }
+		TSharedPtr<FJsonObject> J;
+		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Resp->GetContentAsString()), J) && J.IsValid())
+		{
+			const bool bWasO = Self->bOrpheusReady, bWasC = Self->bCsmReady;
+			Self->bOrpheusReady = J->GetBoolField(TEXT("orpheus"));
+			Self->bCsmReady = J->GetBoolField(TEXT("csm"));
+			if (Self->bOrpheusReady && !bWasO) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: Orpheus ready"));
+			if (Self->bCsmReady && !bWasC) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: CSM ready"));
+			if (Self->bOrpheusReady && Self->bCsmReady) { Self->bStarting = false; return; }
+		}
+		else if (bFirst && !Self->ServerProc.IsValid())
+		{
+			const FString Bat = ProjectFile(TEXT("Tools/VoiceServer.bat"));
+			// the server quits when this process ends, even after a crash
+			FPlatformMisc::SetEnvironmentVar(TEXT("HU_PARENT_PID"), *FString::Printf(TEXT("%u"), FPlatformProcess::GetCurrentProcessId()));
+			Self->ServerProc = FPlatformProcess::CreateProc(TEXT("cmd.exe"), *FString::Printf(TEXT("/c \"\"%s\"\""), *Bat), false, true, true, nullptr, 0, *FPaths::GetPath(Bat), nullptr);
+			UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: starting the local voices (%s)"), Self->ServerProc.IsValid() ? TEXT("ok") : TEXT("failed"));
+		}
 		FTimerHandle H;
-		if (UGameInstance* GI = Self->GetGameInstance()) GI->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(Self.Get(), &UHUVoiceSubsystem::PingChatterbox), 2.f, false);
+		if (UGameInstance* GI = Self->GetGameInstance())
+			GI->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(Self.Get(), &UHUVoiceSubsystem::Ping, false), 1.f, false);
 	});
 	Req->ProcessRequest();
 }
 
-void UHUVoiceSubsystem::SynthesizeChatterbox(const FString& Text, int32 Voice, float Speed, float Emotion, bool bPhone, FHUVoiceReady Done, int32 Fallback)
+void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries)
 {
+	// phone lines (the 911 call, tape audio) are Orpheus; everyone else is CSM. Either stands in if the other isn't loaded.
+	const bool bOrpheus = bPhone ? (bOrpheusReady || !bCsmReady) : (!bCsmReady && bOrpheusReady);
+	if (!bOrpheusReady && !bCsmReady)
+	{
+		// still loading (about a minute after the game starts): wait for it rather than go silent
+		WarmUp();
+		if (Tries > 120 || !bStarting) { Done.ExecuteIfBound(nullptr, 0.f); return; }
+		TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
+		FTimerHandle H;
+		GetGameInstance()->GetTimerManager().SetTimer(H, FTimerDelegate::CreateLambda([Self, Text, Voice, bPhone, bBackground, Done, Tries]()
+		{
+			if (Self.IsValid()) Self->SynthesizeLocal(Text, Voice, bPhone, bBackground, Done, Tries + 1);
+		}), 1.f, false);
+		return;
+	}
+	FString Clean = Text.Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
+	Clean.TrimStartAndEndInline();
+	if (Clean.IsEmpty()) { Done.ExecuteIfBound(nullptr, 0.f); return; }
 	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-	Body->SetStringField(TEXT("text"), Text.Replace(TEXT("*"), TEXT("")));
-	Body->SetStringField(TEXT("voice_mode"), TEXT("predefined"));
-	Body->SetStringField(TEXT("predefined_voice_id"), CbVoices[FMath::Abs(Voice) % UE_ARRAY_COUNT(CbVoices)]);
-	Body->SetStringField(TEXT("output_format"), TEXT("wav"));
-	Body->SetNumberField(TEXT("exaggeration"), FMath::Clamp(Emotion, 0.25f, 1.f));
-	Body->SetNumberField(TEXT("cfg_weight"), Emotion > 0.7f ? 0.3 : 0.5); // lower cfg = steadier pacing when exaggerated
-	Body->SetNumberField(TEXT("speed_factor"), FMath::Clamp(Speed, 0.7f, 1.4f));
-	Body->SetNumberField(TEXT("seed"), 1000 + FMath::Abs(Voice));
+	Body->SetStringField(TEXT("engine"), bOrpheus ? TEXT("orpheus") : TEXT("csm"));
+	Body->SetStringField(TEXT("text"), Clean);
+	Body->SetNumberField(TEXT("voice"), FMath::Abs(Voice));
+	Body->SetBoolField(TEXT("background"), bBackground);
 	FString Json;
 	FJsonSerializer::Serialize(Body, TJsonWriterFactory<>::Create(&Json));
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
-	Req->SetURL(TEXT("http://127.0.0.1:8004/tts"));
+	Req->SetURL(TEXT("http://127.0.0.1:8005/tts"));
 	Req->SetVerb(TEXT("POST"));
 	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Req->SetContentAsString(Json);
-	Req->SetTimeout(45.f);
+	Req->SetTimeout(bBackground ? 600.f : 120.f);
 	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
-	Req->OnProcessRequestComplete().BindLambda([Self, Done, bPhone, Text, Speed, Fallback](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	Req->OnProcessRequestComplete().BindLambda([Self, Done, bPhone](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
 		if (!Self.IsValid()) return;
 		TArray<uint8> Pcm;
 		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && WavToPcm16(Resp->GetContent(), Pcm))
 		{
-			// Chatterbox renders at 24 kHz, the rate we play at
 			float Seconds = 0.f;
 			USoundWave* S = Self->MakeSound(Pcm, bPhone, Seconds);
 			Done.ExecuteIfBound(S, Seconds);
 			return;
 		}
-		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: Chatterbox failed (%d), using Kokoro"), Resp.IsValid() ? Resp->GetResponseCode() : -1);
-		if (Self->HasLocalVoice()) Self->SynthesizeLocal(Text, Fallback, Speed, bPhone, Done);
-		else Done.ExecuteIfBound(nullptr, 0.f);
+		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: local voice failed (%d) %s"), Resp.IsValid() ? Resp->GetResponseCode() : -1, Resp.IsValid() ? *Resp->GetContentAsString().Left(200) : TEXT(""));
+		Done.ExecuteIfBound(nullptr, 0.f);
 	});
 	Req->ProcessRequest();
 }

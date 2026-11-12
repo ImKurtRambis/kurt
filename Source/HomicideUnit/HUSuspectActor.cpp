@@ -333,7 +333,7 @@ void AHUSuspectActor::RecordNextFiller()
 		if (!Self.IsValid()) return;
 		if (S) Self->FillerSounds.Add(Next, S);
 		Self->RecordNextFiller();
-	}), 1.f, 0.45f);
+	}), 1.f, 0.45f, true); // background: kept on disk, waits behind real answers
 }
 
 void AHUSuspectActor::PlayFiller(uint8 Kind)
