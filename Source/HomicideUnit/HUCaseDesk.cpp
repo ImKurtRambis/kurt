@@ -483,7 +483,9 @@ void AHUCaseDesk::Rebuild()
 	const UHUCaseSubsystem* C = Cases();
 	if (!C || !C->bCaseActive)
 	{
-		Pages.Add({ TEXT("NO OPEN CASE"), { TEXT("Nothing's been assigned. Roll call deals the next case.") } });
+		// the last case, closed: how it really happened (any app shows it until the next case)
+		if (C && C->LastReveal.Num()) Pages.Add({ TEXT("CASE CLOSED - HOW IT HAPPENED"), C->LastReveal });
+		else Pages.Add({ TEXT("NO OPEN CASE"), { TEXT("Nothing's been assigned. Roll call deals the next case.") } });
 		return;
 	}
 	const FHUCase& Case = C->Current;

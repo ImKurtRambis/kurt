@@ -77,6 +77,9 @@ namespace HUOffender
 	// write the plan into the case: the culprit's means and alibi lies and the evidence that breaks them, and the
 	// friend's cover story. Call once the place is final (StartCase), on every machine.
 	HOMICIDEUNIT_API void ApplyToCase(FHUCase& Case);
-	// the whole plan as readable lines (debug screen now, the "how it happened" reveal later)
+	// HOW IT HAPPENED: the story told after the case is closed - who, why, the night, and every mistake they made,
+	// marked with whether the squad found it. Found(ClueName) says if that piece of evidence was bagged.
+	HOMICIDEUNIT_API TArray<FString> Reveal(const FPlan& P, TFunctionRef<bool(const FString&)> Found, bool bTapeCaught);
+	// the whole plan as readable lines (the debug screen)
 	HOMICIDEUNIT_API TArray<FString> Describe(const FPlan& P);
 }

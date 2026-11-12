@@ -492,6 +492,13 @@ void UHUCaseSubsystem::ResolveArrests()
 	SaveProgress();
 	AHUPlayerState::PushLocal(W);
 	LastVerdict = V;
+	// the real story, now that it's over - and which of their mistakes the squad caught
+	LastReveal = HUOffender::Reveal(HUOffender::Make(Current), [this](const FString& ClueName)
+	{
+		for (const FHUClue& Cl : Current.Clues) if (Cl.Name == ClueName && Found.Contains(Cl.Id)) return true;
+		return false;
+	}, bTapeCaught);
+	if (LastReveal.Num()) { LastReveal.Insert(TEXT(""), 0); LastReveal.Insert(V, 0); }
 	Arrested.Reset();
 	BookingStep.Reset();
 	bAwaitingCaptain = false;

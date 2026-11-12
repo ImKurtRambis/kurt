@@ -281,6 +281,41 @@ void HUOffender::ApplyToCase(FHUCase& Case)
 	}
 }
 
+TArray<FString> HUOffender::Reveal(const FPlan& P, TFunctionRef<bool(const FString&)> Found, bool bTapeCaught)
+{
+	TArray<FString> L;
+	if (!P.bValid) return L;
+	L.Add(FString::Printf(TEXT("%s did it."), *P.KillerName));
+	L.Add(FString::Printf(TEXT("WHO THEY WERE: %s."), *P.Relationship.Left(1).ToUpper().Append(P.Relationship.Mid(1))));
+	L.Add(FString::Printf(TEXT("WHY: %s."), *P.Motive.Left(1).ToUpper().Append(P.Motive.Mid(1))));
+	L.Add(P.Type == EType::Domestic ? TEXT("It wasn't planned. It happened in the heat of the moment, and they spent the rest of the night covering it up.")
+		: TEXT("It was planned for weeks. They chose the night, the way in and the way out - and built their alibi in advance."));
+	L.Add(TEXT(""));
+	L.Add(TEXT("---- THE NIGHT ----"));
+	for (const FStep& S : P.Timeline)
+	{
+		if (S.What.StartsWith(TEXT("SLIP:"))) continue;
+		L.Add(FString::Printf(TEXT("%-14s  %s"), *(S.Day < 0 ? (S.Day == -1 ? FString(TEXT("the day before")) : FString::Printf(TEXT("%d days before"), -S.Day)) : Clock(S.Minute)), *S.What));
+	}
+	for (const FString& C : P.CoverUp) if (C.Contains(TEXT("money is still")) || C.Contains(TEXT("is alive"))) L.Add(TEXT("               ") + C);
+	L.Add(TEXT(""));
+	L.Add(TEXT("---- WHAT GAVE THEM AWAY ----"));
+	int32 Got = 0, Of = 0;
+	for (int32 i = 0; i < P.SlipInfo.Num() && i < P.Slips.Num(); i++)
+	{
+		const FSlipInfo& S = P.SlipInfo[i];
+		FString Mark;
+		if (!S.ClueName.IsEmpty()) { const bool b = Found(S.ClueName); Mark = b ? TEXT("[FOUND]  ") : TEXT("[MISSED] "); Of++; Got += b; }
+		else if (S.Kind == ESlipKind::Tape) Mark = bTapeCaught ? TEXT("[FOUND]  ") : TEXT("[ON TAPE]");
+		else if (S.Kind == ESlipKind::Phone) Mark = TEXT("[PHONE]  ");
+		else Mark = TEXT("[PEOPLE] ");
+		L.Add(FString::Printf(TEXT("%s %s%s"), *Mark, *P.Slips[i], S.ClueName.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" - the %s"), *S.ClueName.ToLower())));
+	}
+	if (Of > 0) L.Add(FString::Printf(TEXT("You bagged %d of the %d pieces of evidence they left at the scene."), Got, Of));
+	if (!P.LeanedOnName.IsEmpty()) L.Add(FString::Printf(TEXT("%s lied for them. They called it a favour."), *P.LeanedOnName));
+	return L;
+}
+
 TArray<FString> HUOffender::Describe(const FPlan& P)
 {
 	TArray<FString> L;
@@ -296,7 +331,7 @@ TArray<FString> HUOffender::Describe(const FPlan& P)
 	L.Add(TEXT("---- WHAT REALLY HAPPENED ----"));
 	for (const FStep& S : P.Timeline)
 	{
-		const FString When = S.Day < 0 ? FString::Printf(TEXT("%d days before"), -S.Day) : Clock(S.Minute);
+		const FString When = S.Day < 0 ? (S.Day == -1 ? FString(TEXT("the day before")) : FString::Printf(TEXT("%d days before"), -S.Day)) : Clock(S.Minute);
 		L.Add(FString::Printf(TEXT("%-14s  %s  (%s)"), *When, *S.What, *S.Where));
 		if (!S.Trace.IsEmpty()) L.Add(TEXT("                  leaves: ") + S.Trace);
 	}
@@ -340,6 +375,13 @@ static FAutoConsoleCommand GHUCrimePlans(TEXT("HU.CrimePlans"), TEXT("Print the 
 					UE_LOG(LogTemp, Display, TEXT("  LIE %s: \"%s\"  <- broken by: %s"), *S.Name, *St.Text, *FString::Join(Ev, TEXT(", ")));
 				}
 		}
+		for (const HUOffender::FPlan& Pl : Plans)
+			if (Pl.bValid)
+			{
+				UE_LOG(LogTemp, Display, TEXT("==== HOW IT HAPPENED (sample, evidence named 'Blood Drop' counted as found) ===="));
+				for (const FString& L : HUOffender::Reveal(Pl, [](const FString& N) { return N == TEXT("Blood Drop"); }, false)) UE_LOG(LogTemp, Display, TEXT("  %s"), *L);
+				break;
+			}
 		UE_LOG(LogTemp, Display, TEXT("HU.CrimePlans: %d cases generated and planned in %.2f ms, %d not homicides (not planned yet), %d problems"), Plans.Num(), Ms, Skipped, Bad);
 	}));
 #endif

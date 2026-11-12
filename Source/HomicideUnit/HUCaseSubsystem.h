@@ -159,6 +159,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Case") TArray<FString> Arrested;
 	// how the last case ended (shown back at the precinct)
 	UPROPERTY(BlueprintReadOnly, Category = "Case") FString LastVerdict;
+	// HOW IT HAPPENED: the closed case's real story, from the offender's plan (read on any desk computer)
+	UPROPERTY(BlueprintReadOnly, Category = "Case") TArray<FString> LastReveal;
 	// back at the precinct: each prisoner is booked (mugshot, prints, property: 3 steps), then the case goes to the Captain
 	UPROPERTY(BlueprintReadOnly, Category = "Case") TMap<FString, int32> BookingStep;
 	UPROPERTY(BlueprintReadOnly, Category = "Case") bool bAwaitingCaptain = false;

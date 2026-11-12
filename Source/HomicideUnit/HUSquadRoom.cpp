@@ -444,7 +444,7 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 			if (!C->bAwaitingCaptain || C->UnbookedCount() > 0) return;
 			I->PlayReach();
 			C->ResolveArrests(); // judged, paid, closed
-			I->Say(TEXT("THE CAPTAIN:  ") + C->LastVerdict);
+			I->Say(TEXT("THE CAPTAIN:  ") + C->LastVerdict + (C->LastReveal.Num() ? TEXT("  The whole story's in the file now - any desk computer.") : TEXT("")));
 			I->Notify(TEXT("CASE SUBMITTED"), C->LastVerdict, FLinearColor(0.95f, 0.76f, 0.32f));
 			return;
 		}
