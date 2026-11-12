@@ -5,6 +5,7 @@
 #include "HUProfiles.h"
 #include "HUPlayerState.h"
 #include "HUPhoneData.h"
+#include "HUOffenderBrain.h"
 #include "HUSecurityDesk.h"
 #include "GameFramework/GameStateBase.h"
 #include "Components/TextRenderComponent.h"
@@ -43,6 +44,9 @@ static const FDeskApp DeskApps[] = {
 	{ TEXT("Phone Photos"),     TEXT("I"), FLinearColor(0.85f, 0.35f, 0.6f),  9 },
 	{ TEXT("Cell Pings"),       TEXT("G"), FLinearColor(0.55f, 0.55f, 0.6f),  10 },
 	{ TEXT("Security Footage"), TEXT("V"), FLinearColor(0.15f, 0.15f, 0.18f), 11 },
+#if !UE_BUILD_SHIPPING
+	{ TEXT("Crime Plan (debug)"), TEXT("!"), FLinearColor(0.7f, 0.1f, 0.1f), 12 }, // the offender brain's full plan: dev builds only
+#endif
 };
 static constexpr int32 FootageTool = 11;
 const TCHAR* AHUCaseDesk::OSName = TEXT("PrecinctOS");
@@ -584,6 +588,8 @@ void AHUCaseDesk::Rebuild()
 			FPage F{ TEXT("SECURITY FOOTAGE"), {} };
 			F.Lines.Add(C->bTapesPulled ? FString(TEXT("Tapes loaded. Open this icon again to play them.")) : FString(TEXT("NO TAPE IN THE DECK. Pull the tapes from the building's recorder at the scene (hold E on it).")));
 			Pages.Add(F);
+			FPage D{ TEXT("CRIME PLAN - DEBUG (the offender's brain)"), HUOffender::Describe(HUOffender::Make(Case)) };
+			Pages.Add(D);
 		}
 		// the window in front shows its tool's page (Pages holds every tool, in Tool order, until here)
 		{
