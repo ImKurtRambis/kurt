@@ -37,8 +37,20 @@ namespace HUOffender
 		FString Trace;      // what this step leaves behind for the squad ("" = nothing)
 	};
 
+	enum class ESlipKind : uint8 { Scene, Tape, Phone, Witness };
+	struct FSlipInfo
+	{
+		FString Tag;            // "blood", "camera", "cell"...: what other systems ask about (FPlan::Has)
+		ESlipKind Kind = ESlipKind::Scene;
+		int32 Breaks = 0;       // 1 = its evidence breaks the means lie, 2 = the alibi
+		FString ClueName, ClueDetail;
+	};
+
 	struct FPlan
 	{
+		bool Has(const TCHAR* Tag) const;
+		TArray<FSlipInfo> SlipInfo;
+		FString MeansLie, AlibiLie;           // the two lies the plan makes them tell
 		bool bValid = false;
 		EType Type = EType::Domestic;
 		int32 Care = 50;                      // 0..100: how careful they are
@@ -56,6 +68,9 @@ namespace HUOffender
 	HOMICIDEUNIT_API const TCHAR* TypeName(EType T);
 	// the plan for a case (same case = same plan, on every machine)
 	HOMICIDEUNIT_API FPlan Make(const FHUCase& Case);
+	// write the plan into the case: the culprit's means and alibi lies and the evidence that breaks them, and the
+	// friend's cover story. Call once the place is final (StartCase), on every machine.
+	HOMICIDEUNIT_API void ApplyToCase(FHUCase& Case);
 	// the whole plan as readable lines (debug screen now, the "how it happened" reveal later)
 	HOMICIDEUNIT_API TArray<FString> Describe(const FPlan& P);
 }

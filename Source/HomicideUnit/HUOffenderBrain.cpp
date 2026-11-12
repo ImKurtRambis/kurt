@@ -24,8 +24,11 @@ namespace
 		for (const auto& KV : V) S.ReplaceInline(*KV.Key, *KV.Value);
 		return S;
 	}
-	struct FSlip { const TCHAR* What; const TCHAR* Trace; int32 At; }; // At: minutes from the killing
+	// Breaks: 0 none, 1 the means lie, 2 the alibi lie.  At: minutes from the killing.  Clue: what's bagged at the scene.
+	struct FSlip { const TCHAR* Tag; HUOffender::ESlipKind Kind; int32 Breaks; const TCHAR* What; const TCHAR* Trace; int32 At; const TCHAR* ClueName; const TCHAR* ClueDetail; };
 }
+
+bool HUOffender::FPlan::Has(const TCHAR* Tag) const { return SlipInfo.ContainsByPredicate([&](const FSlipInfo& S) { return S.Tag == Tag; }); }
 
 const TCHAR* HUOffender::TypeName(EType T)
 {
@@ -58,6 +61,7 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	FPlan P;
 	const FHUSuspect* K = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == Case.Solution.Killer; });
 	if (!K) return P;
+	if (!Case.Crime.IsEmpty() && Case.Crime != TEXT("homicide")) return P; // robberies, fires, missing persons: not planned yet
 	FRandomStream R(Case.MapSeed * 31 + Case.Number * 7919 + 17);
 	const FSpots Sp = SpotsFor(Case.Place);
 
@@ -130,31 +134,57 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 		Step(0, T + 45, TEXT("across town"), TEXT("{K} turns up where the alibi says they were, and makes sure they're seen."));
 	}
 
-	// 4. SLIPS: careless types slip more, everyone slips at least three times (every case stays solvable)
+	// 4. SLIPS: careless types slip more, everyone slips at least three times (every case stays solvable).
+	// Scene slips leave a piece of evidence that breaks one of their two plan lies (the means, the alibi);
+	// tape, phone and witness slips show up on the tapes, the phone apps and in the interview room.
+	using EK = ESlipKind;
 	TArray<FSlip> Pool = bDom
 		? TArray<FSlip>{
-			{ TEXT("Cut their hand in the struggle"), TEXT("a blood drop that isn't the victim's, near the body"), 1 },
-			{ TEXT("Walked past a camera on the way out"), TEXT("tape: the killer leaving minutes after the time of death"), 28 },
-			{ TEXT("Called the victim's phone afterwards, to look worried"), TEXT("call log: a call to a phone they knew was dead"), 50 },
-			{ TEXT("Kept the victim's key without thinking"), TEXT("the victim's room key in the killer's pocket"), 5 },
-			{ TEXT("A guest heard them through the wall"), TEXT("a witness: raised voices, then a thud, at the time of death"), 0 },
-			{ TEXT("Changed shirts and stuffed the old one in a bag"), TEXT("a stained shirt in the killer's bag"), 12 },
-			{ TEXT("Their story doesn't match the bar tab"), TEXT("the bar tab closed an hour before they say they left"), 35 } }
+			{ TEXT("blood"), EK::Scene, 1, TEXT("Cut their hand in the struggle"), TEXT("a blood drop that isn't the victim's, near the body"), 1,
+				TEXT("Blood Drop"), TEXT("A drop of blood by the door that isn't {V}'s. {K} has a fresh cut across the palm.") },
+			{ TEXT("camera"), EK::Tape, 0, TEXT("Walked past a camera on the way out"), TEXT("tape: the killer leaving minutes after the time of death"), 28, nullptr, nullptr },
+			{ TEXT("calldead"), EK::Phone, 0, TEXT("Called the victim's phone afterwards, to look worried"), TEXT("call log: a call to a phone they knew was dead"), 50, nullptr, nullptr },
+			{ TEXT("key"), EK::Scene, 2, TEXT("Kept the victim's key without thinking"), TEXT("the victim's room key in the killer's pocket"), 5,
+				TEXT("Victim's Key"), TEXT("{V}'s key, found in {K}'s coat. {V} still had it when the two of them split up - {K} saw them after that.") },
+			{ TEXT("witness"), EK::Scene, 2, TEXT("A guest heard them through the wall"), TEXT("a witness: raised voices, then a thud, at the time of death"), 0,
+				TEXT("Noise Complaint"), TEXT("A complaint slip from the front desk, logged at {T}: raised voices, then a thud. The caller describes {K}'s voice.") },
+			{ TEXT("shirt"), EK::Scene, 1, TEXT("Changed shirts and stuffed the old one in a bag"), TEXT("a stained shirt in the killer's bag"), 12,
+				TEXT("Stained Shirt"), TEXT("A shirt balled up in {K}'s bag, spotted with {V}'s blood.") },
+			{ TEXT("tab"), EK::Scene, 2, TEXT("Their story doesn't match the bar tab"), TEXT("the bar tab closed an hour before they say they left"), 35,
+				TEXT("Bar Tab"), TEXT("{K}'s tab, closed out and paid well before {T}. Their story doesn't fit the time on it.") } }
 		: TArray<FSlip>{
-			{ TEXT("Searched the weapon and the victim from their own phone"), TEXT("web history: weeks of searches about the victim and the weapon"), -30000 },
-			{ TEXT("Paid for something with their own card"), TEXT("a receipt in their name for the weapon or what went with it"), -20000 },
-			{ TEXT("Their phone pinged the tower by the scene"), TEXT("cell pings: in the area at the time of death, not across town"), 0 },
-			{ TEXT("A camera caught them coming in"), TEXT("tape: someone matching the killer at the way in"), -40 },
-			{ TEXT("Left a fibre from their gloves on the way out"), TEXT("a glove fibre on the exit route that matches their gloves"), 6 },
-			{ TEXT("The friend they leaned on is a bad liar"), TEXT("the alibi witness's story falls apart under pressure"), 0 },
-			{ TEXT("Kept a souvenir"), TEXT("something of the victim's, hidden in the killer's things"), 8 } };
-	if (P.LeanedOnName.IsEmpty() && !bDom) Pool.RemoveAt(5);
+			{ TEXT("web"), EK::Phone, 0, TEXT("Searched the weapon and the victim from their own phone"), TEXT("web history: weeks of searches about the victim and the weapon"), -30000, nullptr, nullptr },
+			{ TEXT("receipt"), EK::Scene, 1, TEXT("Paid for something with their own card"), TEXT("a receipt in their name for the weapon or what went with it"), -20000,
+				TEXT("Card Receipt"), TEXT("A receipt in {K}'s name, paid by card three weeks ago: {W}, or what goes with it.") },
+			{ TEXT("cell"), EK::Phone, 0, TEXT("Kept their phone on - it pinged the tower by the scene"), TEXT("cell pings: in the area at the time of death, not across town"), 0, nullptr, nullptr },
+			{ TEXT("camin"), EK::Tape, 0, TEXT("A camera caught them coming in"), TEXT("tape: someone matching the killer at the way in"), -40, nullptr, nullptr },
+			{ TEXT("fibre"), EK::Scene, 1, TEXT("Left a fibre from their gloves on the way out"), TEXT("a glove fibre on the exit route that matches their gloves"), 6,
+				TEXT("Glove Fibre"), TEXT("A dark wool fibre snagged on {X}. It matches the gloves in {K}'s coat pocket.") },
+			{ TEXT("friend"), EK::Witness, 0, TEXT("The friend they leaned on is a bad liar"), TEXT("the alibi witness's story falls apart under pressure"), 0, nullptr, nullptr },
+			{ TEXT("souvenir"), EK::Scene, 1, TEXT("Kept a souvenir"), TEXT("something of the victim's, hidden in the killer's things"), 8,
+				TEXT("Keepsake"), TEXT("{V}'s wristwatch, wrapped in a handkerchief in {K}'s things.") },
+			{ TEXT("stub"), EK::Scene, 2, TEXT("The ticket stub alibi is for the early show"), TEXT("their alibi stub is for a show that let out hours before"), -200,
+				TEXT("Ticket Stub"), TEXT("{K}'s 'alibi' stub is for the seven o'clock show. It let out long before {T}.") },
+			{ TEXT("parking"), EK::Scene, 2, TEXT("Parked close and got a ticket"), TEXT("a parking ticket two streets from the scene"), -10,
+				TEXT("Parking Ticket"), TEXT("A parking ticket on {K}'s car, written two streets from {P} ten minutes before {T}.") } };
+	Pool.RemoveAll([&](const FSlip& S) {
+		const FString Tag = S.Tag;
+		return (Tag == TEXT("friend") && P.LeanedOnName.IsEmpty()) || (Tag == TEXT("stub") && !P.LeanedOnName.IsEmpty()); });
 	for (int32 i = Pool.Num() - 1; i > 0; i--) Pool.Swap(i, R.RandRange(0, i));
+	// solvable: one slip that breaks the means lie and one that breaks the alibi go first
+	for (int32 Need = 1; Need <= 2; Need++)
+		if (const int32 At = Pool.IndexOfByPredicate([&](const FSlip& S) { return S.Breaks == Need; }); At != INDEX_NONE) Pool.Swap(Need - 1, At);
 	const int32 Extra = FMath::RoundToInt((100 - P.Care) / 30.f);   // careful = 3, careless = up to 6
 	const int32 NSlips = FMath::Min(3 + Extra, Pool.Num());
+	P.MeansLie = bDom ? FString::Printf(TEXT("I never went near %s after the bar. Never laid a hand on them."), *P.VictimName)
+		: FString::Printf(TEXT("I had nothing to do with %s. Haven't laid eyes on them in years."), *P.VictimName);
+	P.AlibiLie = P.AlibiStory.TrimChar(TEXT('"'));
 	for (int32 i = 0; i < NSlips; i++)
 	{
 		const FSlip& S = Pool[i];
+		FSlipInfo Info; Info.Tag = S.Tag; Info.Kind = S.Kind; Info.Breaks = S.Breaks;
+		if (S.ClueName) { Info.ClueName = S.ClueName; Info.ClueDetail = F(S.ClueDetail, V).Replace(TEXT("{T}"), *Case.Time).Replace(TEXT("{P}"), *Case.Place); }
+		P.SlipInfo.Add(Info);
 		P.Slips.Add(S.What);
 		FStep St; St.Trace = S.Trace; St.What = FString::Printf(TEXT("SLIP: %s."), S.What);
 		if (S.At <= -1440) { St.Day = S.At / 1440; St.Minute = 15 * 60; St.Where = TEXT("in the weeks before"); }
@@ -171,6 +201,50 @@ HUOffender::FPlan HUOffender::Make(const FHUCase& Case)
 	else P.CoverUp.Add(TEXT("Wiped the handle and the door; forgot the glass."));
 	if (!P.LeanedOnName.IsEmpty()) P.CoverUp.Add(FString::Printf(TEXT("%s will back the alibi - until they're pushed."), *P.LeanedOnName));
 	return P;
+}
+
+void HUOffender::ApplyToCase(FHUCase& Case)
+{
+	const FPlan P = Make(Case);
+	if (!P.bValid) return;
+	FHUSuspect* K = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == Case.Solution.Killer; });
+	if (!K) return;
+	// the means and alibi lies, and the evidence that breaks them, come from the plan; every extra scene slip of
+	// the same kind is one more piece of evidence that breaks the same lie
+	auto Rewrite = [&](const FString& ClueId, int32 Breaks, const FString& Lie)
+	{
+		FHUStatement* St = K->Statements.FindByPredicate([&](const FHUStatement& X) { return X.Evidence.Contains(ClueId); });
+		FHUClue* Cl = Case.Clues.FindByPredicate([&](const FHUClue& X) { return X.Id == ClueId; });
+		if (!St || !Cl) return;
+		int32 n = 0;
+		for (const FSlipInfo& S : P.SlipInfo)
+		{
+			if (S.Breaks != Breaks || S.ClueName.IsEmpty()) continue;
+			if (n == 0) { Cl->Name = S.ClueName; Cl->Detail = S.ClueDetail; St->Text = Lie; }
+			else
+			{
+				FHUClue Extra = *Cl; Extra.Id = FString::Printf(TEXT("%s_%d"), *ClueId, n); Extra.Name = S.ClueName; Extra.Detail = S.ClueDetail;
+				St->Evidence.Add(Extra.Id);
+				Case.Clues.Add(Extra);
+				St = K->Statements.FindByPredicate([&](const FHUStatement& X) { return X.Evidence.Contains(ClueId); }); // (the add may move the array)
+				Cl = Case.Clues.FindByPredicate([&](const FHUClue& X) { return X.Id == ClueId; });
+			}
+			n++;
+		}
+	};
+	Rewrite(Case.Solution.Means, 1, P.MeansLie);
+	Rewrite(Case.Solution.Alibi, 2, P.AlibiLie);
+	// the friend they leaned on backs the alibi - and the same evidence breaks their story too
+	if (FHUSuspect* L = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == P.LeanedOnId; }))
+	{
+		const FHUStatement* KA = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == Case.Solution.Killer; })->Statements.FindByPredicate([&](const FHUStatement& X) { return X.Evidence.Contains(Case.Solution.Alibi); });
+		FHUStatement St;
+		St.Text = FString::Printf(TEXT("I was with %s all evening. We never left."), *P.KillerName);
+		St.Truth = false;
+		St.Evidence = KA ? KA->Evidence : TArray<FString>{ Case.Solution.Alibi };
+		St.OnBreak = FString::Printf(TEXT("...Alright. %s asked me to say it. Called it a favour. I didn't ask why."), *P.KillerName);
+		L->Statements.Add(St);
+	}
 }
 
 TArray<FString> HUOffender::Describe(const FPlan& P)
@@ -210,17 +284,28 @@ static FAutoConsoleCommand GHUCrimePlans(TEXT("HU.CrimePlans"), TEXT("Print the 
 		const int32 N = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 5, Seed = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 1234;
 		const double T0 = FPlatformTime::Seconds();
 		const TArray<FHUCase> Cases = HUCaseGen::MakeCases(1, FMath::Max(1, N), Seed);
-		int32 Bad = 0;
+		int32 Bad = 0, Skipped = 0;
 		TArray<HUOffender::FPlan> Plans;
 		for (const FHUCase& C : Cases) Plans.Add(HUOffender::Make(C));
 		const double Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
 		for (int32 i = 0; i < Plans.Num(); i++)
 		{
 			int32 Traces = 0; for (const HUOffender::FStep& S : Plans[i].Timeline) if (!S.Trace.IsEmpty()) Traces++;
-			if (!Plans[i].bValid || Plans[i].Slips.Num() < 3) Bad++;
+			if (!Plans[i].bValid) { Skipped++; continue; }
+			if (Plans[i].Slips.Num() < 3) Bad++;
 			UE_LOG(LogTemp, Display, TEXT("==== CRIME PLAN case %d at %s (%d traces) ===="), Cases[i].Number, *Cases[i].Place, Traces);
 			for (const FString& L : HUOffender::Describe(Plans[i])) UE_LOG(LogTemp, Display, TEXT("  %s"), *L);
+			// what the case looks like once the plan is written into it: every lie needs evidence that exists
+			FHUCase W = Cases[i]; HUOffender::ApplyToCase(W);
+			for (const FHUSuspect& S : W.Suspects)
+				for (const FHUStatement& St : S.Statements)
+				{
+					if (St.Truth || (S.Id != W.Solution.Killer && S.Id != Plans[i].LeanedOnId)) continue;
+					TArray<FString> Ev;
+					for (const FString& E : St.Evidence) { const FHUClue* Cl = W.Clues.FindByPredicate([&](const FHUClue& X) { return X.Id == E; }); Ev.Add(Cl ? Cl->Name : TEXT("MISSING!")); if (!Cl) Bad++; }
+					UE_LOG(LogTemp, Display, TEXT("  LIE %s: \"%s\"  <- broken by: %s"), *S.Name, *St.Text, *FString::Join(Ev, TEXT(", ")));
+				}
 		}
-		UE_LOG(LogTemp, Display, TEXT("HU.CrimePlans: %d cases generated and planned in %.2f ms, %d unsolvable"), Plans.Num(), Ms, Bad);
+		UE_LOG(LogTemp, Display, TEXT("HU.CrimePlans: %d cases generated and planned in %.2f ms, %d not homicides (not planned yet), %d problems"), Plans.Num(), Ms, Skipped, Bad);
 	}));
 #endif

@@ -1,4 +1,5 @@
 #include "HUPhoneData.h"
+#include "HUOffenderBrain.h"
 #include "HUCaseTypes.h"
 #include "HUCaseSubsystem.h"
 
@@ -97,6 +98,9 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 	const int32 T = Minutes(Case.Time);
 	const FString Place = Title(Case.Place);
 	FRandomStream R = Seed(Case, S, (int32)App);
+	// the culprit's phone shows what their plan and their slips left behind (a careful one leaves little)
+	HUOffender::FPlan Plan; if (K == EKind::Culprit) Plan = HUOffender::Make(Case);
+	const bool bPlan = Plan.bValid, bDom = bPlan && Plan.Type == HUOffender::EType::Domestic;
 
 	if (App == Database)
 	{
@@ -137,7 +141,14 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 			const bool bOut = R.FRand() < 0.5f;
 			Log.Add({ At, FString::Printf(TEXT("%s  %s %-16s %d:%02d"), *Clock(At), bOut ? TEXT("OUT ->") : TEXT("IN  <-"), Pick(Contacts, R), R.RandRange(0, 9), R.RandRange(5, 59)) });
 		}
-		if (K == EKind::Culprit)
+		if (bPlan)
+		{
+			if (!Plan.LeanedOnName.IsEmpty()) Log.Add({ T - 1440 + R.RandRange(-60, 60), FString::Printf(TEXT("YESTERDAY  OUT -> %-16s 4:12"), *Plan.LeanedOnName) });
+			if (bDom) Log.Add({ T - 50, FString::Printf(TEXT("%s  OUT -> %-16s 6:12"), *Clock(T - 50), *Vic) });
+			if (Plan.Has(TEXT("calldead"))) Log.Add({ T + 50, FString::Printf(TEXT("%s  OUT -> %-16s 0:00   NO ANSWER"), *Clock(T + 50), *VicFirst) });
+			if (!bDom && !Plan.Has(TEXT("cell"))) Log.Add({ T - 90, TEXT("------   NO ACTIVITY ALL EVENING   (the phone never left home?)") });
+		}
+		else if (K == EKind::Culprit)
 		{
 			if (!bChild) Log.Add({ T - R.RandRange(35, 80), FString::Printf(TEXT("%s  OUT -> %-16s 6:12"), *Clock(T - 50), *Vic) });
 			Log.Add({ T - R.RandRange(8, 20), FString::Printf(TEXT("%s  IN  <- %-16s MISSED"), *Clock(T - 14), bChild ? TEXT("Unknown") : *VicFirst) });
@@ -160,7 +171,21 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 		auto Msg = [&](int32 At, const FString& Who, const FString& What) { L.Add(FString::Printf(TEXT("[%s] %s: %s"), *Clock(At), *Who, *What)); };
 		Msg(T - R.RandRange(200, 400), Pick(Contacts, R), Pick(BoringTexts, R));
 		Msg(T - R.RandRange(120, 199), TEXT("Me"), Pick(BoringTexts, R));
-		if (K == EKind::Culprit)
+		if (bPlan)
+		{
+			if (bDom)
+			{
+				Msg(T - 90, VicFirst, TEXT("don't make a scene tonight. please"));
+				Msg(T - 88, TEXT("Me"), TEXT("then don't give me a reason"));
+				Msg(T + 95, TEXT("Me"), FString::Printf(TEXT("if anyone asks: %s"), *Plan.AlibiLie.ToLower()));
+			}
+			else
+			{
+				L.Add(FString::Printf(TEXT("[ 41 MESSAGES DELETED over the last month - recovered: headers only ]")));
+				if (!Plan.LeanedOnName.IsEmpty()) { Msg(T - 1400, TEXT("Me"), TEXT("still ok for tomorrow? like we said")); Msg(T - 1395, Plan.LeanedOnName, TEXT("yeah. you owe me")); }
+			}
+		}
+		else if (K == EKind::Culprit)
 		{
 			if (bChild)
 			{
@@ -196,7 +221,18 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 		auto Q = [&](int32 At, const FString& What) { L.Add(FString::Printf(TEXT("%s   search: \"%s\""), *Clock(At), *What)); };
 		Q(T - R.RandRange(500, 900), Pick(BoringSearches, R));
 		Q(T - R.RandRange(300, 499), Pick(BoringSearches, R));
-		if (K == EKind::Culprit)
+		if (bPlan)
+		{
+			if (Plan.Has(TEXT("web")))
+			{
+				Q(T - 21 * 1440, FString::Printf(TEXT("%s address"), *Vic.ToLower()));
+				Q(T - 15 * 1440, MeansSearch(Case.Weapon, 0));
+				Q(T - 3 * 1440, FString::Printf(TEXT("%s floor plan"), *Place.ToLower()));
+			}
+			else if (!bDom) Q(T - 1440, TEXT("[ private browsing - nothing kept for a month ]"));
+			if (bDom) { Q(T + 110, TEXT("how long do cell phone records last")); Q(T + 115, TEXT("does bleach get rid of blood")); }
+		}
+		else if (K == EKind::Culprit)
 		{
 			Q(T - 1440 - R.RandRange(60, 300), MeansSearch(Case.Weapon, 0));
 			Q(T - 200, FString::Printf(TEXT("%s hours"), *Place.ToLower()));
@@ -222,7 +258,16 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 		auto P = [&](int32 At, const FString& What) { L.Add(FString::Printf(TEXT("IMG_%04d  %s   %s"), R.RandRange(1000, 9999), *Clock(At), *What)); };
 		P(T - R.RandRange(1440, 4000), Pick(BoringPhotos, R));
 		P(T - R.RandRange(300, 1400), Pick(BoringPhotos, R));
-		if (K == EKind::Culprit)
+		if (bPlan)
+		{
+			if (bDom) P(T - 110, FString::Printf(TEXT("A selfie with %s at the bar, both smiling. The last photo of them."), *VicFirst));
+			else if (Plan.Care < 80)
+			{
+				P(T - 3 * 1440, FString::Printf(TEXT("%s from across the street, at night. Nobody in shot."), *Place));
+				P(T - 3 * 1440 + 2, FString::Printf(TEXT("The same - zoomed in on %s."), *Plan.Entry));
+			}
+		}
+		else if (K == EKind::Culprit)
 		{
 			P(T - 160, FString::Printf(TEXT("The front of %s from across the street, at night. Nobody in shot."), *Place));
 			P(T - 158, TEXT("The same - zoomed in on the side entrance."));
@@ -243,7 +288,12 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 		FString Home = Pick(Towers, R); if (Near.StartsWith(Home)) Home = Towers[(Case.Number + 3) % UE_ARRAY_COUNT(Towers)];
 		auto Ping = [&](int32 At, const FString& Tower) { L.Add(FString::Printf(TEXT("%s   %s"), *Clock(At), *Tower)); };
 		Ping(T - 180, Home);
-		if (K == EKind::Culprit)
+		if (bPlan)
+		{
+			if (bDom || Plan.Has(TEXT("cell"))) { Ping(T - 60, Near); Ping(T - 5, Near); Ping(T + 40, Near); Ping(T + 90, Home); }
+			else { Ping(T - 60, Home); Ping(T, Home); Ping(T + 60, Home); L.Add(TEXT("")); L.Add(TEXT("Note: the phone sat at home all night. Phones don't kill people - but they make good alibis.")); }
+		}
+		else if (K == EKind::Culprit)
 		{
 			Ping(T - 60, Towers[(Case.Number + 5) % UE_ARRAY_COUNT(Towers)]);
 			Ping(T - 22, Near);

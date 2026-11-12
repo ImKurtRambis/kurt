@@ -1,4 +1,5 @@
 #include "HUCaseSubsystem.h"
+#include "HUOffenderBrain.h"
 #include "HUBrainSubsystem.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
@@ -113,6 +114,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 		Current.Place = ChosenPlace;
 	}
 	if (!ChosenDifficulty.IsEmpty()) Current.Difficulty = ChosenDifficulty;
+	HUOffender::ApplyToCase(Current); // the culprit's plan writes their lies and the evidence against them
 	bCaseActive = true;
 	bBriefed = false;
 	PlayDifficulty = Current.Difficulty.IsEmpty() ? TEXT("detective") : Current.Difficulty.ToLower();

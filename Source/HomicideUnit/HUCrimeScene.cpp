@@ -10,6 +10,7 @@
 #include "HUOfficer.h"
 #include "HUPoliceVan.h"
 #include "HUSecurityDesk.h"
+#include "HUOffenderBrain.h"
 #include "HUCoffee.h"
 #include "HUInteractComponent.h"
 #include "Components/BoxComponent.h"
@@ -956,7 +957,13 @@ void AHUCrimeScene::Build()
 		const int32 Killer = SusId.IndexOfByKey(C.Solution.Killer);
 		const int32 Decoy = SusAt.Num() > 1 ? (Killer + 1 + Cr.RandRange(0, SusAt.Num() - 2)) % SusAt.Num() : -1;
 		const EHUProfile Prof = (EHUProfile)C.Profile;
-		const bool bCut = Prof == EHUProfile::ContractKiller || Prof == EHUProfile::Enforcer || Prof == EHUProfile::ConArtist || Cr.FRand() < 0.25f;
+		bool bCut = Prof == EHUProfile::ContractKiller || Prof == EHUProfile::Enforcer || Prof == EHUProfile::ConArtist || Cr.FRand() < 0.25f;
+		// the offender's plan decides the tape: only a camera slip puts them on it; a domestic killer was with the
+		// victim earlier in the open, a planner never was
+		const HUOffender::FPlan OPlan = HUOffender::Make(C);
+		const bool bOnTape = !OPlan.bValid || OPlan.Has(TEXT("camera")) || OPlan.Has(TEXT("camin"));
+		const bool bMeets = !OPlan.bValid || OPlan.Type == HUOffender::EType::Domestic;
+		if (OPlan.bValid) bCut = !bOnTape && (OPlan.Care >= 70 || Cr.FRand() < 0.5f);
 		const bool bHomicide = C.Crime == TEXT("homicide"), bMissing = C.Crime == TEXT("missing"), bArson = C.Crime == TEXT("arson");
 		auto RoomSpot = [&](int32 R) { const FR& Rm = Rooms[R]; return FVector(Cr.FRandRange(Rm.X0 + 80, Rm.X1 - 80), Cr.FRandRange(Rm.Y0 + 80, Rm.Y1 - 80), 0); };
 		TArray<FVector> Early; // where each suspect was earlier in the night
@@ -986,7 +993,7 @@ void AHUCrimeScene::Build()
 			if (Killer >= 0)
 			{
 				FVector& K = P[Killer];
-				if (Off == -32 || Off == -28) K = Meet + FVector(85, 30, 0);             // talking with the victim
+				if (bMeets && (Off == -32 || Off == -28)) K = Meet + FVector(85, 30, 0);             // talking with the victim
 				if (Off == -8) K = FMath::Lerp(K, VictimAt, 0.5f);                       // heading that way
 				if (Off == -5) K = FMath::Lerp(K, VictimAt, 0.85f);
 				if (Off == -3 || Off == -1) K = VictimAt + FVector(70, 40, 0);         // right there
@@ -1022,7 +1029,7 @@ void AHUCrimeScene::Build()
 					if (Killer >= 0 && Seen(Local[k][Killer]) && bVic && FVector::Dist2D(Local[k][Killer], Local[k][NS + 2]) < 200.f) N += FString::Printf(TEXT(" %s and the victim, close together."), *NameOf(Killer));
 				}
 				Notes.Add(N);
-				if (k == CatchAt && Killer >= 0 && Seen(Local[k][Killer]) && !Frames[k].bLost) { CatchFrame = c * NM + k; CatchSuspect = SusId[Killer]; }
+				if (bOnTape && k == CatchAt && Killer >= 0 && Seen(Local[k][Killer]) && !Frames[k].bLost) { CatchFrame = c * NM + k; CatchSuspect = SusId[Killer]; }
 			}
 
 		// the desk itself, somewhere on the floor
