@@ -173,6 +173,7 @@ void AHUSuspectActor::OpenInterview(APawn* User)
 	bTyping = false; Draft.Reset(); bMicOpen = false; Heard.Reset();
 	bFacing = true; // they turn to face you
 	RecordFillers(); // their premade lines, in their voice (once)
+	if (UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>(); L && L->IsInstalled()) L->AutoPickMic(false); // find the mic that actually hears
 	if (UHUListenSubsystem* L = GetGameInstance()->GetSubsystem<UHUListenSubsystem>(); L && !L->IsInstalled())
 		if (UHUInteractComponent* I = User->FindComponentByClass<UHUInteractComponent>()) I->Notify(TEXT("NO MICROPHONE TOOLS"), TEXT("Speech-to-text isn't installed (see AI\\README.txt). Press T to type to them instead."), FLinearColor(0.95f, 0.6f, 0.3f));
 	if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
@@ -192,6 +193,12 @@ void AHUSuspectActor::CloseInterview()
 // typing a question: the other interview keys stand down until Enter / Esc
 void AHUSuspectActor::TypeKey(FKey Key)
 {
+	// Q (or Esc) walks out - even while they're thinking. The interview catches every key, so it's handled here.
+	if (bInterviewing && !bTyping && (Key == EKeys::Q || Key == EKeys::Escape))
+	{
+		if (UHUInteractComponent* I = Interviewer.IsValid() ? Interviewer->FindComponentByClass<UHUInteractComponent>() : nullptr) I->LeaveInterview();
+		return;
+	}
 	if (!bInterviewing || bThinking) return;
 	if (!bTyping) { if (Key == EKeys::T) { bTyping = true; Draft.Reset(); } return; }
 	if (Key == EKeys::Enter) { AskTyped(); return; }
@@ -582,10 +589,17 @@ void AHUSuspectActor::MicUp()
 	if (!L) return;
 	Heard = TEXT("...");
 	TWeakObjectPtr<AHUSuspectActor> Self(this);
-	L->StopListening(FHUHeard::CreateLambda([Self](const FString& Text)
+	TWeakObjectPtr<UHUListenSubsystem> WL(L);
+	L->StopListening(FHUHeard::CreateLambda([Self, WL](const FString& Text)
 	{
 		if (!Self.IsValid() || !Self->bInterviewing) return;
-		if (Text.IsEmpty()) { Self->Heard = TEXT("(didn't catch that - hold V a little longer and speak up)"); return; }
+		if (Text.IsEmpty())
+		{
+			const bool bSilent = WL.IsValid() && WL->LastWasSilent();
+			Self->Heard = bSilent ? FString::Printf(TEXT("(your mic - %s - heard nothing. Checking your other microphones... hold V and try again)"), *WL->MicLabel())
+				: FString(TEXT("(didn't catch that - hold V a little longer and speak up)"));
+			return;
+		}
 		Self->Handle(Text);
 	}));
 }

@@ -9,6 +9,9 @@
 #include "Async/Async.h"
 #include "Engine/GameInstance.h"
 #include "Internationalization/Regex.h"
+#include "HUInteractComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/Pawn.h"
 
 FString UHUListenSubsystem::Dir() const { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI")); }
 
@@ -106,6 +109,81 @@ bool UHUListenSubsystem::OpenMic()
 	return true;
 }
 
+// ---------- auto-detect: which microphone actually hears the room? ----------
+// Each input device is opened for 0.4 s on a background thread and its noise level measured. A dead or
+// disconnected input reads as pure silence; a real microphone always picks up a little room noise.
+void UHUListenSubsystem::AutoPickMic(bool bAfterSilence)
+{
+	if (bProbing || (bProbedOnce && !bAfterSilence)) return;
+	bProbing = true; bProbedOnce = true;
+	TWeakObjectPtr<UHUListenSubsystem> Self(this);
+	Async(EAsyncExecution::Thread, [Self, bAfterSilence]()
+	{
+		Audio::FAudioCapture Probe;
+		TArray<Audio::FCaptureDeviceInfo> Devs;
+		Probe.GetCaptureDevicesAvailable(Devs);
+		FString DefaultName;
+		{ Audio::FCaptureDeviceInfo Def; if (Probe.GetCaptureDeviceInfo(Def, Audio::DefaultDeviceIndex)) DefaultName = Def.DeviceName; }
+		TArray<FString> Names; TArray<float> Rms;
+		for (int32 i = 0; i < Devs.Num(); i++)
+		{
+			double Sum = 0.0; int64 N = 0; FCriticalSection CS;
+			Audio::FAudioCaptureDeviceParams P; P.DeviceIndex = i;
+			const bool bOk = Probe.OpenAudioCaptureStream(P, [&Sum, &N, &CS](const void* In, int32 Frames, int32 Channels, int32, double, bool)
+			{
+				const float* F = static_cast<const float*>(In);
+				FScopeLock L(&CS);
+				for (int32 k = 0; k < Frames * Channels; k++) { Sum += (double)F[k] * F[k]; N++; }
+			}, 1024);
+			if (bOk && Probe.StartStream()) { FPlatformProcess::Sleep(0.4f); Probe.StopStream(); }
+			Probe.CloseStream();
+			FScopeLock L(&CS);
+			Names.Add(Devs[i].DeviceName);
+			Rms.Add(N > 0 ? (float)FMath::Sqrt(Sum / N) : 0.f);
+		}
+		AsyncTask(ENamedThreads::GameThread, [Self, Names, Rms, DefaultName, bAfterSilence]()
+		{
+			if (Self.IsValid()) Self->FinishProbe(Names, Rms, DefaultName, bAfterSilence);
+		});
+	});
+}
+
+void UHUListenSubsystem::FinishProbe(const TArray<FString>& Names, const TArray<float>& Rms, const FString& DefaultName, bool bAfterSilence)
+{
+	bProbing = false;
+	UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	if (!C) return;
+	const FString Using = !C->MicDevice.IsEmpty() && Names.Contains(C->MicDevice) ? C->MicDevice : DefaultName;
+	// what-you-hear / loopback inputs carry the game's own sound, not the player: never pick those
+	auto IsLoopback = [](const FString& N) { return N.Contains(TEXT("Stereo Mix")) || N.Contains(TEXT("What U Hear")) || N.Contains(TEXT("Loopback")) || N.Contains(TEXT("Wave Out")); };
+	const float Alive = 2e-5f;
+	int32 UsingAt = Names.IndexOfByKey(Using), Best = INDEX_NONE;
+	for (int32 i = 0; i < Names.Num(); i++)
+	{
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: mic %d \"%s\" noise %.6f%s"), i, *Names[i], Rms[i], i == UsingAt ? TEXT("  (in use)") : TEXT(""));
+		if (IsLoopback(Names[i]) || Rms[i] < Alive || (bAfterSilence && i == UsingAt)) continue;
+		if (Best == INDEX_NONE || Rms[i] > Rms[Best]) Best = i;
+	}
+	const bool bUsingAlive = UsingAt != INDEX_NONE && Rms[UsingAt] >= Alive;
+	if (!bAfterSilence && bUsingAlive) return; // the one in use hears fine: leave it
+	if (Best == INDEX_NONE)
+	{
+		Tell(bUsingAlive ? FString::Printf(TEXT("%s is the only microphone that hears anything - speak up, or check it isn't muted."), *Using)
+			: FString(TEXT("No microphone is picking up any sound. Check it's plugged in and not muted in Windows' sound settings - or press T to type.")));
+		return;
+	}
+	C->MicDevice = Names[Best];
+	C->SaveProgress();
+	Tell(FString::Printf(TEXT("Now listening on %s%s. Hold V and talk."), *Names[Best], Using.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s heard nothing)"), *Using)));
+}
+
+void UHUListenSubsystem::Tell(const FString& Body)
+{
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: %s"), *Body);
+	APawn* Me = UGameplayStatics::GetPlayerPawn(GetGameInstance()->GetWorld(), 0);
+	if (UHUInteractComponent* I = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr) I->Notify(TEXT("MICROPHONE"), Body, FLinearColor(0.4f, 0.8f, 0.95f));
+}
+
 bool UHUListenSubsystem::StartMonitor()
 {
 	if (bMonitoring || bListening) return bMonitoring;
@@ -136,6 +214,10 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 	Capture->StopStream(); Capture->CloseStream();
 	TArray<float> Mono; int32 Rate;
 	{ FScopeLock L(&Lock); Mono = MoveTemp(Samples); Rate = CaptureRate; }
+	float Peak = 0.f; for (float S : Mono) Peak = FMath::Max(Peak, FMath::Abs(S));
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: %.1f s from %s, loudest %.4f"), Mono.Num() / (float)FMath::Max(1, Rate), *MicLabel(), Peak);
+	bLastSilent = Mono.Num() >= Rate / 4 && Peak < 0.01f;
+	if (bLastSilent) { AutoPickMic(true); Done.ExecuteIfBound(FString()); return; } // that mic heard nothing: try the others
 	if (Mono.Num() < Rate / 4) { Done.ExecuteIfBound(FString()); return; } // under a quarter second: nothing said
 
 	// 16 kHz, 16-bit mono .wav - what the model wants
@@ -180,6 +262,7 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 			Text.TrimStartAndEndInline();
 		}
 		if (Code != 0) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: speech-to-text failed (%d) %s"), Code, *StdErr.Right(200));
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: heard \"%s\""), *Text);
 		AsyncTask(ENamedThreads::GameThread, [Self, Text, Done]()
 		{
 			if (Self.IsValid()) Self->bWorking = false;
@@ -187,3 +270,13 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 		});
 	});
 }
+
+#if !UE_BUILD_SHIPPING
+#include "HAL/IConsoleManager.h"
+#include "Engine/World.h"
+// HU.MicCheck: measure every microphone now and log what each one hears (and switch if the one in use is dead)
+static FAutoConsoleCommandWithWorld GHUMicCheck(TEXT("HU.MicCheck"), TEXT("Probe every microphone and log their noise levels"), FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+{
+	if (UGameInstance* GI = World ? World->GetGameInstance() : nullptr) if (UHUListenSubsystem* L = GI->GetSubsystem<UHUListenSubsystem>()) L->RecheckMic();
+}));
+#endif

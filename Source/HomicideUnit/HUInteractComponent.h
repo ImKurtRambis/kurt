@@ -137,6 +137,7 @@ public:
 	TWeakObjectPtr<class AHUCaseDesk> Reading;
 	// use a particular part of something as if you were looking at it (sent to the squad like any use)
 	void SendUseOn(AActor* Target, UPrimitiveComponent* Part, bool bSecondary);
+	void LeaveInterview() { UseSecondary(); } // Q in an interview (the suspect's key handler passes it here)
 
 	// pop-up cards in the corner (evidence bagged, kit bought...)
 	struct FNote { FString Title; FString Body; FLinearColor Color; float Born = 0.f; };

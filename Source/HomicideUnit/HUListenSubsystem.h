@@ -44,6 +44,11 @@ public:
 	void StopMonitor();
 	bool IsMonitoring() const { return bMonitoring; }
 	void StopListening(FHUHeard Done);
+	// AUTO-DETECT: listen to every microphone for a moment (in the background) and use one that actually picks
+	// up sound. bAfterSilence: the current one just recorded nothing, so prefer another. Says what it picked.
+	void AutoPickMic(bool bAfterSilence);
+	bool LastWasSilent() const { return bLastSilent; }
+	void RecheckMic() { bProbedOnce = false; AutoPickMic(false); } // HU.MicCheck
 
 private:
 	TUniquePtr<Audio::FAudioCapture> Capture;
@@ -54,6 +59,9 @@ private:
 	bool OpenMic(); // opens the picked device (samples kept only while listening)
 	int32 PickedDeviceIndex();
 	float MicLevel = 0.f;
+	bool bLastSilent = false, bProbing = false, bProbedOnce = false;
+	void FinishProbe(const TArray<FString>& Names, const TArray<float>& Rms, const FString& DefaultName, bool bAfterSilence);
+	void Tell(const FString& Body);
 	int32 Counter = 0;
 	FString Dir() const;
 };
