@@ -15,6 +15,8 @@
 #include "Engine/GameInstance.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimSequence.h"
 
 using namespace HUBuild;
 
@@ -59,6 +61,31 @@ void AHUSuspectActor::Pose()
 	// rest positions, for acting out reactions (see Animate)
 	BaseXf.Reset();
 	for (UStaticMeshComponent* B : Blocks) if (B) BaseXf.Add(B->GetRelativeTransform());
+	if (Look) for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
+}
+
+// MetaHumans built by Tools/MakeMetaHuman.py live in /Game/MetaHumans/<name>/BP_<name>. For now the case's
+// first suspect gets MH_Suspect01; the rest keep the block figure until more are built.
+void AHUSuspectActor::SpawnLook()
+{
+	if (Look || !GetWorld()) return;
+	const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	if (!Cases || Cases->Current.Suspects.Num() == 0 || Cases->Current.Suspects[0].Id != SuspectId) return;
+	UClass* Cls = LoadClass<AActor>(nullptr, TEXT("/Game/MetaHumans/MH_Suspect01/BP_MH_Suspect01.BP_MH_Suspect01_C"));
+	if (!Cls) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: no MetaHuman built yet - block figure for %s"), *SuspectId); return; }
+	FActorSpawnParameters P; P.Owner = this; P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Look = GetWorld()->SpawnActor<AActor>(Cls, GetActorTransform(), P);
+	if (!Look) return;
+	Look->SetActorEnableCollision(false);
+	Look->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	Look->SetActorRelativeRotation(FRotator(0, -90, 0)); // MetaHumans face +Y; the suspect faces +X
+	UAnimSequence* Idle = LoadObject<UAnimSequence>(nullptr, TEXT("/MetaHumanCharacter/Optional/Animation/UEFNAnimPreset/Locomotion/AS_MH_Neutral_Stand_Idle_Loop.AS_MH_Neutral_Stand_Idle_Loop"));
+	TArray<USkeletalMeshComponent*> Meshes; Look->GetComponents(Meshes);
+	for (USkeletalMeshComponent* M : Meshes)
+		if (M && M->GetFName() == TEXT("Body") && Idle) { M->SetAnimationMode(EAnimationMode::AnimationSingleNode); M->PlayAnimation(Idle, true); }
+	for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
+	NameTag->SetRelativeLocation(FVector(0, 0, 200));
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is a MetaHuman (%d meshes)"), *SuspectId, Meshes.Num());
 }
 
 void AHUSuspectActor::BeginPlay()
@@ -66,6 +93,7 @@ void AHUSuspectActor::BeginPlay()
 	Super::BeginPlay();
 	NameTag->SetText(FText::FromString(DisplayName().ToUpper()));
 	FaceYaw = GetActorRotation().Yaw;
+	SpawnLook();
 	// back at the scene a second time: anyone already taken in is in holding at the precinct, not here
 	if (const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr)
 		if (Cases->Arrested.Contains(SuspectId)) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is in holding - not at the scene"), *SuspectId); SetActorHiddenInGame(true); SetActorEnableCollision(false); SetActorTickEnabled(false); }
@@ -485,6 +513,7 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 void AHUSuspectActor::EndPlay(const EEndPlayReason::Type Reason)
 {
 	CloseInterview();
+	if (Look) { Look->Destroy(); Look = nullptr; }
 	Super::EndPlay(Reason);
 }
 
@@ -670,3 +699,36 @@ void AHUSuspectActor::Animate(float Dt)
 		Blocks[i]->SetRelativeScale3D(FMath::VInterpTo(Blocks[i]->GetRelativeScale3D(), Sc, Dt, 10.f));
 	}
 }
+
+#if !UE_BUILD_SHIPPING
+#include "HAL/IConsoleManager.h"
+#include "Containers/Ticker.h"
+#include "EngineUtils.h"
+#include "UnrealClient.h"
+// HU.LookSuspect: stand the player in front of the MetaHuman suspect (or the first suspect) and screenshot it
+static FAutoConsoleCommandWithWorld GHULookSuspect(TEXT("HU.LookSuspect"), TEXT("Face the first suspect and take a screenshot"), FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+{
+	TWeakObjectPtr<UWorld> W(World);
+	TSharedRef<int32> Step = MakeShared<int32>(0);
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([W, Step](float)
+	{
+		UWorld* Wd = W.Get(); if (!Wd) return false;
+		APlayerController* PC = Wd->GetFirstPlayerController();
+		AHUSuspectActor* S = nullptr;
+		for (TActorIterator<AHUSuspectActor> It(Wd); It; ++It) if (!S || It->HasLook()) S = *It;
+		if (!PC || !PC->GetPawn() || !S) return true;
+		const int32 N = (*Step)++;
+		const float Dist[] = { 170.f, 90.f };
+		if (N % 2 == 0)
+		{
+			const FVector F = S->GetActorForwardVector();
+			const float H = N == 0 ? 120.f : 165.f;
+			const FVector At = S->GetActorLocation() + F * Dist[N / 2] + FVector(0, 0, H - 88.f);
+			PC->GetPawn()->SetActorLocation(At, false, nullptr, ETeleportType::TeleportPhysics);
+			PC->SetControlRotation(((S->GetActorLocation() + FVector(0, 0, H)) - (At + FVector(0, 0, 64.f))).Rotation());
+		}
+		else FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("%s/LookSuspect_%d.png"), *FPaths::ProjectSavedDir(), N / 2), false, false);
+		return N < 3;
+	}), 2.0f);
+}));
+#endif

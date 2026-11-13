@@ -1,3 +1,5 @@
 ﻿# Unreal binary assets
 *.uasset binary
 *.umap binary
+Content/Characters/MetaHumans/** filter=lfs diff=lfs merge=lfs -text
+Content/MetaHumans/** filter=lfs diff=lfs merge=lfs -text

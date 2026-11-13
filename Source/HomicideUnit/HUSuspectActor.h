@@ -71,6 +71,12 @@ protected:
 
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	// the real person: a built MetaHuman standing where the block figure is (the blocks stay, hidden, for collision)
+	UPROPERTY() TObjectPtr<AActor> Look;
+	void SpawnLook();
+public:
+	bool HasLook() const { return Look != nullptr; }
+private:
 	TWeakObjectPtr<APawn> Escort;
 	int32 Line = -1;
 	float StunLeft = 0.f;
