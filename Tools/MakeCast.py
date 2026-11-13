@@ -68,5 +68,8 @@ def build(name, hair, shirt, pants):
 for row in CAST:
     try: build(*row)
     except Exception as e: log("%s error: %s" % (row[0], str(e)[:300]))
+# the builder leaves most body shapes' clothing without a base material (grey checker): repair it, apply colours
+import os; exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "FixCastClothing.py"), encoding="utf-8").read())
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "FixCastClothing.py"), encoding="utf-8").read())  # second pass: colours need the parent
 log("done")
 unreal.SystemLibrary.quit_editor()
