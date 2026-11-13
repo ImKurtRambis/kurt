@@ -64,15 +64,37 @@ void AHUSuspectActor::Pose()
 	if (Look) for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
 }
 
-// MetaHumans built by Tools/MakeMetaHuman.py live in /Game/MetaHumans/<name>/BP_<name>. For now the case's
-// first suspect gets MH_Suspect01; the rest keep the block figure until more are built.
+// MetaHumans built by Tools/MakeCast.py live in /Game/MetaHumans/MH_<Name>/BP_MH_<Name>. Suspects are cast by
+// gender (HUCaseGen's first names alternate man/woman), and no two in a case share a face. Anyone the cast has
+// no built MetaHuman for keeps the block figure.
+static bool HUIsWoman(const FString& Name)
+{
+	static const TCHAR* Women[] = { TEXT("Doris"), TEXT("Helen"), TEXT("June"), TEXT("Irene"), TEXT("Marge"), TEXT("Vera"), TEXT("Nora"), TEXT("Pearl"), TEXT("Edie"), TEXT("Lorraine") };
+	FString First; if (!Name.Split(TEXT(" "), &First, nullptr)) First = Name;
+	for (const TCHAR* W : Women) if (First == W) return true;
+	return false;
+}
+
 void AHUSuspectActor::SpawnLook()
 {
 	if (Look || !GetWorld()) return;
 	const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
-	if (!Cases || Cases->Current.Suspects.Num() == 0 || Cases->Current.Suspects[0].Id != SuspectId) return;
-	UClass* Cls = LoadClass<AActor>(nullptr, TEXT("/Game/MetaHumans/MH_Suspect01/BP_MH_Suspect01.BP_MH_Suspect01_C"));
-	if (!Cls) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: no MetaHuman built yet - block figure for %s"), *SuspectId); return; }
+	if (!Cases) return;
+	static const TCHAR* Men[] = { TEXT("Walter"), TEXT("Bruce"), TEXT("Victor"), TEXT("Lorenzo") };
+	static const TCHAR* Women[] = { TEXT("Vivian"), TEXT("Grace"), TEXT("Celeste"), TEXT("Etta") };
+	// this suspect's place among the case's suspects of the same gender, shifted by the case so faces rotate
+	int32 Slot = -1; bool bWoman = false;
+	for (const FHUSuspect& S : Cases->Current.Suspects)
+	{
+		const bool W = HUIsWoman(S.Name);
+		if (S.Id == SuspectId) { bWoman = W; Slot++; break; }
+		if (W == HUIsWoman(DisplayName())) Slot++;
+	}
+	if (Slot < 0) return;
+	const int32 Pick = (Slot + Cases->Current.Number) % 4;
+	const FString Who = bWoman ? Women[Pick] : Men[Pick];
+	UClass* Cls = LoadClass<AActor>(nullptr, *FString::Printf(TEXT("/Game/MetaHumans/MH_%s/BP_MH_%s.BP_MH_%s_C"), *Who, *Who, *Who));
+	if (!Cls) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: MetaHuman %s not built - block figure for %s"), *Who, *SuspectId); return; }
 	FActorSpawnParameters P; P.Owner = this; P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Look = GetWorld()->SpawnActor<AActor>(Cls, GetActorTransform(), P);
 	if (!Look) return;
@@ -85,7 +107,7 @@ void AHUSuspectActor::SpawnLook()
 		if (M && M->GetFName() == TEXT("Body") && Idle) { M->SetAnimationMode(EAnimationMode::AnimationSingleNode); M->PlayAnimation(Idle, true); }
 	for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
 	NameTag->SetRelativeLocation(FVector(0, 0, 200));
-	UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is a MetaHuman (%d meshes)"), *SuspectId, Meshes.Num());
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s (%s) is played by MetaHuman %s"), *SuspectId, *DisplayName(), *Who);
 }
 
 void AHUSuspectActor::BeginPlay()
@@ -714,21 +736,22 @@ static FAutoConsoleCommandWithWorld GHULookSuspect(TEXT("HU.LookSuspect"), TEXT(
 	{
 		UWorld* Wd = W.Get(); if (!Wd) return false;
 		APlayerController* PC = Wd->GetFirstPlayerController();
-		AHUSuspectActor* S = nullptr;
-		for (TActorIterator<AHUSuspectActor> It(Wd); It; ++It) if (!S || It->HasLook()) S = *It;
-		if (!PC || !PC->GetPawn() || !S) return true;
+		TArray<AHUSuspectActor*> All;
+		for (TActorIterator<AHUSuspectActor> It(Wd); It; ++It) if (It->HasLook()) All.Add(*It);
+		if (!PC || !PC->GetPawn() || All.Num() == 0) return true;
 		const int32 N = (*Step)++;
-		const float Dist[] = { 170.f, 90.f };
+		if (N / 2 >= All.Num()) return false;
+		AHUSuspectActor* S = All[N / 2];
 		if (N % 2 == 0)
 		{
+			// head and shoulders, from a metre and a half
 			const FVector F = S->GetActorForwardVector();
-			const float H = N == 0 ? 120.f : 165.f;
-			const FVector At = S->GetActorLocation() + F * Dist[N / 2] + FVector(0, 0, H - 88.f);
+			const FVector At = S->GetActorLocation() + F * 120.f + FVector(0, 0, 70.f);
 			PC->GetPawn()->SetActorLocation(At, false, nullptr, ETeleportType::TeleportPhysics);
-			PC->SetControlRotation(((S->GetActorLocation() + FVector(0, 0, H)) - (At + FVector(0, 0, 64.f))).Rotation());
+			PC->SetControlRotation(((S->GetActorLocation() + FVector(0, 0, 150.f)) - (At + FVector(0, 0, 64.f))).Rotation());
 		}
 		else FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("%s/LookSuspect_%d.png"), *FPaths::ProjectSavedDir(), N / 2), false, false);
-		return N < 3;
+		return true;
 	}), 2.0f);
 }));
 #endif

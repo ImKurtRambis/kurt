@@ -25,3 +25,7 @@ AI/csm/
 AI/snac/
 AI/python/
 AI/voices/
+
+# MetaHumans are built locally by Tools/MakeCast.py (several GB) - not stored in git
+Content/MetaHumans/
+Content/Characters/MetaHumans/
