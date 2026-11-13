@@ -157,6 +157,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Evidence") TArray<FString> InScene;
 	// suspects in the back of the van (ids)
 	UPROPERTY(BlueprintReadWrite, Category = "Case") TArray<FString> Arrested;
+	// phones the squad has seized (suspect ids): taken on arrest, or with a warrant (a broken story); plugged into a desk to read
+	UPROPERTY(BlueprintReadWrite, Category = "Case") TArray<FString> SeizedPhones;
 	// how the last case ended (shown back at the precinct)
 	UPROPERTY(BlueprintReadOnly, Category = "Case") FString LastVerdict;
 	// HOW IT HAPPENED: the closed case's real story, from the offender's plan (read on any desk computer)

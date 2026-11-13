@@ -925,9 +925,11 @@ void UHUInteractComponent::MulticastDeskShare_Implementation(int32 Desk, int32 A
 	const FString AppName = AHUCaseDesk::AppName(App);
 	if (User == Me) { Mine->Say(FString::Printf(TEXT("You send %s to the squad's desks."), *AppName)); return; }
 	const FString Who = User && User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName().Replace(TEXT("_"), TEXT(" ")) : FString(TEXT("Your partner"));
-	// it lands on your own desk (or, with no desk of your own, any free one)
+	// it lands on your own desk (or, with no desk of your own, any free one); a phone brings the phone on their desk with it
+	FString Phone;
+	if (AHUCaseDesk::IsPhoneApp(App)) for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It) if (It->DeskIndex == Desk) Phone = It->PhoneOf;
 	for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
-		if (It->OwnerState() && (APlayerState*)It->OwnerState() == Me->GetPlayerState()) { It->ReceiveShare(App, Who); break; }
+		if (It->OwnerState() && (APlayerState*)It->OwnerState() == Me->GetPlayerState()) { It->ReceiveShare(App, Who, Phone); break; }
 	Mine->Notify(AHUCaseDesk::OSName, FString::Printf(TEXT("%s sent you %s - it's waiting on your desktop"), *Who, *AppName), FLinearColor(0.3f, 0.55f, 0.95f));
 }
 

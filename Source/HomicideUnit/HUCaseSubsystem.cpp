@@ -121,6 +121,7 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 	{ int32 D, Hd, L; GetRules(D, Hd, L); Current.Solution.RequiredBreaks = L; }
 	InScene.Reset();
 	Arrested.Reset();
+	SeizedPhones.Reset();
 	BookingStep.Reset();
 	TapeFrames.Reset(); TapeClock.Reset(); TapeLost.Reset(); TapeCamNames.Reset(); TapeNotes.Reset();
 	TapeCatch = -1; TapeCatchSuspect.Reset(); bTapesPulled = false; bTapeCaught = false;

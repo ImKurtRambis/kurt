@@ -80,7 +80,7 @@ static FString MeansSearch(const FString& Weapon, int32 Which)
 bool HasWarrant(const UHUCaseSubsystem* C, const FString& SuspectId)
 {
 	if (!C) return false;
-	if (C->Arrested.Contains(SuspectId)) return true;
+	if (C->Arrested.Contains(SuspectId) || C->SeizedPhones.Contains(SuspectId)) return true; // in custody, or the phone's already in evidence
 	FHUSuspect S;
 	if (!C->GetSuspect(SuspectId, S)) return false;
 	for (int32 i = 0; i < S.Statements.Num(); i++) if (C->IsBroken(SuspectId, i)) return true;
@@ -168,21 +168,24 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 	}
 	case Texts:
 	{
-		auto Msg = [&](int32 At, const FString& Who, const FString& What) { L.Add(FString::Printf(TEXT("[%s] %s: %s"), *Clock(At), *Who, *What)); };
-		Msg(T - R.RandRange(200, 400), Pick(Contacts, R), Pick(BoringTexts, R));
-		Msg(T - R.RandRange(120, 199), TEXT("Me"), Pick(BoringTexts, R));
+		// "[time] Who: text", and "[time] Me -> Who: text" for what they sent (the phone app groups these into conversations)
+		auto Msg = [&](int32 At, const FString& Who, const FString& What, const FString& To = FString())
+		{ L.Add(Who == TEXT("Me") ? FString::Printf(TEXT("[%s] Me -> %s: %s"), *Clock(At), To.IsEmpty() ? TEXT("Unknown") : *To, *What) : FString::Printf(TEXT("[%s] %s: %s"), *Clock(At), *Who, *What)); };
+		const FString Pal = Pick(Contacts, R);
+		Msg(T - R.RandRange(200, 400), Pal, Pick(BoringTexts, R));
+		Msg(T - R.RandRange(120, 199), TEXT("Me"), Pick(BoringTexts, R), Pal);
 		if (bPlan)
 		{
 			if (bDom)
 			{
 				Msg(T - 90, VicFirst, TEXT("don't make a scene tonight. please"));
-				Msg(T - 88, TEXT("Me"), TEXT("then don't give me a reason"));
+				Msg(T - 88, TEXT("Me"), TEXT("then don't give me a reason"), VicFirst);
 				Msg(T + 95, TEXT("Me"), FString::Printf(TEXT("if anyone asks: %s"), *Plan.AlibiLie.ToLower()));
 			}
 			else
 			{
 				L.Add(FString::Printf(TEXT("[ 41 MESSAGES DELETED over the last month - recovered: headers only ]")));
-				if (!Plan.LeanedOnName.IsEmpty()) { Msg(T - 1400, TEXT("Me"), TEXT("still ok for tomorrow? like we said")); Msg(T - 1395, Plan.LeanedOnName, TEXT("yeah. you owe me")); }
+				if (!Plan.LeanedOnName.IsEmpty()) { Msg(T - 1400, TEXT("Me"), TEXT("still ok for tomorrow? like we said"), Plan.LeanedOnName); Msg(T - 1395, Plan.LeanedOnName, TEXT("yeah. you owe me")); }
 			}
 		}
 		else if (K == EKind::Culprit)
@@ -196,7 +199,7 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 			else
 			{
 				Msg(T - 90, VicFirst, TEXT("we need to talk. tonight. I'm not doing this anymore"));
-				Msg(T - 88, TEXT("Me"), TEXT("fine. I'll come to you"));
+				Msg(T - 88, TEXT("Me"), TEXT("fine. I'll come to you"), VicFirst);
 			}
 			L.Add(FString::Printf(TEXT("[%s - %s]  9 MESSAGES DELETED   (recovered: headers only)"), *Clock(T - 30), *Clock(T + 40)));
 			Msg(T + 95, TEXT("Me"), TEXT("if anyone asks I was home all night ok"));
@@ -207,12 +210,13 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 			Msg(T - 45, TEXT("Unknown"), TEXT("same place. don't be late. don't tell anyone"));
 			Msg(T - 44, TEXT("Me"), TEXT("delete this"));
 			Msg(T + 60, Who, TEXT("where were you tonight? you said you'd be home"));
-			Msg(T + 62, TEXT("Me"), TEXT("long story. later"));
+			Msg(T + 62, TEXT("Me"), TEXT("long story. later"), Who);
 		}
 		else
 		{
-			Msg(T - 10, Pick(Contacts, R), Pick(BoringTexts, R));
-			Msg(T + 20, TEXT("Me"), Pick(BoringTexts, R));
+			const FString Friend = Pick(Contacts, R);
+			Msg(T - 10, Friend, Pick(BoringTexts, R));
+			Msg(T + 20, TEXT("Me"), Pick(BoringTexts, R), Friend);
 		}
 		break;
 	}
@@ -256,8 +260,11 @@ TArray<FString> Lines(const UHUCaseSubsystem* C, const FHUSuspect& S, EApp App)
 	case Photos:
 	{
 		auto P = [&](int32 At, const FString& What) { L.Add(FString::Printf(TEXT("IMG_%04d  %s   %s"), R.RandRange(1000, 9999), *Clock(At), *What)); };
-		P(T - R.RandRange(1440, 4000), Pick(BoringPhotos, R));
-		P(T - R.RandRange(300, 1400), Pick(BoringPhotos, R));
+		const FString First = Pick(BoringPhotos, R);
+		FString Second = Pick(BoringPhotos, R);
+		for (int32 Try = 0; Try < 8 && Second == First; Try++) Second = Pick(BoringPhotos, R); // two different everyday photos
+		P(T - R.RandRange(1440, 4000), First);
+		P(T - R.RandRange(300, 1400), Second);
 		if (bPlan)
 		{
 			if (bDom) P(T - 110, FString::Printf(TEXT("A selfie with %s at the bar, both smiling. The last photo of them."), *VicFirst));

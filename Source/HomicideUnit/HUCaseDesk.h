@@ -78,10 +78,30 @@ public:
 	bool bOwnerOn = false;
 	int32 OwnerApp = -1;
 	void SetOwnerView(bool bOn, int32 App) { bOwnerOn = bOn; OwnerApp = App; }
-	void ReceiveShare(int32 App, const FString& From) { SharedFrom.Add(App, From); }
+	void ReceiveShare(int32 App, const FString& From, const FString& InPhone = FString()) { SharedFrom.Add(App, From); if (!InPhone.IsEmpty()) SharedPhone = InPhone; }
+
+	// ---- THE SUSPECT'S PHONE: a seized phone on the cable at this desk, used through the Phone app ----
+	FString PhoneOf;                   // the suspect whose phone is plugged in here (the same on every machine)
+	FString SharedPhone;               // a partner sent you the phone on their desk
+	FString ShownPhone() const { return !PhoneOf.IsEmpty() ? PhoneOf : SharedPhone; }
+	static bool IsPhoneApp(int32 A);
+	enum class EPhone : uint8 { Home, Calls, Chats, Thread, Photos, Photo, Web, Cell };
+	EPhone PhoneScreen = EPhone::Home;
+	int32 PhoneSel = 0;                // the open conversation / photo
+	struct FPhoneRow { FString Title, Sub, Right; bool bMe = false; bool bNote = false; };
+	struct FPhoneView
+	{
+		FString Owner, Number, Clock;
+		TArray<FPhoneRow> Calls, Photos, Web, Cell, Notes;   // Notes: what the lab could recover of deleted messages
+		TArray<FString> Threads;                            // conversations, in order
+		TArray<TArray<FPhoneRow>> Msgs;                     // the messages in each
+	};
+	FPhoneView Phone;                  // filled from the phone being shown (Rebuild)
+	void PhoneTap(int32 Kind, int32 Arg); // the phone's screen was clicked: 0 an app icon, 1 a row, 2 back, 3 home
+	void DevShowPhone(APawn* User, int32 Screen, int32 InSel); // development: seize every phone, plug in the culprit's, show a screen
 	void OpenPeek(APawn* User);
 	// THE MOUSE: the screen records where it drew each clickable thing (absolute screen coords) as it paints
-	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown, Share, Swallow };
+	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown, Share, Swallow, PhoneIcon, PhoneRow, PhoneBack, PhoneHome };
 	struct FHit { FVector2D Min, Max; EHit Kind; int32 Arg; };
 	mutable TArray<FHit> Hits;
 	mutable FVector2D HitSpace = FVector2D(1, 1); // the screen's size in the units the hits are in (it fills the viewport)
@@ -98,6 +118,10 @@ private:
 	UPROPERTY() TArray<UStaticMeshComponent*> FolderParts;        // one per folder
 	UPROPERTY() TArray<class UTextRenderComponent*> FolderLabels; // the tab on each
 	UPROPERTY() class UTextRenderComponent* NamePlate = nullptr;   // DET. NAME on the desk's front edge
+	UPROPERTY() TArray<UStaticMeshComponent*> DockParts;           // the phone cable and its cradle
+	UPROPERTY() UStaticMeshComponent* DockPhone = nullptr;         // a phone sitting in it (when one's plugged in)
+	bool IsDock(const UPrimitiveComponent* Part) const;
+	void BuildPhone();                                             // Phone from the phone being shown
 	void AssignDesks(); // the host: everyone without a desk gets the lowest free one
 	TWeakObjectPtr<APawn> Holder[FolderCount];                    // who has each folder (null: on the desk)
 	TWeakObjectPtr<APawn> Viewer;                                 // this machine's player, while reading

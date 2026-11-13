@@ -53,6 +53,7 @@ public:
 	void ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId);
 
 	// pepper spray / taser from someone's belt: doubled over for a few seconds (runs on every machine)
+	void SeizePhone(APawn* User); // their phone into evidence (on arrest, or Q with a warrant)
 	void Subdue(APawn* User, bool bTaser);
 	UFUNCTION(BlueprintPure, Category = "Suspect") bool IsSubdued() const { return StunLeft > 0.f; }
 

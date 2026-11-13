@@ -1,4 +1,5 @@
 #include "HUSuspectActor.h"
+#include "HUPhoneData.h"
 #include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
@@ -88,7 +89,9 @@ FText AHUSuspectActor::GetPrompt_Implementation(APawn* User) const
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (I && I->IsHolding(EHUTool::Handcuffs))
 		return FText::FromString(FString::Printf(TEXT("[E] Arrest %s — put the cuffs on  ·  [Q] Run their record"), *S.Name));
-	return FText::FromString(FString::Printf(TEXT("[E] Talk to %s%s  ·  [Q] Run their record"), *S.Name, S.Role.IsEmpty() ? TEXT("") : *(TEXT(", ") + S.Role)));
+	const bool bCanSeize = HUPhone::HasWarrant(Cases, SuspectId) && !Cases->SeizedPhones.Contains(SuspectId);
+	return FText::FromString(FString::Printf(TEXT("[E] Talk to %s%s  ·  [Q] %s"), *S.Name, S.Role.IsEmpty() ? TEXT("") : *(TEXT(", ") + S.Role),
+		bCanSeize ? TEXT("Seize their phone (you have a warrant)") : TEXT("Run their record")));
 }
 
 void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
@@ -112,6 +115,12 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 		else { Escort = User; I->PlayReach(); I->Say(FString::Printf(TEXT("You take %s by the arm. Walk them out to the van."), *S.Name)); }
 		return;
 	}
+	// Q with a warrant: take their phone (it's read at a desk computer back at the precinct)
+	if (bSecondary && HUPhone::HasWarrant(Cases, SuspectId) && !Cases->SeizedPhones.Contains(SuspectId))
+	{
+		SeizePhone(User);
+		return;
+	}
 	// Q: run their record - does it fit the profile the evidence is building?
 	if (bSecondary)
 	{
@@ -129,6 +138,7 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 		const TCHAR* Protest[] = { TEXT("\"You're making a mistake!\""), TEXT("\"I want a lawyer. Now.\""), TEXT("\"Easy — easy! I'm not resisting.\""), TEXT("\"You've got the wrong person, detective.\""), TEXT("\"...\"") };
 		I->Say(FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), Protest[FMath::RandRange(0, UE_ARRAY_COUNT(Protest) - 1)]));
 		I->Notify(TEXT("ARRESTED"), FString::Printf(TEXT("%s — walk them to the van outside"), *S.Name), FLinearColor(1.f, 0.7f, 0.3f));
+		SeizePhone(User); // their phone goes in a bag with them
 		return;
 	}
 	// otherwise: the interview (opened only on the screen of whoever's doing it)
@@ -500,6 +510,19 @@ void AHUSuspectActor::Tick(float DeltaSeconds)
 	const FVector Next = Center + FRotator(0, NewYaw, 0).Vector() * NewDist;
 	SetActorLocation(FVector(Next.X, Next.Y, Now.Z));
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0, OfficerYaw, 0), DeltaSeconds, 10.f));
+}
+
+// runs on every machine (uses are replayed): the phone goes into the squad's evidence
+void AHUSuspectActor::SeizePhone(APawn* User)
+{
+	UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	FHUSuspect S;
+	if (!Cases || !Cases->GetSuspect(SuspectId, S) || Cases->SeizedPhones.Contains(SuspectId)) return;
+	Cases->SeizedPhones.Add(SuspectId);
+	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!I) return;
+	I->PlayReach();
+	I->Notify(TEXT("PHONE SEIZED"), FString::Printf(TEXT("%s's phone is bagged. Plug it into the cable at your desk to go through it."), *S.Name), FLinearColor(0.35f, 0.75f, 0.95f));
 }
 
 void AHUSuspectActor::Subdue(APawn* User, bool bTaser)

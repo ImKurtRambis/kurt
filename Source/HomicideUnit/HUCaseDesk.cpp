@@ -38,17 +38,14 @@ static const FDeskApp DeskApps[] = {
 	{ TEXT("Tape Flags"),       TEXT("T"), FLinearColor(0.25f, 0.5f, 0.88f),  3 },
 	{ TEXT("Case Status"),      TEXT("C"), FLinearColor(0.84f, 0.32f, 0.26f), 4 },
 	{ TEXT("Suspect Database"), TEXT("D"), FLinearColor(0.2f, 0.6f, 0.62f),   5 },
-	{ TEXT("Call Log"),         TEXT("L"), FLinearColor(0.35f, 0.75f, 0.4f),  6 },
-	{ TEXT("Text Messages"),    TEXT("M"), FLinearColor(0.3f, 0.55f, 0.95f),  7 },
-	{ TEXT("Web History"),      TEXT("W"), FLinearColor(0.95f, 0.5f, 0.15f),  8 },
-	{ TEXT("Phone Photos"),     TEXT("I"), FLinearColor(0.85f, 0.35f, 0.6f),  9 },
-	{ TEXT("Cell Pings"),       TEXT("G"), FLinearColor(0.55f, 0.55f, 0.6f),  10 },
+	{ TEXT("Suspect Phone"),    TEXT("Ph"), FLinearColor(0.12f, 0.12f, 0.14f), 13 }, // the phone plugged into this desk
 	{ TEXT("Security Footage"), TEXT("V"), FLinearColor(0.15f, 0.15f, 0.18f), 11 },
 #if !UE_BUILD_SHIPPING
 	{ TEXT("Crime Plan (debug)"), TEXT("!"), FLinearColor(0.7f, 0.1f, 0.1f), 12 }, // the offender brain's full plan: dev builds only
 #endif
 };
-static constexpr int32 FootageTool = 11;
+static constexpr int32 FootageTool = 11, PhoneTool = 13;
+bool AHUCaseDesk::IsPhoneApp(int32 A) { return A >= 0 && A < UE_ARRAY_COUNT(DeskApps) && DeskApps[A].Tool == PhoneTool; }
 const TCHAR* AHUCaseDesk::OSName = TEXT("PrecinctOS");
 int32 AHUCaseDesk::AppCount() { return UE_ARRAY_COUNT(DeskApps); }
 FString AHUCaseDesk::AppName(int32 A) { return A >= 0 && A < AppCount() ? FString(DeskApps[A].Name) : FString(); }
@@ -110,6 +107,17 @@ void AHUCaseDesk::OnConstruction(const FTransform& Transform)
 	NamePlate->SetWorldSize(4.5f);
 	NamePlate->SetTextRenderColor(FColor(235, 200, 110));
 	NamePlate->RegisterComponent();
+	// the phone cable: a cradle to the right of the keyboard, its cord running back to the computer
+	DockParts.Reset();
+	DockParts.Add(Block(this, Root, Blocks, EShape::Cube, FVector(14, 50, 76.5f), FVector(14, 10, 3), FLinearColor(0.08f, 0.08f, 0.09f)));
+	DockParts.Add(Block(this, Root, Blocks, EShape::Cube, FVector(30, 44, 75.4f), FVector(22, 1.2f, 1.2f), FLinearColor(0.05f, 0.05f, 0.05f), FRotator(0, -20, 0)));
+	DockPhone = Block(this, Root, Blocks, EShape::Cube, FVector(14, 50, 82), FVector(2, 7, 13), FLinearColor(0.08f, 0.12f, 0.2f), FRotator(0, 0, 0), false);
+	DockPhone->SetVisibility(!PhoneOf.IsEmpty(), true);
+}
+
+bool AHUCaseDesk::IsDock(const UPrimitiveComponent* Part) const
+{
+	return Part && (DockParts.Contains(Part) || Part == DockPhone);
 }
 
 AHUPlayerState* AHUCaseDesk::OwnerState() const
@@ -155,6 +163,7 @@ void AHUCaseDesk::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveCompone
 {
 	const int32 K = FolderOf(Part);
 	if (K >= 0) Out.Add(FolderParts[K]);
+	if (IsDock(Part)) for (UStaticMeshComponent* D : DockParts) Out.Add(D);
 }
 
 void AHUCaseDesk::SetOnDesk(int32 K, bool bOn)
@@ -173,12 +182,23 @@ static FString WhoIs(const APawn* P)
 FText AHUCaseDesk::GetPrompt_Implementation(APawn* User) const
 {
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (I && IsDock(I->FocusPart))
+	{
+		const UHUCaseSubsystem* C = Cases();
+		if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("Phone cable - Det. %s's desk"), *OwnerName()));
+		FHUSuspect S;
+		const FString Now = C && C->GetSuspect(PhoneOf, S) ? S.Name : FString();
+		if (!C || C->SeizedPhones.Num() == 0) return FText::FromString(TEXT("Phone cable - no phones seized yet (arrest someone, or break their story and take theirs)"));
+		const FString Next = C->SeizedPhones.Num() > 1 || Now.IsEmpty() ? TEXT("[E] Plug in the next seized phone") : FString();
+		return FText::FromString(Now.IsEmpty() ? FString::Printf(TEXT("%s (%d seized)"), *Next, C->SeizedPhones.Num())
+			: FString::Printf(TEXT("%s's phone is plugged in - open Suspect Phone on the computer%s  ·  [Q] Unplug"), *Now, Next.IsEmpty() ? TEXT("") : *(TEXT("  ·  ") + Next)));
+	}
 	const int32 K = I ? FolderOf(I->FocusPart) : -1;
 	if (K < 0) return FText::GetEmpty();
 	if (Holder[K].IsValid()) return FText::FromString(FString::Printf(TEXT("%s has the %s"), *WhoIs(Holder[K].Get()), FolderName(K)));
-	if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("%s  â€”  Det. %s's desk"), FolderName(K), *OwnerName()));
+	if (!CanUse(User)) return FText::FromString(FString::Printf(TEXT("%s  -  Det. %s's desk"), FolderName(K), *OwnerName()));
 	const UHUCaseSubsystem* C = Cases();
-	if (!C || !C->bCaseActive) return FText::FromString(FString::Printf(TEXT("%s  â€”  empty, no case open"), FolderName(K)));
+	if (!C || !C->bCaseActive) return FText::FromString(FString::Printf(TEXT("%s  -  empty, no case open"), FolderName(K)));
 	return FText::FromString(FString::Printf(TEXT("[E] Pick up the %s"), FolderName(K)));
 }
 
@@ -186,6 +206,23 @@ FText AHUCaseDesk::GetPrompt_Implementation(APawn* User) const
 void AHUCaseDesk::Interact_Implementation(APawn* User, bool bSecondary)
 {
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (I && IsDock(I->FocusPart))
+	{
+		const UHUCaseSubsystem* C = Cases();
+		if (!C || !CanUse(User)) return;
+		if (bSecondary) PhoneOf.Reset();
+		else if (C->SeizedPhones.Num())
+		{
+			const int32 At = C->SeizedPhones.IndexOfByKey(PhoneOf);
+			PhoneOf = C->SeizedPhones[(At + 1) % C->SeizedPhones.Num()];
+		}
+		if (DockPhone) DockPhone->SetVisibility(!PhoneOf.IsEmpty(), true);
+		PhoneScreen = EPhone::Home; PhoneSel = 0;
+		I->PlayReach();
+		FHUSuspect S;
+		if (User->IsLocallyControlled()) I->Say(C->GetSuspect(PhoneOf, S) ? FString::Printf(TEXT("You plug %s's phone into the computer. Open Suspect Phone to go through it."), *S.Name) : FString(TEXT("You unplug the phone.")));
+		return;
+	}
 	const int32 K = I ? FolderOf(I->FocusPart) : -1;
 	if (K < 0) return;
 	if (bSecondary)
@@ -372,7 +409,24 @@ void AHUCaseDesk::MouseClick()
 	case EHit::ScrollDown: ScrollDown(); return;
 	case EHit::Share: KeyF(); return;
 	case EHit::Swallow: return;
+	case EHit::PhoneIcon: PhoneTap(0, H.Arg); return;
+	case EHit::PhoneRow: PhoneTap(1, H.Arg); return;
+	case EHit::PhoneBack: PhoneTap(2, 0); return;
+	case EHit::PhoneHome: PhoneTap(3, 0); return;
 	}
+}
+
+// the phone's screens: home -> an app -> a conversation / a photo; back goes up a level
+void AHUCaseDesk::PhoneTap(int32 Kind, int32 Arg)
+{
+	const EPhone Apps[] = { EPhone::Calls, EPhone::Chats, EPhone::Photos, EPhone::Web, EPhone::Cell };
+	if (Kind == 0 && Arg >= 0 && Arg < UE_ARRAY_COUNT(Apps)) PhoneScreen = Apps[Arg];
+	else if (Kind == 1 && PhoneScreen == EPhone::Chats && Phone.Threads.IsValidIndex(Arg)) { PhoneScreen = EPhone::Thread; PhoneSel = Arg; }
+	else if (Kind == 1 && PhoneScreen == EPhone::Photos && Phone.Photos.IsValidIndex(Arg)) { PhoneScreen = EPhone::Photo; PhoneSel = Arg; }
+	else if (Kind == 2) PhoneScreen = PhoneScreen == EPhone::Thread ? EPhone::Chats : PhoneScreen == EPhone::Photo ? EPhone::Photos : EPhone::Home;
+	else if (Kind == 3) PhoneScreen = EPhone::Home;
+	else return;
+	Scroll = 0;
 }
 
 void AHUCaseDesk::OpenApp(int32 A)
@@ -477,6 +531,83 @@ void AHUCaseDesk::Tick(float DeltaSeconds)
 }
 
 // ---------------- what's written in the file ----------------
+// the phone being shown, read off the phone company's and the handset's records (HUPhoneData), screen by screen
+void AHUCaseDesk::BuildPhone()
+{
+	Phone = FPhoneView();
+	const UHUCaseSubsystem* C = Cases();
+	FHUSuspect S;
+	if (!C || !C->GetSuspect(ShownPhone(), S)) return;
+	Phone.Owner = S.Name;
+	Phone.Clock = C->Current.Time;
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Database)) if (L.StartsWith(TEXT("PHONE:"))) Phone.Number = L.Mid(6).TrimStartAndEnd();
+	auto Note = [](TArray<FPhoneRow>& To, const FString& T) { FPhoneRow R; R.Title = T; R.bNote = true; To.Add(R); };
+	// CALLS: "10:05 PM  OUT -> Name   3:12"
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Calls))
+	{
+		if (L.StartsWith(TEXT("TIME"))) continue;
+		const int32 Out = L.Find(TEXT("OUT ->")), In = L.Find(TEXT("IN  <-")), At = Out >= 0 ? Out : In;
+		if (At < 0) { Note(Phone.Calls, L.Replace(TEXT("-"), TEXT("")).TrimStartAndEnd()); continue; }
+		FPhoneRow R;
+		const FString After = L.Mid(At + 6);
+		R.Title = After.Left(17).TrimStartAndEnd();
+		R.Right = After.Mid(17).TrimStartAndEnd();
+		R.Sub = FString::Printf(TEXT("%s  %s"), Out >= 0 ? TEXT("Outgoing") : TEXT("Incoming"), *L.Left(At).TrimStartAndEnd());
+		R.bMe = Out >= 0;
+		if (R.Right.Contains(TEXT("MISSED"))) { R.Sub = TEXT("Missed  ") + L.Left(At).TrimStartAndEnd(); R.Right.Reset(); }
+		Phone.Calls.Add(R);
+	}
+	// TEXTS: "[10:05 PM] Name: text", "[10:05 PM] Me -> Name: text", "[ deleted ... ]"
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Texts))
+	{
+		const int32 Close = L.Find(TEXT("]"));
+		if (!L.StartsWith(TEXT("[")) || Close < 0 || L.Contains(TEXT("DELETED"))) { Note(Phone.Notes, L.Replace(TEXT("["), TEXT("")).Replace(TEXT("]"), TEXT("")).TrimStartAndEnd()); continue; }
+		FString Rest = L.Mid(Close + 1).TrimStart(), Who, Body;
+		if (!Rest.Split(TEXT(": "), &Who, &Body)) continue;
+		FPhoneRow R; R.Title = Body; R.Sub = L.Mid(1, Close - 1);
+		if (Who.StartsWith(TEXT("Me -> "))) { R.bMe = true; Who = Who.Mid(6); }
+		int32 Th = Phone.Threads.IndexOfByKey(Who);
+		if (Th == INDEX_NONE) { Th = Phone.Threads.Add(Who); Phone.Msgs.AddDefaulted(); }
+		Phone.Msgs[Th].Add(R);
+	}
+	// PHOTOS: "IMG_1234  10:05 PM   what's in it"
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Photos))
+	{
+		FString Name, Rest, When, What;
+		if (!L.Split(TEXT("  "), &Name, &Rest)) continue;
+		Rest.TrimStartInline();
+		if (!Rest.Split(TEXT("   "), &When, &What)) { When = Rest; }
+		FPhoneRow R; R.Title = What.TrimStartAndEnd().Replace(TEXT("["), TEXT("")).Replace(TEXT("]"), TEXT("")).TrimStartAndEnd(); R.Sub = When; R.Right = Name; R.bNote = Name.Contains(TEXT("--"));
+		Phone.Photos.Add(R);
+	}
+	// BROWSER: "10:05 PM   search: "..."" and "[ private browsing ]"
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Web))
+	{
+		FString When, What;
+		if (L.Split(TEXT("   "), &When, &What) && !L.StartsWith(TEXT("[")))
+		{
+			FPhoneRow R; R.Sub = When.TrimStartAndEnd(); R.Title = What.Replace(TEXT("search:"), TEXT("")).Replace(TEXT("\""), TEXT("")).TrimStartAndEnd();
+			R.bNote = R.Title.StartsWith(TEXT("["));
+			if (R.bNote) R.Title = R.Title.Replace(TEXT("["), TEXT("")).Replace(TEXT("]"), TEXT("")).TrimStartAndEnd();
+			Phone.Web.Add(R);
+		}
+		else if (!L.IsEmpty()) Note(Phone.Web, L);
+	}
+	// LOCATION: "10:05 PM   the tower" and notes
+	for (const FString& L : HUPhone::Lines(C, S, HUPhone::Cell))
+	{
+		if (L.IsEmpty()) continue;
+		FString When, Where;
+		if (L.Split(TEXT("   "), &When, &Where) && !L.StartsWith(TEXT("Note")))
+		{
+			FPhoneRow R; R.Sub = When.TrimStartAndEnd(); R.Title = Where.TrimStartAndEnd(); R.bNote = R.Title.StartsWith(TEXT("--"));
+			Phone.Cell.Add(R);
+		}
+		else Note(Phone.Cell, L);
+	}
+	if (!Phone.Threads.IsValidIndex(PhoneSel) && PhoneScreen == EPhone::Thread) PhoneScreen = EPhone::Chats;
+}
+
 void AHUCaseDesk::Rebuild()
 {
 	Pages.Reset();
@@ -592,6 +723,13 @@ void AHUCaseDesk::Rebuild()
 			Pages.Add(F);
 			FPage D{ TEXT("CRIME PLAN - DEBUG (the offender's brain)"), HUOffender::Describe(HUOffender::Make(Case)) };
 			Pages.Add(D);
+			FPage Ph{ TEXT("SUSPECT PHONE"), {} };
+			Ph.Lines.Add(TEXT("No phone connected."));
+			Ph.Lines.Add(TEXT(""));
+			Ph.Lines.Add(TEXT("Seize a suspect's phone - it's taken when you arrest them, or press Q on them once you have a warrant (one of their stories broken on the record)."));
+			Ph.Lines.Add(TEXT("Then plug it into the cable beside the keyboard on your desk, and open this app again."));
+			Pages.Add(Ph);
+			BuildPhone();
 		}
 		// the window in front shows its tool's page (Pages holds every tool, in Tool order, until here)
 		{
@@ -683,3 +821,48 @@ void AHUCaseDesk::Rebuild()
 		break;
 	}
 }
+
+void AHUCaseDesk::DevShowPhone(APawn* User, int32 Screen, int32 InSel)
+{
+	UHUCaseSubsystem* C = Cases();
+	if (!C || !User) return;
+	if (!C->bCaseActive) C->StartCase(-1);
+	for (const FHUSuspect& S : C->Current.Suspects) C->SeizedPhones.AddUnique(S.Id);
+	PhoneOf = C->Current.Solution.Killer;
+	if (DockPhone) DockPhone->SetVisibility(true, true);
+	if (!bReading) Open(User, true, -1);
+	for (int32 A = 0; A < AppCount(); A++) if (IsPhoneApp(A) && Active != A) OpenApp(A);
+	PhoneScreen = (EPhone)Screen; PhoneSel = InSel; Scroll = 0;
+	Rebuild();
+}
+
+#if !UE_BUILD_SHIPPING
+#include "Containers/Ticker.h"
+#include "HAL/IConsoleManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "UnrealClient.h"
+#include "Misc/Paths.h"
+// HU.PhoneTour: at the precinct, open the culprit's phone on desk 0 and screenshot every screen (Saved/Screenshots)
+static FAutoConsoleCommandWithWorld GHUPhoneTour(TEXT("HU.PhoneTour"), TEXT("Screenshot every screen of a seized phone"), FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+{
+	TSharedRef<int32> Step = MakeShared<int32>(-8);
+	TWeakObjectPtr<UWorld> W(World);
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Step, W](float)
+	{
+		UWorld* World = W.Get();
+		if (!World) return false;
+		APawn* Me = UGameplayStatics::GetPlayerPawn(World, 0);
+		AHUCaseDesk* Desk = nullptr;
+		for (TActorIterator<AHUCaseDesk> It(World); It; ++It) if (It->DeskIndex == 0 || !Desk) Desk = *It;
+		if (!Me || !Desk) return true;           // wait for the player
+		const int32 S = (*Step)++;
+		if (S < 0) return true;                  // a moment to settle
+		const int32 Screens[][2] = { { 0, 0 }, { 1, 0 }, { 2, 0 }, { 3, 0 }, { 3, 1 }, { 4, 0 }, { 5, 0 }, { 6, 0 }, { 7, 0 } };
+		const int32 N = UE_ARRAY_COUNT(Screens);
+		if (S / 2 >= N) return false;
+		if (S % 2 == 0) Desk->DevShowPhone(Me, Screens[S / 2][0], Screens[S / 2][1]);
+		else FScreenshotRequest::RequestScreenshot(FPaths::ProjectSavedDir() / FString::Printf(TEXT("PhoneTour/phone_%d.png"), S / 2), true, false);
+		return true;
+	}), 1.0f);
+}));
+#endif
