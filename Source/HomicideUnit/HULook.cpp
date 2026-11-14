@@ -1,56 +1,20 @@
 #include "HULook.h"
 #include "HUBuild.h"
-#include "HUPeople.h"
 #include "Components/StaticMeshComponent.h"
 
 namespace
 {
-	const TCHAR* Builds[] = { TEXT("Slim"), TEXT("Average"), TEXT("Broad"), TEXT("Heavy") };
-	const float BuildW[] = { 0.85f, 1.f, 1.15f, 1.3f };
-	const TCHAR* Skins[] = { TEXT("Fair"), TEXT("Light"), TEXT("Medium"), TEXT("Olive"), TEXT("Brown"), TEXT("Dark") };
-	const FLinearColor SkinCol[] = { {0.95f, 0.8f, 0.68f}, {0.87f, 0.68f, 0.53f}, {0.72f, 0.52f, 0.38f}, {0.6f, 0.45f, 0.3f}, {0.42f, 0.28f, 0.18f}, {0.26f, 0.17f, 0.11f} };
-	const TCHAR* Coats[] = { TEXT("Tan"), TEXT("Charcoal"), TEXT("Navy"), TEXT("Black"), TEXT("Brown") };
-	const FLinearColor CoatCol[] = { {0.55f, 0.45f, 0.3f}, {0.12f, 0.12f, 0.13f}, {0.08f, 0.1f, 0.2f}, {0.04f, 0.035f, 0.03f}, {0.3f, 0.2f, 0.12f} };
+	// the one detective's arm: the tan sleeve and the skin of the detective model (Tools/MakeCast.py), 12 cm through
+	const FLinearColor DetectiveSkin(0.72f, 0.52f, 0.38f), DetectiveSleeve(0.55f, 0.45f, 0.3f);
+	const float SleeveCm = 12.f;
 }
 
-const TCHAR* HULook::FieldName(int32 F)
-{
-	static const TCHAR* Names[] = { TEXT("Model"), TEXT("Build"), TEXT("Height"), TEXT("Hand skin"), TEXT("Sleeve") };
-	return F >= 0 && F < Fields ? Names[F] : TEXT("");
-}
-int32 HULook::Options(int32 F)
-{
-	static const int32 Counts[] = { HUPeople::CastCount, 4, 8, 6, 5 };
-	return F >= 0 && F < Fields ? Counts[F] : 1;
-}
-float HULook::HeightCm(const FHULook& L) { return 165.f + 5.f * FMath::Min<int32>(L.Height, 7); }
-FString HULook::ValueName(const FHULook& L, int32 F)
-{
-	switch (F)
-	{
-	case 0: return HUPeople::CastFace(L.Model);
-	case 1: return Builds[FMath::Min<int32>(L.Build, 3)];
-	case 2: return FString::Printf(TEXT("%d cm"), FMath::RoundToInt(HeightCm(L)));
-	case 3: return Skins[FMath::Min<int32>(L.Skin, 5)];
-	case 4: return Coats[FMath::Min<int32>(L.Coat, 4)];
-	default: return FString();
-	}
-}
-void HULook::Step(FHULook& L, int32 F, int32 Dir)
-{
-	if (F < 0 || F >= Fields) return;
-	uint8* Values[] = { &L.Model, &L.Build, &L.Height, &L.Skin, &L.Coat };
-	const int32 Count = Options(F);
-	*Values[F] = (uint8)(((FMath::Clamp<int32>(*Values[F], 0, Count - 1) + Dir) % Count + Count) % Count);
-}
-float HULook::SleeveThickness(const FHULook& L) { return 12.f * BuildW[FMath::Min<int32>(L.Build, 3)]; } // as thick as the body's arms
-
-void HULook::BuildArm(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, const FHULook& L,
+void HULook::BuildArm(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out,
 	const FTransform& Xf, float SleeveLen, bool bLeft, EHand Shape, ESeen Seen, FVector ForearmDir, float Thickness)
 {
 	using namespace HUBuild;
-	const FLinearColor Skin = SkinCol[FMath::Min<int32>(L.Skin, 5)], Coat = CoatCol[FMath::Min<int32>(L.Coat, 4)], Shirt(0.75f, 0.74f, 0.7f);
-	const float T = SleeveThickness(L) * Thickness;
+	const FLinearColor Skin = DetectiveSkin, Coat = DetectiveSleeve, Shirt(0.75f, 0.74f, 0.7f);
+	const float T = SleeveCm * Thickness;
 	const float Th = bLeft ? 1.f : -1.f; // the thumb's side
 	auto Put = [&](const FTransform& F, FVector Pos, FVector Size, FLinearColor Col, FRotator Rot)
 	{

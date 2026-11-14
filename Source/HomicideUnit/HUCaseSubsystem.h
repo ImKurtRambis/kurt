@@ -9,7 +9,6 @@
 #include "HUTools.h"
 #include "HUProfiles.h"
 #include "HUInterrogation.h"
-#include "HULook.h"
 #include "HUCaseSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHUClueFound, const FHUClue&, Clue);
@@ -132,8 +131,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Player") uint8 VoiceProvider = 2; // ElevenLabs
 	// Settings: hold V in interviews to SAY a question (local speech-to-text)
 	UPROPERTY(BlueprintReadWrite, Category = "Player") bool bVoiceQuestions = false;
-	// how your detective looks (picked at the name plate, saved, shown to the squad)
-	UPROPERTY(BlueprintReadWrite, Category = "Player") FHULook Look;
 	// the microphone to talk to suspects with, by name (empty: Windows' default input)
 	UPROPERTY(BlueprintReadWrite, Category = "Player") FString MicDevice;
 	UPROPERTY() FString VoiceKey;

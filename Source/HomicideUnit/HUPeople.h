@@ -9,7 +9,6 @@
 class UStaticMeshComponent;
 class USkeletalMeshComponent;
 class UHUPersonAnimation;
-struct FHULook;
 struct FHUCase;
 
 namespace HUPeople
@@ -27,8 +26,12 @@ namespace HUPeople
 	HOMICIDEUNIT_API AActor* Stand(AActor* Owner, USceneComponent* Parent, const FString& Who, FVector RelLoc, float RelYaw);
 	// MH_<Who> lying face up along Parent's +X (head that way), feet at RelFeet: it falls limp, settles, and stays put.
 	HOMICIDEUNIT_API AActor* Lie(AActor* Owner, USceneComponent* Parent, const FString& Who, FVector RelFeet, float Scale = 1.f);
-	// Reuse the existing model when only proportions change. The desk preview uses this same path.
-	HOMICIDEUNIT_API AActor* Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, const FHULook& Look, bool bOwnerNoSee, float Scale = 1.f);
+	// THE DETECTIVE: one model, the same for every player on every PC - nothing about it comes from a save.
+	// Its own face (one nobody else at a case wears) when Tools/MakeCast.py has built it, otherwise Bruce from the cast.
+	HOMICIDEUNIT_API FString DetectiveFace();
+	// Stands the detective up on Parent (Previous: the one already there, kept). The desk's figurine is the same model
+	// at Scale 0.15.
+	HOMICIDEUNIT_API AActor* Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, bool bOwnerNoSee, float Scale = 1.f);
 	// the clip for how fast they're moving (cm/s): standing idle, walking, running - played at the pace of their feet
 	HOMICIDEUNIT_API void Motion(AActor* Look, float Speed);
 	// their body's animation (sitting, cuffs, talking, flinching... HUPersonAnimation.h), or nullptr

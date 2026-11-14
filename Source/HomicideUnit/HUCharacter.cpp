@@ -39,12 +39,12 @@ void AHUCharacter::BeginPlay()
 	Super::BeginPlay();
 	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
 	if (C) Eyes->SetFieldOfView(C->FieldOfView);
-	// your look: from your save, sent to the host so the squad sees it (everyone else's comes in by replication)
+	// your body: the one detective model, the same for every player
 	Body = NewObject<USceneComponent>(this, TEXT("HUBody"));
 	Body->SetupAttachment(GetCapsuleComponent());
 	Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight()));
 	Body->RegisterComponent();
-	BuildBody(); // (yours is sent once you're possessed - see Tick)
+	BuildBody();
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		PC->SetInputMode(FInputModeGameOnly());
@@ -62,19 +62,11 @@ void AHUCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 	Input->BindKey(EKeys::Escape, IE_Pressed, this, &AHUCharacter::OpenMenu);
 }
 
-void AHUCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AHUCharacter, Look);
-}
-
-void AHUCharacter::ServerSetLook_Implementation(const FHULook& NewLook) { Look = NewLook; BuildBody(); }
-
-// Full-body characters and the desk preview share the same model factory.
+// Every player is the same detective: one model at one size (the desk's figurine is the same one, small).
 void AHUCharacter::BuildBody()
 {
 	if (!Body) return;
-	Model = HUPeople::Detective(this, Body, Model, Look, true);
+	Model = HUPeople::Detective(this, Body, Model, true);
 }
 
 USkeletalMeshComponent* AHUCharacter::VisualBody() const { return HUPeople::BodyOf(Model); }
@@ -111,14 +103,6 @@ void AHUCharacter::Tick(float DeltaSeconds)
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
 	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
-	// your look, from your save: set it once you're the one controlling this body (the host passes it on)
-	if (!bLookSent && IsLocallyControlled() && C)
-	{
-		bLookSent = true;
-		Look = C->Look;
-		BuildBody();
-		if (!HasAuthority()) ServerSetLook(C->Look);
-	}
 	// look (works whatever input mappings the project has)
 	const float Sens = C ? C->MouseSensitivity : 1.f;
 	float DX = 0, DY = 0;

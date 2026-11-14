@@ -1,6 +1,5 @@
 #include "HUPeople.h"
 #include "HUBuild.h"
-#include "HULook.h"
 #include "HUCaseTypes.h"
 #include "HUPersonAnimation.h"
 #include "Misc/PackageName.h"
@@ -163,16 +162,16 @@ AActor* HUPeople::Lie(AActor* Owner, USceneComponent* Parent, const FString& Who
 	return Look;
 }
 
-AActor* HUPeople::Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, const FHULook& Appearance, bool bOwnerNoSee, float Scale)
+// Mikel: one of Epic's preset people that no suspect, officer, Captain or victim is cast from (Tools/MakeCast.py builds
+// him in the detective's tan shirt). Where he isn't built, Bruce - the cast's face the detective had before.
+FString HUPeople::DetectiveFace() { return AvailableFace(TEXT("Mikel"), CastFace(1)); }
+
+// Every player is this one model at its own size: no face, build or height of anyone's own.
+AActor* HUPeople::Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, bool bOwnerNoSee, float Scale)
 {
-	const FString Face = CastFace(Appearance.Model);
-	if (Previous && !Previous->ActorHasTag(FName(*(TEXT("HUFace:") + Face)))) { Previous->Destroy(); Previous = nullptr; }
-	AActor* Person = Previous ? Previous : Stand(Owner, Parent, Face, FVector::ZeroVector, 0.f);
+	AActor* Person = Previous ? Previous : Stand(Owner, Parent, DetectiveFace(), FVector::ZeroVector, 0.f);
 	if (!Person) return nullptr;
-	static const float Widths[] = { 0.85f, 1.f, 1.15f, 1.3f };
-	const float Height = HULook::HeightCm(Appearance) / 180.f * Scale;
-	const float Width = Widths[FMath::Min<int32>(Appearance.Build, 3)];
-	Person->SetActorRelativeScale3D(FVector(Height * Width, Height * Width, Height));
+	Person->SetActorRelativeScale3D(FVector(Scale));
 	TInlineComponentArray<UPrimitiveComponent*> Parts(Person);
 	for (UPrimitiveComponent* Part : Parts) Part->SetOwnerNoSee(bOwnerNoSee);
 	return Person;

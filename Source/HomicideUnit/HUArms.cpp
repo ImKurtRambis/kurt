@@ -29,7 +29,7 @@ namespace
 	}
 }
 
-void HUArms::FirstPerson(AActor* Owner, USceneComponent* Root, TArray<UStaticMeshComponent*>& Out, const FHULook& L, int32 InHeld, bool bDrag)
+void HUArms::FirstPerson(AActor* Owner, USceneComponent* Root, TArray<UStaticMeshComponent*>& Out, int32 InHeld, bool bDrag)
 {
 	// a hand closing on Grip (a point on the tool) turned Rot; bent at the wrist, the sleeve runs back, down and out to
 	// its own side so it leaves the view (a touch slimmer than the body's: it's right under your nose)
@@ -37,7 +37,7 @@ void HUArms::FirstPerson(AActor* Owner, USceneComponent* Root, TArray<UStaticMes
 	{
 		const FQuat Q = Rot.Quaternion();
 		if (Fore.IsNearlyZero()) Fore = bLeft ? FVector(-0.55f, -0.4f, -0.73f) : FVector(-0.72f, 0.42f, -0.55f); // the left one drops away steeply: it's in the middle of the view
-		HULook::BuildArm(Owner, Root, Out, L, FTransform(Q, Grip - Q.RotateVector(GripOf(S))), 34.f, bLeft, S, HULook::ESeen::OnlyOwner, Fore, 0.85f);
+		HULook::BuildArm(Owner, Root, Out, FTransform(Q, Grip - Q.RotateVector(GripOf(S))), 34.f, bLeft, S, HULook::ESeen::OnlyOwner, Fore, 0.85f);
 	};
 	// pushing furniture: both palms flat against it, fingers up
 	if (bDrag)
@@ -367,25 +367,6 @@ void UHUInteractComponent::HandShots(float Dt)
 {
 	static const bool bOn = FParse::Param(FCommandLine::Get(), TEXT("HUHandShots"));
 	if (!bOn || ShotStep < 0) return;
-	// -HUHandLook=Model=3,Height=6,Coat=2 (any of your look's fields, by name): dress yourself first - once your save's
-	// look is in - to see the arms follow (your body is rebuilt from it, and the tick rebuilds your arms)
-	FString Dress;
-	static bool bDressed = false;
-	if (!bDressed && ShotClock > 2.f && FParse::Value(FCommandLine::Get(), TEXT("HUHandLook="), Dress, false))
-		if (AHUCharacter* Ch = Cast<AHUCharacter>(GetOwner()))
-		{
-			bDressed = true;
-			FHULook L = Ch->Look;
-			TArray<FString> Pairs; Dress.ParseIntoArray(Pairs, TEXT(","));
-			for (const FString& Pair : Pairs)
-			{
-				FString K, V;
-				if (!Pair.Split(TEXT("="), &K, &V)) continue;
-				if (const FByteProperty* P = CastField<FByteProperty>(FHULook::StaticStruct()->FindPropertyByName(*K))) P->SetPropertyValue_InContainer(&L, (uint8)FCString::Atoi(*V));
-				else UE_LOG(LogTemp, Warning, TEXT("HUHandShots: your look has no %s"), *K);
-			}
-			Ch->ServerSetLook(L);
-		}
 	// a steady view for every shot, a little below level (-HUHandPitch=degrees), whatever the mouse does
 	if (APawn* Pawn = Cast<APawn>(GetOwner()))
 		if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
@@ -411,7 +392,7 @@ void UHUInteractComponent::HandShots(float Dt)
 		if (H < 0) // the push pose, built straight in (there's no furniture in your hands)
 		{
 			HUBuild::Clear(HandParts);
-			if (!HUArms::RealArms(GetOwner(), Hand, 0, true)) HUArms::FirstPerson(GetOwner(), Hand, HandParts, HandLook, 0, true);
+			if (!HUArms::RealArms(GetOwner(), Hand, 0, true)) HUArms::FirstPerson(GetOwner(), Hand, HandParts, 0, true);
 		}
 		else BuildHand();
 		bShotPosed = true;

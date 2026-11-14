@@ -12,7 +12,6 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "HUTools.h"
-#include "HULook.h"
 #include "HUInteractComponent.generated.h"
 
 UCLASS(ClassGroup = (HomicideUnit), meta = (BlueprintSpawnableComponent))
@@ -197,7 +196,6 @@ private:
 	class UHUCaseSubsystem* Cases() const;
 	void UpdateBeam();
 	void BuildHand();
-	FHULook HandLook;           // the look your first-person arms were built in (HUArms) - rebuilt when yours changes
 	void HandShots(float Dt);   // -HUHandShots (HUArms.cpp)
 	int32 ShotStep = 0; float ShotClock = 0.f; bool bShotPosed = false;
 	void UsePrimary() { BeginUse(false); }

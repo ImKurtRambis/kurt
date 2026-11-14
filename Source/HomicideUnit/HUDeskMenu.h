@@ -90,7 +90,7 @@ private:
 	void StartTyping(int32 Field);
 	void FinishTyping(bool bKeep);
 	void ChangeSetting(int32 Dir);
-	void ChangeLook(int32 Dir);
+	void ChangeSpecialty(int32 Dir);
 	void BuildFigurine();
 	UPROPERTY() USceneComponent* Figurine = nullptr;
 	UPROPERTY() AActor* FigureModel = nullptr;

@@ -34,7 +34,12 @@ namespace
 		for (TActorIterator<AHUCharacter> It(World); It; ++It)
 		{
 			if (It->IsLocallyControlled()) Player = *It;
-			Check(It->VisualBody() != nullptr, TEXT("Detective has no real model"));
+			const USkeletalMeshComponent* Seen = It->VisualBody();
+			Check(Seen != nullptr, TEXT("Detective has no real model"));
+			// one detective model for every player: the same face at its own size, whoever's save it is
+			const AActor* Person = Seen ? Seen->GetOwner() : nullptr;
+			Check(Person && Person->ActorHasTag(FName(*(TEXT("HUFace:") + HUPeople::DetectiveFace()))) && Person->GetActorRelativeScale3D().Equals(FVector::OneVector, 0.001f),
+				It->GetName() + TEXT(" is not the one detective model"));
 		}
 		for (TActorIterator<AActor> It(World); It; ++It)
 			if (It->ActorHasTag(TEXT("HUPerson")))

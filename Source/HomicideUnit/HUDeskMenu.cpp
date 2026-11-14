@@ -644,14 +644,14 @@ static int32 OrderIndex(int32 Item) { for (int32 i = 0; i < UE_ARRAY_COUNT(DeskO
 
 int32 AHUDeskMenu::RowsIn(EHUMenuPanel P) const
 {
-	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 2 + HULook::Fields; /* name, looks, specialty */ default: return 0; }
+	switch (P) { case EHUMenuPanel::Settings: return 10; case EHUMenuPanel::Join: return 2; case EHUMenuPanel::Personnel: return 2; /* name, specialty */ default: return 0; }
 }
 
 void AHUDeskMenu::Prev()
 {
 	if (bTyping) return;
 	if (Panel == EHUMenuPanel::Settings) { ChangeSetting(-1); return; }
-	if (Panel == EHUMenuPanel::Personnel) { ChangeLook(-1); return; }
+	if (Panel == EHUMenuPanel::Personnel) { ChangeSpecialty(-1); return; }
 	if (Panel != EHUMenuPanel::None) return;
 	Pick = (int32)DeskOrder[(OrderIndex(Pick) + UE_ARRAY_COUNT(DeskOrder) - 1) % UE_ARRAY_COUNT(DeskOrder)];
 }
@@ -659,31 +659,23 @@ void AHUDeskMenu::Next()
 {
 	if (bTyping) return;
 	if (Panel == EHUMenuPanel::Settings) { ChangeSetting(1); return; }
-	if (Panel == EHUMenuPanel::Personnel) { ChangeLook(1); return; }
+	if (Panel == EHUMenuPanel::Personnel) { ChangeSpecialty(1); return; }
 	if (Panel != EHUMenuPanel::None) return;
 	Pick = (int32)DeskOrder[(OrderIndex(Pick) + 1) % UE_ARRAY_COUNT(DeskOrder)];
 }
 
-// the name plate: ← → change the picked part of your look (row 0 is your name)
-void AHUDeskMenu::ChangeLook(int32 Dir)
+// the name plate: ← → change your specialty (row 0 is your name). How you look isn't here: every player is the same
+// detective.
+void AHUDeskMenu::ChangeSpecialty(int32 Dir)
 {
 	UHUCaseSubsystem* C = Cases();
-	if (!C || Row < 1) return;
-	if (Row == 1 + HULook::Fields) // the specialty
-	{
-		C->SetSpecialty((uint8)((C->Specialty + Dir + HUProgress::SpecCount) % HUProgress::SpecCount));
-		return;
-	}
-	HULook::Step(C->Look, Row - 1, Dir);
-	C->SaveProgress();
-	BuildFigurine();
+	if (!C || Row != 1) return;
+	C->SetSpecialty((uint8)((C->Specialty + Dir + HUProgress::SpecCount) % HUProgress::SpecCount));
 }
 
-// your detective, in miniature, standing on the desk behind the name plate
+// the detective every player is, in miniature, standing on the desk behind the name plate
 void AHUDeskMenu::BuildFigurine()
 {
-	const UHUCaseSubsystem* C = Cases();
-	if (!C) return;
 	if (!Figurine)
 	{
 		Figurine = NewObject<USceneComponent>(this, TEXT("HUFigurine"));
@@ -692,7 +684,7 @@ void AHUDeskMenu::BuildFigurine()
 		Figurine->SetRelativeRotation(FRotator(0, 200, 0)); // facing you, a little turned
 		Figurine->RegisterComponent();
 	}
-	FigureModel = HUPeople::Detective(this, Figurine, FigureModel, C->Look, false, 0.15f);
+	FigureModel = HUPeople::Detective(this, Figurine, FigureModel, false, 0.15f);
 }
 void AHUDeskMenu::Up() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + N - 1) % N; }
 void AHUDeskMenu::Down() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + 1) % N; }
@@ -711,7 +703,7 @@ void AHUDeskMenu::Activate()
 	{
 	case EHUMenuPanel::None: Use((EHUDeskItem)Pick); break;
 	case EHUMenuPanel::Settings: ChangeSetting(1); break;
-	case EHUMenuPanel::Personnel: if (Row == 0) StartTyping(0); else ChangeLook(1); break;
+	case EHUMenuPanel::Personnel: if (Row == 0) StartTyping(0); else ChangeSpecialty(1); break;
 	case EHUMenuPanel::Join:
 		if (Row == 0) StartTyping(1);
 		else if (const UHUCaseSubsystem* C = Cases())
@@ -903,14 +895,11 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 		Title = TEXT("PERSONNEL FILE");
 		if (bTyping) Lines.Add(FString::Printf(TEXT("▸ NAME:  %s%s"), *Typed, *Caret));
 		else Lines.Add(FString::Printf(TEXT("%sNAME:  %s"), Sel(0), Name().IsEmpty() ? TEXT("(none yet)") : *Name()));
-		// how you look - the figure on the desk changes as you go
-		if (C) for (int32 f = 0; f < HULook::Fields; f++)
-			Lines.Add(FString::Printf(TEXT("%s%s:   <  %s  >"), Sel(f + 1), HULook::FieldName(f), *HULook::ValueName(C->Look, f)));
 		if (C)
 		{
 			// your specialty and how far up you are
 			const int32 Lv = HUProgress::SpecLevel(C->SpecXPOf(C->Specialty));
-			Lines.Add(FString::Printf(TEXT("%sSPECIALTY:   <  %s%s  >"), Sel(1 + HULook::Fields), HUProgress::SpecName(C->Specialty), C->Specialty ? *FString::Printf(TEXT("  (level %d%s)"), Lv, Lv < 5 ? *FString::Printf(TEXT(", %d / %d XP"), C->SpecXPOf(C->Specialty), HUProgress::SpecLevelXP(Lv + 1)) : TEXT(", max")) : TEXT("")));
+			Lines.Add(FString::Printf(TEXT("%sSPECIALTY:   <  %s%s  >"), Sel(1), HUProgress::SpecName(C->Specialty), C->Specialty ? *FString::Printf(TEXT("  (level %d%s)"), Lv, Lv < 5 ? *FString::Printf(TEXT(", %d / %d XP"), C->SpecXPOf(C->Specialty), HUProgress::SpecLevelXP(Lv + 1)) : TEXT(", max")) : TEXT("")));
 			Lines.Add(FString(TEXT("      ")) + HUProgress::SpecPerk(C->Specialty));
 			const int32 Rk = HUProgress::RankOf(C->SquadXP);
 			Lines.Add(FString::Printf(TEXT("   RANK:  %s   (%d XP%s)"), HUProgress::RankName(Rk), C->SquadXP, Rk < HUProgress::RankCount - 1 ? *FString::Printf(TEXT(", next at %d"), HUProgress::RankXP(Rk + 1)) : TEXT("")));
@@ -921,7 +910,7 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 			Lines.Add(TEXT("   KIT:  ") + (Kit.IsEmpty() ? FString(TEXT("nothing signed out yet")) : Kit));
 		}
 		Lines.Add(TEXT(""));
-		Lines.Add(bTyping ? TEXT("Type your name   ·   ENTER save   ·   ESC cancel") : TEXT("↑ ↓ choose   ·   ← → change your look   ·   ENTER on NAME to type it   ·   saved automatically   ·   ESC back"));
+		Lines.Add(bTyping ? TEXT("Type your name   ·   ENTER save   ·   ESC cancel") : TEXT("↑ ↓ choose   ·   ← → change your specialty   ·   ENTER on NAME to type it   ·   saved automatically   ·   ESC back"));
 		break;
 	case EHUMenuPanel::Settings:
 	{

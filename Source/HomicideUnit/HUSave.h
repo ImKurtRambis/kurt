@@ -3,7 +3,6 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
-#include "HULook.h"
 #include "HUSave.generated.h"
 
 UCLASS()
@@ -21,7 +20,6 @@ public:
 	UPROPERTY() uint8 VoiceProvider = 2; // ElevenLabs
 	UPROPERTY() FString VoiceKey;
 	UPROPERTY() bool bVoiceQuestions = false;
-	UPROPERTY() FHULook Look; // how your detective looks (the name plate)
 	UPROPERTY() FString MicDevice;
 	// progression (see HUProgress)
 	UPROPERTY() int32 SquadXP = 0;

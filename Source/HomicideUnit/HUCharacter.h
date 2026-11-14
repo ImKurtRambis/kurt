@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "HULook.h"
 #include "HUCharacter.generated.h"
 
 UCLASS()
@@ -22,12 +21,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Detective") FName MenuLevel = TEXT("L_Menu");
 	// leave the case (and the squad) for the desk menu - from the ESC menu
 	void BackToDesk();
-
-	// ---- how you look (from your name plate): a body everyone else sees; you only see your hand ----
-	UPROPERTY(ReplicatedUsing = OnRep_Look) FHULook Look;
-	UFUNCTION(Server, Reliable) void ServerSetLook(const FHULook& NewLook);
-	UFUNCTION() void OnRep_Look() { BuildBody(); }
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
 
 	// ---- sitting: E on a chair sits you down facing the way it faces; WASD, SPACE or E again stands you up ----
 	UPROPERTY(BlueprintReadOnly, Category = "Detective") bool bSeated = false;
@@ -60,10 +53,11 @@ protected:
 private:
 	void ToggleCrouch();
 	void OpenMenu();
+	// your body: the one detective model every player is (HUPeople::Detective). Everyone else sees it; you see only
+	// your arms (HUArms). It's built the same on every PC, so nothing about it is saved or sent.
 	UPROPERTY() USceneComponent* Body = nullptr;
 	UPROPERTY() AActor* Model = nullptr;
 	void BuildBody();
-	bool bLookSent = false;
 	FVector StandSpot;
 	double CoffeeUntil = -1.0;
 	void StartJump() { if (bSeated) StandUp(); else Jump(); }

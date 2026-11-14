@@ -244,10 +244,9 @@ void UHUInteractComponent::BuildHand()
 		if (M) { M->SetCastShadow(false); M->bOnlyOwnerSee = true; }
 		return M;
 	};
-	// your arms: your own body's (your MetaHuman's; blocks in your look's colours without one) holding what's in your
+	// your arms: your own body's (the detective model's; block arms where it isn't built) holding what's in your
 	// hands (both palms flat on furniture you're dragging)
-	if (const AHUCharacter* Ch = Cast<AHUCharacter>(O)) HandLook = Ch->Look;
-	if (!HUArms::RealArms(O, Hand, Held, Grabbed.IsValid())) HUArms::FirstPerson(O, Hand, HandParts, HandLook, Held, Grabbed.IsValid());
+	if (!HUArms::RealArms(O, Hand, Held, Grabbed.IsValid())) HUArms::FirstPerson(O, Hand, HandParts, Held, Grabbed.IsValid());
 	if (Grabbed.IsValid()) return;
 	HeldItemParts([&](uint8 S, FVector Pos, FVector Size, FLinearColor Col, FRotator Rot) { return P((EShape)S, Pos, Size, Col, Rot); }, Held, Lens);
 }
@@ -324,9 +323,8 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	if (!Keys) Setup(PC);
 	SendGear();
 
-	// your arms are your body's: rebuild them when your look changes (the name plate, or it arriving from your save)
-	// or your body does
-	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && (!(Ch->Look == HandLook) || HUArms::Stale(Ch))) BuildHand();
+	// your arms are your body's: rebuild them when your body arrives or is built again
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && HUArms::Stale(Ch)) BuildHand();
 	HandShots(DeltaTime);
 	// the hand sways a little as you walk
 	if (Hand)
