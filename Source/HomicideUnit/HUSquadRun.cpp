@@ -338,14 +338,27 @@ void UHUSquadRun::Briefing()
 			Next(1.0);
 			return;
 		}
-		Say(TEXT("the host drives: everyone to the scene"));
+		Say(TEXT("the host drives: everyone to the scene. ") + CarState(Car));
 		I->SendUseOn(Car, nullptr, false);
 		Next(1.0);
 		return;
 	default:
-		After(1.0); // driving
+		// driving; still here after a while: say why the car isn't going
+		if (bHost && Car && NowS() - StepStart > 10.0 && ++Tries % 10 == 1) Say(TEXT("the car hasn't left. ") + CarState(Car));
+		After(1.0);
 		return;
 	}
+}
+
+// what a car tells whoever's at it (its prompt says why it won't go), and where the squad is from it
+FString UHUSquadRun::CarState(AHUCruiser* Car) const
+{
+	FString S = FString::Printf(TEXT("Car %s at (%.0f, %.0f): \"%s\"; squad at"), *Car->GetName(), Car->GetActorLocation().X, Car->GetActorLocation().Y,
+		Me() ? *IHUInteractable::Execute_GetPrompt(Car, Me()).ToString() : TEXT("?"));
+	for (APawn* P : Squad()) S += FString::Printf(TEXT(" %.0f cm"), FVector::Dist2D(P->GetActorLocation(), Car->GetActorLocation()));
+	int32 Cars = 0;
+	for (TActorIterator<AHUCruiser> It(World()); It; ++It) if (It->bPlayerCar) Cars++;
+	return S + FString::Printf(TEXT(" (gather %.0f; %d player cars in the level)"), Car->GatherRadius, Cars);
 }
 
 // the scene: the partner bags everything, the host interviews the culprit, the partner cuffs them and walks them to
@@ -629,4 +642,5 @@ UHUCaseSubsystem* UHUSquadRun::Case() const { return nullptr; }
 TArray<APawn*> UHUSquadRun::Squad() const { return {}; }
 APawn* UHUSquadRun::Partner() const { return nullptr; }
 void UHUSquadRun::Teleport(APawn*, FVector, float) const {}
+FString UHUSquadRun::CarState(AHUCruiser*) const { return FString(); }
 #endif

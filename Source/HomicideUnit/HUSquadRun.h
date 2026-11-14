@@ -51,6 +51,7 @@ private:
 	TArray<class APawn*> Squad() const;
 	class APawn* Partner() const;
 	void Teleport(class APawn* P, FVector At, float Yaw) const;
+	FString CarState(class AHUCruiser* Car) const;
 
 	FTSTicker::FDelegateHandle TickH;
 	FDelegateHandle LeaveH, SeamlessH;
