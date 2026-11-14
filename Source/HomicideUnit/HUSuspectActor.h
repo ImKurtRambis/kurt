@@ -1,4 +1,4 @@
-// A person of interest at the scene (a stand-in figure for now).
+// A person of interest at the scene, played by the shared MetaHuman cast.
 //   E starts the interview (you talk to them out loud - see below).   Q runs their record.
 //   The CUFFS on your belt (look down, pick them, click) arrest them: cuffed, hands behind their back, and they follow you.
 //   Pepper spray or the taser (also on the belt) doubles them over for a few seconds.
@@ -70,8 +70,7 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
-	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
-	// the real person: a built MetaHuman standing where the block figure is (the blocks stay, hidden, for collision)
+	UPROPERTY() class UCapsuleComponent* InteractionBody = nullptr;
 	UPROPERTY() TObjectPtr<AActor> Look;
 	void SpawnLook();
 public:
@@ -99,13 +98,15 @@ private:
 	void Act(uint8 Action);
 	void Animate(float DeltaSeconds);
 	uint8 Stance = 0;    // 0 standing, 1 sitting
+	// told to sit: a chair where they stand (the body sits on it: HUPersonAnimation), gone when they stand up
+	UPROPERTY() TArray<class UStaticMeshComponent*> ChairParts;
+	void SitChair(bool bOn);
 	uint8 Arms = 0;      // 0 at the sides, 1 crossed, 2 hands up
 	float ArmsLeft = 0.f;
 	uint8 Gesture = 0;
 	float GestureT = -1.f;
 	float FaceYaw = 0.f;
 	bool bFacing = false;
-	TArray<FTransform> BaseXf; // the parts' rest positions (legs, body, head, arms)
 	// premade lines (HUFiller), recorded in this suspect's voice when the interview starts, played at once while
 	// the brain thinks; the real answer waits until the line has finished
 	UPROPERTY() TMap<FString, class USoundWave*> FillerSounds;

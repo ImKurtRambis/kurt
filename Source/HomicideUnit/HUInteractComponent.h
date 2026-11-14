@@ -124,6 +124,25 @@ public:
 	UFUNCTION(Server, Reliable) void ServerTapeNote(const FString& Note, bool bCatch);
 	UFUNCTION(NetMulticast, Reliable) void MulticastTapeNote(const FString& Note, bool bCatch);
 
+	// ---- WHAT THE SQUAD SEES YOU DO (HUWorldGear.cpp) ----
+	// what's in your hand (Held) and what you're doing with it, sent to the squad; their copy of you raises the same
+	// tool on your body's right arm, aims it where you look, reaches, works over evidence while you bag it, holds the
+	// cuffs out while you cuff, and shines the beam from the torch in that hand.
+	enum EGearPose : uint8 { PoseIdle, PoseWork, PoseCuff, PoseDrag };
+	UPROPERTY(Replicated) uint8 RepHeld = 0;
+	UPROPERTY(Replicated) uint8 RepPose = 0;
+	UFUNCTION(Server, Reliable) void ServerGear(uint8 InHeld, uint8 InPose);
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	void SendGear();                         // (your machine) tell the squad when your hand or pose changes
+	void TickWorldGear(APawn* Pawn, float Dt); // (their machines) pose your body's arm, hand and beam
+	UPROPERTY() USceneComponent* WorldArm = nullptr;
+	UPROPERTY() TArray<class UStaticMeshComponent*> WorldArmParts;
+	UPROPERTY() class UStaticMeshComponent* WorldLens = nullptr;
+	int32 WorldBuiltHeld = -1, SentHeld = -1, SentPose = -1;
+	float WorldPitch = 0.f, WorldT = 0.f;
+	// the parts of whatever's in a hand, built by whoever draws it (the first-person hand, or the squad's view)
+	static void HeldItemParts(TFunctionRef<class UStaticMeshComponent*(uint8, FVector, FVector, FLinearColor, FRotator)> P, int32 InHeld, class UStaticMeshComponent*& OutLens);
+
 	// the security desk you're watching the tapes at (the HUD shows the feed)
 	TWeakObjectPtr<class AHUSecurityDesk> Watching;
 	// PrecinctOS on the desk computers: what your screen shows (so partners can look over your shoulder),

@@ -47,6 +47,8 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* Input) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	class USkeletalMeshComponent* VisualBody() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -55,7 +57,7 @@ private:
 	void ToggleCrouch();
 	void OpenMenu();
 	UPROPERTY() USceneComponent* Body = nullptr;
-	UPROPERTY() TArray<class UStaticMeshComponent*> BodyParts;
+	UPROPERTY() AActor* Model = nullptr;
 	void BuildBody();
 	bool bLookSent = false;
 	FVector StandSpot;

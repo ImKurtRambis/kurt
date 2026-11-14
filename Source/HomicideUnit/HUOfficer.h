@@ -1,4 +1,5 @@
-// A patrol officer holding the scene outside. Stands at the tape; E gets a word out of them.
+// A patrol officer holding the scene outside. Stands at the tape; E gets a word out of them. Played by a MetaHuman in
+// uniform through HUPeople, with a separate capsule for conversation and movement collision.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -17,9 +18,13 @@ public:
 
 	virtual FText GetPrompt_Implementation(APawn* User) const override;
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
-	virtual void OnConstruction(const FTransform& Transform) override;
+
+protected:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
-	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() class UCapsuleComponent* InteractionBody = nullptr;
+	UPROPERTY() AActor* Look = nullptr; // the MetaHuman
 	int32 Line = 0;
 };

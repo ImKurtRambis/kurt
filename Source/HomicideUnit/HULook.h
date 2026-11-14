@@ -1,6 +1,4 @@
-// How your detective looks: picked at your NAME PLATE on the desk (your personnel file), saved, and sent to the
-// squad so everyone sees you that way. The figure is a stand-in built from blocks, like the suspects, until
-// there are real character models.
+// Saved detective appearance. HUPeople renders the selected real model; HUArms draws the first-person viewmodel.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,6 +8,7 @@ USTRUCT(BlueprintType)
 struct FHULook
 {
 	GENERATED_BODY()
+	UPROPERTY() uint8 Model = 1;     // shared cast index; Bruce is the default detective
 	UPROPERTY() uint8 Build = 1;     // body shape: slim, average, broad, heavy
 	UPROPERTY() uint8 Height = 3;    // 165 cm + 5 per step (0..7)
 	UPROPERTY() uint8 Skin = 2;
@@ -18,21 +17,18 @@ struct FHULook
 	UPROPERTY() uint8 Coat = 0;
 	UPROPERTY() uint8 Hat = 1;       // none, fedora, flat cap
 
-	bool operator==(const FHULook& O) const { return Build == O.Build && Height == O.Height && Skin == O.Skin && Hair == O.Hair && HairColor == O.HairColor && Coat == O.Coat && Hat == O.Hat; }
+	bool operator==(const FHULook& O) const { return Model == O.Model && Build == O.Build && Height == O.Height && Skin == O.Skin && Hair == O.Hair && HairColor == O.HairColor && Coat == O.Coat && Hat == O.Hat; }
 };
 
 namespace HULook
 {
-	// the choices, in order: Build, Height, Skin, Hair, Hair colour, Coat, Hat
-	constexpr int32 Fields = 7;
+	// Hair/hat data remains serializable for old saves; the model now supplies those features.
+	constexpr int32 Fields = 5; // model, build, height, first-person hand skin and sleeve
 	HOMICIDEUNIT_API const TCHAR* FieldName(int32 Field);
 	HOMICIDEUNIT_API int32 Options(int32 Field);
 	HOMICIDEUNIT_API FString ValueName(const FHULook& L, int32 Field);
 	HOMICIDEUNIT_API void Step(FHULook& L, int32 Field, int32 Dir);
 	HOMICIDEUNIT_API float HeightCm(const FHULook& L);
-
-	// builds the figure: feet at the parent's origin, facing +X. bOwnerNoSee hides it from its own player's camera.
-	HOMICIDEUNIT_API void BuildFigure(AActor* Owner, USceneComponent* Parent, TArray<class UStaticMeshComponent*>& Out, const FHULook& L, bool bOwnerNoSee);
 
 	// ---- ONE ARM, shared by the body everyone sees and your own first-person view, so they're the same arm ----
 	// the coat sleeve (SleeveLen back from the wrist), the shirt cuff, and the hand in a shape. Built in frame Xf: the

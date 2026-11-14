@@ -91,6 +91,8 @@ bool UHUCaseSubsystem::StartCase(int32 Index)
 {
 	if (Cases.Num() == 0 && !LoadCases()) return false;
 	if (!Cases.IsValidIndex(Index)) Index = SquadSeed != 0 ? (SquadSeed + CasesStarted) % Cases.Num() : FMath::RandRange(0, Cases.Num() - 1); // a squad all gets the same case, and a new one each shift
+	// testing one kind of crime: -HUCrime=homicide (the first such case dealt)
+	{ FString Crime; if (FParse::Value(FCommandLine::Get(), TEXT("HUCrime="), Crime)) for (int32 i = 0; i < Cases.Num(); i++) if (Cases[i].Crime == Crime) { Index = i; break; } }
 	CasesStarted++;
 	Current = Cases[Index];
 	// testing a place: -HUPlace=HOTEL on the command line

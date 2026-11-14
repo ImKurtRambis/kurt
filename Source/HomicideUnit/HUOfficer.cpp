@@ -1,31 +1,38 @@
 #include "HUOfficer.h"
-#include "HUBuild.h"
+#include "HUPeople.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/GameInstance.h"
-
-using namespace HUBuild;
 
 AHUOfficer::AHUOfficer()
 {
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	InteractionBody = CreateDefaultSubobject<UCapsuleComponent>(TEXT("InteractionBody"));
+	InteractionBody->SetupAttachment(Root);
+	InteractionBody->SetRelativeLocation(FVector(0, 0, 95));
+	InteractionBody->InitCapsuleSize(32.f, 95.f);
+	InteractionBody->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	InteractionBody->SetCollisionResponseToAllChannels(ECR_Ignore);
+	InteractionBody->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	InteractionBody->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 }
 
-void AHUOfficer::OnConstruction(const FTransform& Transform)
+
+
+void AHUOfficer::BeginPlay()
 {
-	Super::OnConstruction(Transform);
-	Clear(Blocks);
-	const FLinearColor Navy(0.03f, 0.05f, 0.12f), Skin = Variant % 3 == 0 ? FLinearColor(0.6f, 0.44f, 0.34f) : Variant % 3 == 1 ? FLinearColor(0.4f, 0.27f, 0.18f) : FLinearColor(0.72f, 0.55f, 0.44f);
-	USceneComponent* R = RootComponent;
-	Block(this, R, Blocks, EShape::Cylinder, FVector(0, 0, 45), FVector(38, 44, 90), Navy * 0.8f);
-	Block(this, R, Blocks, EShape::Cylinder, FVector(0, 0, 125), FVector(52, 58, 76), Navy);
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 92), FVector(54, 60, 6), FLinearColor(0.02f, 0.02f, 0.02f));          // duty belt
-	Block(this, R, Blocks, EShape::Cube, FVector(25, 12, 145), FVector(2, 6, 7), FLinearColor(0.85f, 0.7f, 0.25f));           // badge
-	Block(this, R, Blocks, EShape::Sphere, FVector(0, 0, 178), FVector(26, 24, 30), Skin);
-	Block(this, R, Blocks, EShape::Cylinder, FVector(0, 0, 193), FVector(30, 30, 8), Navy * 0.7f);                             // cap
-	Block(this, R, Blocks, EShape::Cube, FVector(10, 0, 190), FVector(16, 26, 2), FLinearColor(0.02f, 0.02f, 0.02f));         // visor
+	Super::BeginPlay();
+	// The real officer faces +X; the capsule supplies conversation and movement collision.
+	Look = HUPeople::Stand(this, RootComponent, HUPeople::OfficerFace(Variant), FVector::ZeroVector, 0.f);
+	if (Look) HUPeople::Uniform(Look);
+}
+
+void AHUOfficer::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (Look) { Look->Destroy(); Look = nullptr; }
+	Super::EndPlay(Reason);
 }
 
 FText AHUOfficer::GetPrompt_Implementation(APawn* User) const { return FText::FromString(TEXT("[E] Talk to the patrol officer")); }

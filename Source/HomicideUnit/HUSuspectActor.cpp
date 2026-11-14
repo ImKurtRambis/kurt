@@ -1,7 +1,10 @@
 #include "HUSuspectActor.h"
+#include "HUPeople.h"
 #include "HUSound.h"
 #include "HUPhoneData.h"
 #include "HUProgress.h"
+#include "HUPersonAnimation.h"
+#include "HUProps.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
@@ -11,7 +14,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "HUInterrogation.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/GameInstance.h"
 #include "Components/InputComponent.h"
@@ -19,13 +22,19 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimSequence.h"
 
-using namespace HUBuild;
-
 AHUSuspectActor::AHUSuspectActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	InteractionBody = CreateDefaultSubobject<UCapsuleComponent>(TEXT("InteractionBody"));
+	InteractionBody->SetupAttachment(Root);
+	InteractionBody->SetRelativeLocation(FVector(0, 0, 95));
+	InteractionBody->InitCapsuleSize(32.f, 95.f);
+	InteractionBody->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	InteractionBody->SetCollisionResponseToAllChannels(ECR_Ignore);
+	InteractionBody->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	InteractionBody->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	NameTag = CreateDefaultSubobject<UTextRenderComponent>(TEXT("NameTag"));
 	NameTag->SetupAttachment(Root);
 	NameTag->SetRelativeLocation(FVector(0, 0, 205));
@@ -40,75 +49,20 @@ void AHUSuspectActor::OnConstruction(const FTransform& Transform)
 	Pose();
 }
 
-// the figure: arms at the sides, or behind the back in cuffs
+// Gameplay collision stays on the suspect; the MetaHuman contains no interaction proxies.
 void AHUSuspectActor::Pose()
 {
-	Clear(Blocks);
-	const FLinearColor Skin(0.6f, 0.42f, 0.32f), Pants(0.05f, 0.05f, 0.06f), Steel(0.75f, 0.77f, 0.8f);
-	Block(this, RootComponent, Blocks, EShape::Cylinder, FVector(0, 0, 45), FVector(40, 46, 90), Pants);
-	Block(this, RootComponent, Blocks, EShape::Cylinder, FVector(0, 0, 125), FVector(52, 60, 76), Coat);
-	Block(this, RootComponent, Blocks, EShape::Sphere, FVector(0, 0, 178), FVector(26, 24, 30), Skin);
-	if (!bCuffed)
-	{
-		for (float S : { -1.f, 1.f }) Block(this, RootComponent, Blocks, EShape::Cylinder, FVector(0, S * 32, 118), FVector(12, 12, 62), Coat * 0.9f);
-	}
-	else
-	{
-		// arms drawn back, wrists together behind, the cuffs on
-		for (float S : { -1.f, 1.f }) Block(this, RootComponent, Blocks, EShape::Cylinder, FVector(-18, S * 22, 115), FVector(12, 12, 60), Coat * 0.9f, FRotator(0, 0, S * 22));
-		Block(this, RootComponent, Blocks, EShape::Cube, FVector(-30, 0, 90), FVector(6, 14, 5), Steel);
-	}
-	if (bCuffed) for (UStaticMeshComponent* B : Blocks) if (B) B->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // don't trip the officer walking them
-	// rest positions, for acting out reactions (see Animate)
-	BaseXf.Reset();
-	for (UStaticMeshComponent* B : Blocks) if (B) BaseXf.Add(B->GetRelativeTransform());
-	if (Look) for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
-}
-
-// MetaHumans built by Tools/MakeCast.py live in /Game/MetaHumans/MH_<Name>/BP_MH_<Name>. Suspects are cast by
-// gender (HUCaseGen's first names alternate man/woman), and no two in a case share a face. Anyone the cast has
-// no built MetaHuman for keeps the block figure.
-static bool HUIsWoman(const FString& Name)
-{
-	static const TCHAR* Women[] = { TEXT("Doris"), TEXT("Helen"), TEXT("June"), TEXT("Irene"), TEXT("Marge"), TEXT("Vera"), TEXT("Nora"), TEXT("Pearl"), TEXT("Edie"), TEXT("Lorraine") };
-	FString First; if (!Name.Split(TEXT(" "), &First, nullptr)) First = Name;
-	for (const TCHAR* W : Women) if (First == W) return true;
-	return false;
+	InteractionBody->SetCollisionResponseToChannel(ECC_Pawn, bCuffed ? ECR_Ignore : ECR_Block);
+	if (USkeletalMeshComponent* Mesh = HUPeople::BodyOf(Look))
+		if (UHUPersonAnimation* Animation = Cast<UHUPersonAnimation>(Mesh->GetAnimInstance())) Animation->bCuffed = bCuffed;
 }
 
 void AHUSuspectActor::SpawnLook()
 {
-	if (Look || !GetWorld()) return;
-	const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
-	if (!Cases) return;
-	static const TCHAR* Men[] = { TEXT("Walter"), TEXT("Bruce"), TEXT("Victor"), TEXT("Lorenzo") };
-	static const TCHAR* Women[] = { TEXT("Vivian"), TEXT("Grace"), TEXT("Celeste"), TEXT("Etta") };
-	// this suspect's place among the case's suspects of the same gender, shifted by the case so faces rotate
-	int32 Slot = -1; bool bWoman = false;
-	for (const FHUSuspect& S : Cases->Current.Suspects)
-	{
-		const bool W = HUIsWoman(S.Name);
-		if (S.Id == SuspectId) { bWoman = W; Slot++; break; }
-		if (W == HUIsWoman(DisplayName())) Slot++;
-	}
-	if (Slot < 0) return;
-	const int32 Pick = (Slot + Cases->Current.Number) % 4;
-	const FString Who = bWoman ? Women[Pick] : Men[Pick];
-	UClass* Cls = LoadClass<AActor>(nullptr, *FString::Printf(TEXT("/Game/MetaHumans/MH_%s/BP_MH_%s.BP_MH_%s_C"), *Who, *Who, *Who));
-	if (!Cls) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: MetaHuman %s not built - block figure for %s"), *Who, *SuspectId); return; }
-	FActorSpawnParameters P; P.Owner = this; P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Look = GetWorld()->SpawnActor<AActor>(Cls, GetActorTransform(), P);
-	if (!Look) return;
-	Look->SetActorEnableCollision(false);
-	Look->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-	Look->SetActorRelativeRotation(FRotator(0, -90, 0)); // MetaHumans face +Y; the suspect faces +X
-	UAnimSequence* Idle = LoadObject<UAnimSequence>(nullptr, TEXT("/MetaHumanCharacter/Optional/Animation/UEFNAnimPreset/Locomotion/AS_MH_Neutral_Stand_Idle_Loop.AS_MH_Neutral_Stand_Idle_Loop"));
-	TArray<USkeletalMeshComponent*> Meshes; Look->GetComponents(Meshes);
-	for (USkeletalMeshComponent* M : Meshes)
-		if (M && M->GetFName() == TEXT("Body") && Idle) { M->SetAnimationMode(EAnimationMode::AnimationSingleNode); M->PlayAnimation(Idle, true); }
-	for (UStaticMeshComponent* B : Blocks) if (B) B->SetVisibility(false);
-	NameTag->SetRelativeLocation(FVector(0, 0, 200));
-	UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s (%s) is played by MetaHuman %s"), *SuspectId, *DisplayName(), *Who);
+	if (Look) return;
+	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	if (C) Look = HUPeople::Stand(this, RootComponent, HUPeople::SuspectFace(C->Current, SuspectId), FVector::ZeroVector, 0.f);
+	Pose();
 }
 
 void AHUSuspectActor::BeginPlay()
@@ -119,7 +73,7 @@ void AHUSuspectActor::BeginPlay()
 	SpawnLook();
 	// back at the scene a second time: anyone already taken in is in holding at the precinct, not here
 	if (const UHUCaseSubsystem* Cases = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr)
-		if (Cases->Arrested.Contains(SuspectId)) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is in holding - not at the scene"), *SuspectId); SetActorHiddenInGame(true); SetActorEnableCollision(false); SetActorTickEnabled(false); }
+		if (Cases->Arrested.Contains(SuspectId)) { UE_LOG(LogTemp, Log, TEXT("HomicideUnit: %s is in holding - not at the scene"), *SuspectId); SetActorHiddenInGame(true); if (Look) Look->SetActorHiddenInGame(true); SetActorEnableCollision(false); SetActorTickEnabled(false); }
 }
 
 FString AHUSuspectActor::DisplayName() const
@@ -418,6 +372,7 @@ void AHUSuspectActor::PlayFiller(uint8 Kind)
 	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
 	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, S, GetActorLocation() + FVector(0, 0, 170));
 	SpeakNotBefore = GetWorld()->GetTimeSeconds() + (S ? S->Duration : 1.f) + 0.15;
+	HUPeople::Talk(Look, S ? S->Duration : 1.f);
 	LastReply = L;
 	OpenedWith = L;
 }
@@ -436,6 +391,7 @@ void AHUSuspectActor::PlayVoice(USoundWave* Sound)
 	}
 	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
 	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation() + FVector(0, 0, 170));
+	HUPeople::Talk(Look, Sound->Duration); // the hands and head go with the words
 }
 
 // the thinking brain: words, emotion, body - shared with the squad, and spoken by the voice on every machine
@@ -515,6 +471,8 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 		I->Say(FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Reply));
 		Speak(Reply);
 	}
+	// shown the proof: they flinch (every machine runs this, so the squad sees it too); a confession hits harder
+	if (C->Breaks > BreaksBefore || (!bConfessedBefore && !C->Confessed.IsEmpty())) HUPeople::Flinch(Look, !C->Confessed.IsEmpty() && !bConfessedBefore ? 1.5f : 1.f);
 	if (C->Breaks > BreaksBefore) I->Notify(TEXT("LIE ON THE RECORD"), FString::Printf(TEXT("%s — %d of %d lies"), *S.Name, C->Breaks, C->Current.Solution.RequiredBreaks), FLinearColor(0.95f, 0.35f, 0.3f));
 	if (!bConfessedBefore && !C->Confessed.IsEmpty()) I->Notify(TEXT("CONFESSION"), FString::Printf(TEXT("%s confessed. Cuff them, van, book, submit."), *S.Name), FLinearColor(0.95f, 0.76f, 0.32f));
 }
@@ -539,6 +497,7 @@ void AHUSuspectActor::Tick(float DeltaSeconds)
 		SetActorRotation(StunLeft > 0.f ? FMath::RInterpTo(Now, FRotator(Bend, Now.Yaw, 0), DeltaSeconds, StunLeft > 1.f ? 12.f : 4.f) : FRotator(0, Now.Yaw, 0));
 	}
 	Animate(DeltaSeconds);
+	HUPeople::Motion(Look, bCuffed && Escort.IsValid() ? 150.f : 0.f);
 	const APawn* E = Escort.Get();
 	if (!bCuffed || !E) return;
 	// walked in front of whoever has them by the arm: an arm's length ahead, back to the officer
@@ -575,6 +534,7 @@ void AHUSuspectActor::Subdue(APawn* User, bool bTaser)
 	if (bCuffed || IsHidden()) return;
 	if (bInterviewing) CloseInterview();
 	StunLeft = bTaser ? 5.f : 7.f;
+	HUPeople::Flinch(Look, 2.f);
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I) return;
 	const TCHAR* Pepper[] = { TEXT("\"Agh — my eyes! My EYES!\""), TEXT("*coughing* \"What the hell, man?!\""), TEXT("\"I can't see! I can't — \"") };
@@ -588,6 +548,7 @@ void AHUSuspectActor::LoadIntoVan()
 	if (UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()) Cases->Arrested.AddUnique(SuspectId);
 	Escort = nullptr;
 	SetActorHiddenInGame(true);
+	if (Look) Look->SetActorHiddenInGame(true);
 	SetActorEnableCollision(false);
 	SetActorTickEnabled(false);
 }
@@ -597,7 +558,9 @@ void AHUSuspectActor::Speak(const FString& Said, uint8 InEmotion)
 {
 	UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-	if (!V || !C || !V->HasNeuralVoice() || GetNetMode() == NM_DedicatedServer) return;
+	if (GetNetMode() == NM_DedicatedServer) return;
+	// no voice to time it by: they still talk with their hands for about as long as the words would take
+	if (!V || !C || !V->HasNeuralVoice()) { HUPeople::Talk(Look, HUPeople::SpeakingTime(Said)); return; }
 	// THE VOICE: the emotion the thinking brain picked, or (written lines) one from their mood
 	const EHUSuspectMood M = C->MoodOf(SuspectId);
 	float Speed = M == EHUSuspectMood::Rattled ? 1.1f : M == EHUSuspectMood::Cracking ? 1.2f : M == EHUSuspectMood::Broken ? 0.85f : M == EHUSuspectMood::Defensive ? 1.05f : 1.f;
@@ -659,9 +622,24 @@ void AHUSuspectActor::Act(uint8 A)
 	}
 }
 
+void AHUSuspectActor::SitChair(bool bOn)
+{
+	if (bOn == (ChairParts.Num() > 0)) return;
+	for (UStaticMeshComponent* P : ChairParts) if (P) P->DestroyComponent();
+	ChairParts.Reset();
+	if (!bOn) return;
+	// a stacking chair right behind them, facing the way they face (+X)
+	if (HUBuild::Prop(this, RootComponent, ChairParts, TEXT("StackChair"), FVector(-8, 0, 50), FVector(0, 0, 100), FRotator::ZeroRotator, false)) return;
+	const FLinearColor Steel(0.3f, 0.32f, 0.34f), Seat(0.17f, 0.19f, 0.21f);
+	HUBuild::Block(this, RootComponent, ChairParts, HUBuild::EShape::Cube, FVector(-8, 0, 44), FVector(46, 46, 6), Seat, FRotator::ZeroRotator, false, EHUSurface::Fabric);
+	HUBuild::Block(this, RootComponent, ChairParts, HUBuild::EShape::Cube, FVector(-31, 0, 74), FVector(5, 44, 50), Seat, FRotator::ZeroRotator, false, EHUSurface::Fabric);
+	for (float DX : { -26.f, 10.f }) for (float DY : { -18.f, 18.f })
+		HUBuild::Block(this, RootComponent, ChairParts, HUBuild::EShape::Cube, FVector(DX, DY, 21), FVector(3, 3, 42), Steel, FRotator::ZeroRotator, false, EHUSurface::PaintedMetal);
+}
+
 void AHUSuspectActor::Animate(float Dt)
 {
-	if (bCuffed || StunLeft > 0.f || Blocks.Num() < 5 || BaseXf.Num() < 5) return;
+	if (bCuffed || StunLeft > 0.f || !Look) return;
 	// facing whoever's interviewing them
 	if (bFacing && Interviewer.IsValid()) FaceYaw = (Interviewer->GetActorLocation() - GetActorLocation()).Rotation().Yaw;
 	// the gesture's curve: in, hold, out over ~2.5 s
@@ -686,27 +664,18 @@ void AHUSuspectActor::Animate(float Dt)
 	default: break;
 	}
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0, FaceYaw + YawOff, 0), Dt, 8.f));
-	// the parts: 0 legs, 1 body, 2 head, 3-4 arms
-	const float Drop = Stance == 1 ? 44.f : 0.f;
-	for (int32 i = 0; i < 5; i++)
+	// (the body sits itself down onto the chair: HUPersonAnimation lowers the hips and bends the legs)
+	Look->SetActorRelativeLocation(FMath::VInterpTo(Look->GetRootComponent()->GetRelativeLocation(), All, Dt, 10.f));
+	SitChair(Stance == 1);
+	if (UHUPersonAnimation* Animation = HUPeople::AnimOf(Look))
 	{
-		FTransform X = BaseXf[i];
-		FVector L = X.GetLocation() + All;
-		FRotator R = X.Rotator();
-		FVector Sc = X.GetScale3D();
-		if (i == 0 && Stance == 1) { Sc.Z *= 0.5f; L.Z = 22.f; L.X += 10.f; } // crouched on a seat that isn't there yet
-		if (i > 0) L.Z -= Drop;
-		if (i == 2) L += Head;
-		if (i >= 3)
-		{
-			const float Side = i == 3 ? -1.f : 1.f;
-			if (Arms == 1) { L = FVector(16, Side * 6, 118 + (i == 3 ? 0.f : 8.f) - Drop) + All; R = FRotator(0, 0, 90); Sc.Z *= 0.85f; }
-			else if (Arms == 2) { L = FVector(4, Side * 30, 182 - Drop) + All; }
-		}
-		Blocks[i]->SetRelativeLocation(FMath::VInterpTo(Blocks[i]->GetRelativeLocation(), L, Dt, 10.f));
-		Blocks[i]->SetRelativeRotation(FMath::RInterpTo(Blocks[i]->GetRelativeRotation(), R, Dt, 10.f));
-		Blocks[i]->SetRelativeScale3D(FMath::VInterpTo(Blocks[i]->GetRelativeScale3D(), Sc, Dt, 10.f));
+		Animation->bSeated = Stance == 1;
+		Animation->SeatHeight = 47.f;
+		Animation->Arms = Arms;
+		Animation->HeadPitch = -Head.Z * 1.2f; // a nod, the head going down
 	}
+
+
 }
 
 #if !UE_BUILD_SHIPPING

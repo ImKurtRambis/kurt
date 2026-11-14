@@ -10,13 +10,15 @@
 #include "Engine/Engine.h"
 #include "HUMotorPool.h"
 #include "HUBuild.h"
+#include "HUPeople.h"
 #include "HUProps.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
-#include "Misc/CommandLine.h"
+#include "Misc/PackageName.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
@@ -32,6 +34,13 @@ AHUBriefingRoom::AHUBriefingRoom()
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	CaptainBody = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CaptainInteraction"));
+	CaptainBody->SetupAttachment(Root);
+	CaptainBody->SetRelativeLocation(FVector(670, -380, 95));
+	CaptainBody->InitCapsuleSize(30.f, 95.f);
+	CaptainBody->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CaptainBody->SetCollisionResponseToAllChannels(ECR_Ignore);
+	CaptainBody->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeF(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylF(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -109,12 +118,18 @@ void AHUBriefingRoom::Build()
 	CorridorLabels.Reset();
 	if (!Cube) return;
 
-	const FLinearColor Carpet(0.05f, 0.07f, 0.10f), Wall(0.35f, 0.38f, 0.42f), Wainscot(0.18f, 0.10f, 0.06f), Ceiling(0.6f, 0.6f, 0.58f);
-	const FLinearColor Wood(0.22f, 0.12f, 0.05f), Steel(0.25f, 0.27f, 0.3f), Seat(0.08f, 0.12f, 0.2f);
+	const FLinearColor Lino = FLinearColor::FromSRGBColor(FColor(98, 100, 93));
+	const FLinearColor Wall = FLinearColor::FromSRGBColor(FColor(201, 193, 175));
+	const FLinearColor Wainscot = FLinearColor::FromSRGBColor(FColor(105, 118, 102));
+	const FLinearColor WainscotRail = FLinearColor::FromSRGBColor(FColor(82, 96, 82));
+	const FLinearColor Ceiling = FLinearColor::FromSRGBColor(FColor(216, 207, 187));
+	const FLinearColor Wood = FLinearColor::FromSRGBColor(FColor(73, 55, 44));
+	const FLinearColor Steel = FLinearColor::FromSRGBColor(FColor(77, 87, 89));
+	const FLinearColor Seat = FLinearColor::FromSRGBColor(FColor(52, 72, 90));
 
-	// shell: navy commercial carpet, acoustic tiles overhead, plaster over a walnut wainscot (HUSurfaces.h)
+	// shell: scuffed green-gray linoleum, acoustic tiles, cream plaster over painted sage wainscot.
 	auto Made = [](UStaticMeshComponent* C, EHUSurface S, const FLinearColor& Col) { HUSurfaces::Apply(C, S, Col); return C; };
-	Made(Block(Cube, FVector(0, 0, -5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Carpet), EHUSurface::Fabric, Carpet);
+	Made(Block(Cube, FVector(0, 0, -5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Lino), EHUSurface::Linoleum, Lino);
 	Made(Block(Cube, FVector(0, 0, RoomH + 5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Ceiling), EHUSurface::CeilingTile, Ceiling);
 	Made(Block(Cube, FVector(RoomHalfX + 5, 0, RoomH / 2), FVector(10, RoomHalfY * 2, RoomH), Wall), EHUSurface::Plaster, Wall);
 	// the back wall has the doorway out to the corridor and the motor pool
@@ -122,10 +137,15 @@ void AHUBriefingRoom::Build()
 	BuildCorridor();
 	Made(Block(Cube, FVector(0, RoomHalfY + 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall), EHUSurface::Plaster, Wall);
 	Made(Block(Cube, FVector(0, -RoomHalfY - 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall), EHUSurface::Plaster, Wall);
-	// dark wood wainscot round the bottom of the walls
-	for (int32 S = -1; S <= 1; S += 2) Made(Block(Cube, FVector(-RoomHalfX + 2, S * (RoomHalfY + 90) / 2, 50), FVector(4, RoomHalfY - 90, 100), Wainscot), EHUSurface::Walnut, Wainscot);
-	Made(Block(Cube, FVector(0, RoomHalfY - 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot), EHUSurface::Walnut, Wainscot);
-	Made(Block(Cube, FVector(0, -RoomHalfY + 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot), EHUSurface::Walnut, Wainscot);
+	// painted lower wall panels and a metal cap rail match the precinct and roll-call room.
+	for (int32 S = -1; S <= 1; S += 2)
+	{
+		Made(Block(Cube, FVector(-RoomHalfX + 2, S * (RoomHalfY + 90) / 2, 43), FVector(4, RoomHalfY - 90, 86), Wainscot), EHUSurface::Plaster, Wainscot);
+		Made(Block(Cube, FVector(0, S * (RoomHalfY - 2), 43), FVector(RoomHalfX * 2, 4, 86), Wainscot), EHUSurface::Plaster, Wainscot);
+		Made(Block(Cube, FVector(0, S * (RoomHalfY - 2), 88), FVector(RoomHalfX * 2, 5, 4), WainscotRail), EHUSurface::PaintedMetal, WainscotRail);
+	}
+	for (int32 Side : {-1,1})
+		Made(Block(Cube,FVector(-RoomHalfX+2,Side*(RoomHalfY+90)/2,88),FVector(4,RoomHalfY-90,4),WainscotRail),EHUSurface::PaintedMetal,WainscotRail);
 	// ceiling lights
 	for (float X : { -400.f, 0.f, 400.f }) for (float Y : { -500.f, 0.f, 500.f })
 		Block(Cube, FVector(X, Y, RoomH - 4), FVector(120, 40, 4), FLinearColor(3.f, 3.f, 2.8f));
@@ -133,10 +153,12 @@ void AHUBriefingRoom::Build()
 	// the projector screen: a black frame, the blue slide, the header bar
 	Block(Cube, ScreenPos + FVector(4, 0, 0), FVector(4, 520, 300), FLinearColor(0.01f, 0.01f, 0.01f));
 	Block(Cube, ScreenPos, FVector(4, 500, 280), FLinearColor(0.02f, 0.06f, 0.12f));
-	Block(Cube, ScreenPos + FVector(-1, 0, 115), FVector(4, 500, 40), FLinearColor(0.15f, 0.55f, 1.f));
-	// the projector, hanging from the ceiling
-	Block(Cube, FVector(200, 0, RoomH - 50), FVector(40, 30, 14), Steel);
-	Block(Cylinder, FVector(200, 0, RoomH - 20), FVector(3, 3, 40), Steel);
+	Block(Cube, ScreenPos + FVector(-1, 0, 115), FVector(4, 500, 40), FLinearColor::FromSRGBColor(FColor(39, 58, 75)));
+	// weighted pull-down screen case and a compact ceiling-mounted projector from the period.
+	Made(Block(Cube, ScreenPos + FVector(0, 0, 154), FVector(18, 522, 12), Steel), EHUSurface::PaintedMetal, Steel);
+	Made(Block(Cube, ScreenPos + FVector(-2, 0, -143), FVector(3, 500, 5), Steel), EHUSurface::PaintedMetal, Steel);
+	Made(Block(Cube, FVector(200, 0, RoomH - 50), FVector(44, 34, 14), Steel), EHUSurface::PaintedMetal, Steel);
+	Block(Cylinder, FVector(222, 0, RoomH - 50), FVector(6, 6, 8), FLinearColor(0.05f, 0.06f, 0.07f), FRotator(90, 0, 0));
 
 	// A hollow walnut lectern, sloped reading surface, microphone and paper notes.
 	PodiumParts.Reset();
@@ -151,11 +173,6 @@ void AHUBriefingRoom::Build()
 	Block(Cube,FVector(602,-382,120),FVector(27,38,1),FLinearColor(.65f,.61f,.48f),FRotator(-10,0,0));
 	Block(Cylinder,FVector(584,-354,130),FVector(1.3f,1.3f,26),Steel,FRotator(-20,0,0));
 	Block(Sphere,FVector(588,-354,143),FVector(4,4,7),FLinearColor(.012f,.012f,.012f));
-
-	CaptainParts.Reset();
-	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 80), FVector(50, 50, 160), FLinearColor(0.03f, 0.05f, 0.1f)));
-	CaptainParts.Add(Block(Sphere, FVector(670, -380, 180), FVector(34, 30, 38), FLinearColor(0.6f, 0.42f, 0.32f)));
-	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 200), FVector(40, 40, 8), FLinearColor(0.02f, 0.03f, 0.07f)));
 
 	// the laptop table (the laptop itself is its own actor, spawned at play): a real desk when the art is in (HUProps)
 	if (!HUBuild::Prop(this, RootComponent, Blocks, TEXT("Desk"), FVector(560, 420, 38.5f), FVector(90, 140, 77), FRotator(0, 180, 0)))
@@ -172,20 +189,21 @@ void AHUBriefingRoom::Build()
 			{
 				const float Y = Side * (180.f + i * 130.f);
 				// a real stacking chair when the art is in (HUProps): the whole chair is the seat
-				if (UStaticMeshComponent* Real = HUBuild::Prop(this, RootComponent, Blocks, TEXT("StackChair"), FVector(X, Y, 50), FVector(0, 0, 100)))
+				const FVector SeatPos(X, Y, 48);
+				if (UStaticMeshComponent* Real = HUBuild::Prop(this, RootComponent, Blocks, TEXT("StackChair"), SeatPos, FVector(50, 50, 96)))
 				{
-					Seats.Add(Real, FVector(X, Y, 48));
+					Seats.Add(Real, SeatPos);
 					continue;
 				}
 				// remember both the cushion and the backrest as "this chair"
-				Seats.Add(Made(Block(Cube, FVector(X, Y, 45), FVector(50, 50, 6), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));
-				Seats.Add(Made(Block(Cube, FVector(X - 24, Y, 75), FVector(4, 50, 50), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));
+				Seats.Add(Made(Block(Cube, FVector(X, Y, 45), FVector(50, 50, 6), Seat), EHUSurface::Fabric, Seat), SeatPos);
+				Seats.Add(Made(Block(Cube, FVector(X - 24, Y, 75), FVector(4, 50, 50), Seat), EHUSurface::Fabric, Seat), SeatPos);
 				for (float DX : { -20.f, 20.f }) for (float DY : { -20.f, 20.f })
 					Block(Cube, FVector(X + DX, Y + DY, 21), FVector(3, 3, 42), Steel);
 			}
 }
 
-// out the back door: a corridor to the motor pool, with signs
+// Department doors and clear sightlines join the dim briefing to the brighter service garage.
 void AHUBriefingRoom::BuildCorridor()
 {
 	const float X0=-RoomHalfX-10, X1=MotorPoolPos.X+900, Len=X0-X1, Mid=(X0+X1)/2;
@@ -294,6 +312,8 @@ void AHUBriefingRoom::BeginPlay()
 		L->SetRelativeLocation(FVector(X,0,260)); L->SetIntensity(2400); L->SetAttenuationRadius(340);
 		L->SetLightColor(FLinearColor(.89f,.94f,.87f)); L->RegisterComponent();
 	}
+	// The Captain uses the shared cast and a separate conversation capsule.
+	HUPeople::Stand(this, RootComponent, HUPeople::CaptainFace(), FVector(670, -380, 0), 180.f);
 	// the laptop, wired to this room's screen
 	const FTransform T = FTransform(FRotator::ZeroRotator, FVector(560, 420, 78)) * GetActorTransform();
 	FActorSpawnParameters LP; LP.Name = TEXT("HU_BriefingLaptop"); LP.bDeferConstruction = true; LP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -359,11 +379,19 @@ void AHUBriefingRoom::SeatSquad()
 FText AHUBriefingRoom::GetPrompt_Implementation(APawn* User) const
 {
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
-	if (I && CaptainParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Talk to the Captain"));
+	if (I && I->FocusPart == CaptainBody) return FText::FromString(TEXT("[E] Talk to the Captain"));
 	if (I && PodiumParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Read the Captain's notes"));
 	if (!I || !Seats.Contains(I->FocusPart)) return FText::GetEmpty();
 	const AHUCharacter* Ch = Cast<AHUCharacter>(User);
 	return FText::FromString(Ch && Ch->bSeated ? TEXT("[E] Stand up") : TEXT("[E] Sit down"));
+}
+
+// the Captain (the one person this room stands up: HUPeople::Stand) talks with his hands for as long as the line takes
+static void CaptainTalks(AActor* Room, const FString& Line)
+{
+	TArray<AActor*> Kids;
+	Room->GetAttachedActors(Kids);
+	for (AActor* A : Kids) if (A && A->ActorHasTag(TEXT("HUPerson"))) HUPeople::Talk(A, HUPeople::SpeakingTime(Line));
 }
 
 void AHUBriefingRoom::Interact_Implementation(APawn* User, bool bSecondary)
@@ -371,12 +399,14 @@ void AHUBriefingRoom::Interact_Implementation(APawn* User, bool bSecondary)
 	AHUCharacter* Ch = Cast<AHUCharacter>(User);
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I || bSecondary) return;
-	if (CaptainParts.Contains(I->FocusPart))
+	if (I->FocusPart == CaptainBody)
 	{
 		const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		const bool bDone = C && C->bBriefed;
 		const TCHAR* Lines[] = { TEXT("\"Eyes on the screen, detective. The laptop's on the side table.\""), TEXT("\"Don't look at me, look at the evidence.\""), TEXT("\"Every one of them is lying about something. Find out which lie matters.\"") };
-		I->Say(TEXT("THE CAPTAIN:  ") + FString(bDone ? TEXT("\"What are you still doing here? Your car's in the motor pool.\"") : Lines[FMath::RandRange(0, 2)]));
+		const FString Line = bDone ? TEXT("\"What are you still doing here? Your car's in the motor pool.\"") : Lines[FMath::RandRange(0, 2)];
+		I->Say(TEXT("THE CAPTAIN:  ") + Line);
+		CaptainTalks(this, Line);
 		return;
 	}
 	if (PodiumParts.Contains(I->FocusPart))
@@ -403,6 +433,7 @@ void AHUBriefingRoom::ShowSlide(const FHUSlide& Slide, int32 SlideIndex, int32 S
 	ScreenRows->SetRelativeLocation(ScreenPos + FVector(-4, 0, bList ? -30.f : -10.f));
 	ScreenCounter->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), SlideIndex + 1, SlideCount)));
 	PendingLine = TEXT("THE CAPTAIN:  ") + Slide.CaptainLine;
+	CaptainTalks(this, Slide.CaptainLine); // he talks the room through the slide
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 		if (APawn* P = PC->GetPawn())
 			if (UHUInteractComponent* I = P->FindComponentByClass<UHUInteractComponent>())
@@ -411,7 +442,7 @@ void AHUBriefingRoom::ShowSlide(const FHUSlide& Slide, int32 SlideIndex, int32 S
 
 void AHUBriefingRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const
 {
-	if (CaptainParts.Contains(Part)) { for (UStaticMeshComponent* P : CaptainParts) Out.Add(P); return; }
+	if (Part == CaptainBody) { Out.Add(CaptainBody); return; }
 	if (PodiumParts.Contains(Part)) { for (UStaticMeshComponent* P : PodiumParts) Out.Add(P); return; }
 	// a chair: its cushion and its backrest
 	if (const FVector* Seat = Seats.Find(Part)) for (const TPair<UPrimitiveComponent*, FVector>& S : Seats) if (S.Value.Equals(*Seat)) Out.Add(S.Key);
@@ -497,5 +528,9 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 }
 void AHUBriefingRoom::EndPlay(const EEndPlayReason::Type Reason)
 {
+	HUPeople::DestroyOwned(this);
 	Super::EndPlay(Reason);
 }
+
+
+

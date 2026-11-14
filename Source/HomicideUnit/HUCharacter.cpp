@@ -1,5 +1,8 @@
 #include "HUCharacter.h"
 #include "HUProgress.h"
+#include "HUPeople.h"
+#include "HUPersonAnimation.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "HUInteractComponent.h"
 #include "HUCaseSubsystem.h"
 #include "HUSquadSubsystem.h"
@@ -67,11 +70,20 @@ void AHUCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 
 void AHUCharacter::ServerSetLook_Implementation(const FHULook& NewLook) { Look = NewLook; BuildBody(); }
 
-// a stand-in body built from your look: hidden from your own camera (you see your hand), seen by everyone else
+// Full-body characters and the desk preview share the same model factory.
 void AHUCharacter::BuildBody()
 {
 	if (!Body) return;
-	HULook::BuildFigure(this, Body, BodyParts, Look, true);
+	Model = HUPeople::Detective(this, Body, Model, Look, true);
+}
+
+USkeletalMeshComponent* AHUCharacter::VisualBody() const { return HUPeople::BodyOf(Model); }
+
+void AHUCharacter::EndPlay(const EEndPlayReason::Type Reason)
+{
+	HUPeople::DestroyOwned(this);
+	Model = nullptr;
+	Super::EndPlay(Reason);
 }
 
 // ESC: the menu (settings, pager, leave the case) - not straight back to the desk
@@ -84,6 +96,18 @@ void AHUCharacter::OpenMenu()
 void AHUCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	HUPeople::Motion(Model, GetVelocity().Size2D());
+	// the body poses itself: down onto the seat, or a deep crouch (HUPersonAnimation). Seated, the capsule rests 40 cm
+	// below the seat's top (SitDown), so the feet go 6 cm lower to stand on the floor under a 46 cm seat.
+	const float ModelScale = Model ? FMath::Max(0.5f, (float)Model->GetActorRelativeScale3D().Z) : 1.f;
+	if (UHUPersonAnimation* Animation = HUPeople::AnimOf(Model))
+	{
+		Animation->bSeated = bSeated;
+		Animation->bCrouched = bIsCrouched && !bSeated;
+		Animation->SeatHeight = 46.f / ModelScale;
+	}
+	if (Body) Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight()));
+	if (Model) Model->SetActorRelativeLocation(FVector(0, 0, bSeated ? -6.f : 0.f));
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
 	const UHUCaseSubsystem* C = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr;

@@ -52,6 +52,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Menu") void Use(EHUDeskItem Item);
 
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 protected:
@@ -92,7 +93,7 @@ private:
 	void ChangeLook(int32 Dir);
 	void BuildFigurine();
 	UPROPERTY() USceneComponent* Figurine = nullptr;
-	UPROPERTY() TArray<UStaticMeshComponent*> FigureParts;
+	UPROPERTY() AActor* FigureModel = nullptr;
 	int32 RowsIn(EHUMenuPanel P) const;
 	bool LevelExists(FName Level) const;
 	void GoTo(FName Level, const FString& Options);

@@ -1,9 +1,12 @@
 #include "HUVictim.h"
 #include "HUBuild.h"
+#include "HUPeople.h"
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
 #include "HUInteractComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 
 using namespace HUBuild;
@@ -12,18 +15,65 @@ AHUVictim::AHUVictim()
 {
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
+	const TCHAR* Names[] = { TEXT("Head"), TEXT("Neck"), TEXT("LeftHand"), TEXT("RightHand"), TEXT("LeftArm"), TEXT("RightArm"), TEXT("Torso"), TEXT("LeftThigh"), TEXT("RightThigh"), TEXT("LeftCalf"), TEXT("RightCalf") };
+	const float Radii[] = { 12, 8, 10, 10, 13, 13, 25, 18, 18, 16, 16 };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
+	{
+		USphereComponent* Zone = CreateDefaultSubobject<USphereComponent>(FName(Names[Index]));
+		Zone->SetupAttachment(Root);
+		Zone->InitSphereRadius(Radii[Index]);
+		Zone->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Zone->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Zone->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		Zone->SetGenerateOverlapEvents(false);
+		BodyZones.Add(Zone);
+	}
 }
 
 UHUCaseSubsystem* AHUVictim::Cases() const { return GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUCaseSubsystem>() : nullptr; }
+
+void AHUVictim::BeginPlay()
+{
+	Super::BeginPlay();
+	const UHUCaseSubsystem* C = Cases();
+	if (Kind != EHUVictimKind::Body || !C) return;
+	FString Name = C->Current.Victim; int32 Comma; if (Name.FindChar(',', Comma)) Name = Name.Left(Comma);
+	const float Scale = C->Current.Victim.Contains(TEXT("age ")) ? 0.65f : 1.f;
+	Corpse = HUPeople::Lie(this, RootComponent, HUPeople::VictimFace(Name, C->Current.Number), FVector(-112 * Scale, 0, 22), Scale);
+	USkeletalMeshComponent* Body = HUPeople::BodyOf(Corpse);
+	if (!Body) return;
+	const FName Bones[] = { TEXT("head"), TEXT("neck_01"), TEXT("hand_l"), TEXT("hand_r"), TEXT("lowerarm_l"), TEXT("lowerarm_r"), TEXT("spine_03"), TEXT("thigh_l"), TEXT("thigh_r"), TEXT("calf_l"), TEXT("calf_r") };
+	for (int32 Index = 0; Index < BodyZones.Num(); ++Index)
+		if (Body->DoesSocketExist(Bones[Index]))
+		{
+			BodyZones[Index]->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetNotIncludingScale, Bones[Index]);
+			BodyZones[Index]->SetRelativeScale3D(FVector(1.f));
+			BodyZones[Index]->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		}
+
+
+}
+
+void AHUVictim::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (Corpse) { Corpse->Destroy(); Corpse = nullptr; }
+	Super::EndPlay(Reason);
+}
 
 // local +X runs from the feet to the head
 void AHUVictim::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	Clear(Blocks);
+	Spots.Reset();
+	const int32 SpotIds[] = { 0, 1, 2, 2, 2, 2, 3, 4, 4, 4, 4 };
+	for (int32 Index = 0; Index < BodyZones.Num(); ++Index)
+	{
+		BodyZones[Index]->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		if (Kind == EHUVictimKind::Body) Spots.Add(BodyZones[Index], SpotIds[Index]);
+	}
 	USceneComponent* R = RootComponent;
-	const FLinearColor Skin(0.55f, 0.43f, 0.36f), Pants(0.05f, 0.05f, 0.06f), Shoe(0.02f, 0.015f, 0.01f), Blood(0.22f, 0.01f, 0.01f), Tape(0.95f, 0.95f, 0.92f);
-	const FRotator AlongX(90, 0, 0);
+	const FLinearColor Blood(0.22f, 0.01f, 0.01f), Tape(0.95f, 0.95f, 0.92f);
 	auto Line = [&](FVector A, FVector B) // a strip of white tape on the floor from A to B
 	{
 		const FVector D = B - A;
@@ -36,22 +86,8 @@ void AHUVictim::OnConstruction(const FTransform& Transform)
 		// a pool of blood under the head and shoulders
 		Block(this, R, Blocks, EShape::Cylinder, FVector(30, 10, 0.3f), FVector(80, 62, 0.6f), Blood);
 		Block(this, R, Blocks, EShape::Cylinder, FVector(62, 30, 0.3f), FVector(26, 18, 0.6f), Blood);
-		// the body, face up, one arm flung out, one knee bent - each part examinable: head, neck, hands, torso, legs
-		Spots.Reset();
-		auto Part = [&](int32 Spot, EShape S, FVector P, FVector Sz, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator) { if (UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Sz, Col, Rot)) Spots.Add(M, Spot); };
-		Part(3, EShape::Cube, FVector(0, 0, 10), FVector(62, 36, 18), Coat);
-		Part(3, EShape::Cube, FVector(-30, 0, 9), FVector(10, 34, 16), Coat * 0.8f);
-		Part(1, EShape::Cylinder, FVector(33, 2, 10), FVector(11, 11, 12), Skin, AlongX);
-		Part(0, EShape::Sphere, FVector(43, 2, 11), FVector(21, 19, 20), Skin);
-		Part(0, EShape::Sphere, FVector(46, 2, 14), FVector(19, 18, 12), FLinearColor(0.08f, 0.06f, 0.04f));
-		Part(4, EShape::Cylinder, FVector(-68, 9, 7), FVector(13, 13, 72), Pants, AlongX);
-		Part(4, EShape::Cylinder, FVector(-60, -14, 9), FVector(13, 13, 70), Pants, FRotator(90, -14, 0));
-		Part(4, EShape::Cube, FVector(-108, 9, 6), FVector(12, 10, 10), Shoe);
-		Part(4, EShape::Cube, FVector(-98, -24, 6), FVector(12, 10, 10), Shoe);
-		Part(2, EShape::Cylinder, FVector(18, 38, 6), FVector(10, 10, 54), Coat, FRotator(90, 55, 0));   // flung out
-		Part(2, EShape::Sphere, FVector(34, 60, 5), FVector(9, 7, 6), Skin);
-		Part(2, EShape::Cylinder, FVector(-2, -22, 7), FVector(10, 10, 50), Coat, FRotator(90, -8, 0));   // at the side
-		Part(2, EShape::Sphere, FVector(-28, -25, 5), FVector(9, 7, 6), Skin);
+
+
 		break;
 	}
 	case EHUVictimKind::Outline:

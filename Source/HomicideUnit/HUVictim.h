@@ -36,8 +36,15 @@ public:
 	virtual void HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveComponent*>& Out) const override;
 	virtual float UseTime(APawn* User, bool bSecondary) const override;
 
+protected:
+	// Examination zones follow the real body's bones as it settles.
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+
 private:
+	UPROPERTY() TArray<class USphereComponent*> BodyZones;
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
+	UPROPERTY() AActor* Corpse = nullptr; // the MetaHuman
 	bool bSearched = false;
 	// the body's parts: 0 head, 1 neck, 2 hands & arms, 3 torso, 4 legs & shoes
 	UPROPERTY() TMap<UPrimitiveComponent*, int32> Spots;

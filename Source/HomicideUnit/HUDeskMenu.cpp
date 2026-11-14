@@ -1,5 +1,6 @@
 #include "HUDeskMenu.h"
 #include "HUProgress.h"
+#include "HUPeople.h"
 #include "HUListenSubsystem.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
@@ -25,8 +26,8 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "HUProps.h"
-
 #include "HUFilmCamera.h"
+
 using namespace HUBuild;
 
 static const float DeskZ = 75.f; // the desk top
@@ -549,10 +550,10 @@ void AHUDeskMenu::Tick(float DeltaSeconds)
 	const FVector Target = ItemPos[Pick] + FVector(0, 0, 55);
 	Highlight->SetRelativeLocation(FMath::VInterpTo(Highlight->GetRelativeLocation(), Target, DeltaSeconds, 12.f));
 	Highlight->SetVisibility(Panel == EHUMenuPanel::None);
-	// your name on the plate (with a cursor while you type it)
 	// and the camera's focus follows it there (the window and the city stay soft behind)
 	if (UHUFilmCamera* Film = GetWorld()->GetSubsystem<UHUFilmCamera>())
 		Film->FocusOn(FVector::Dist(Seat->GetComponentLocation(), GetActorTransform().TransformPosition(ItemPos[Pick] + FVector(0, 0, 6))));
+	// your name on the plate (with a cursor while you type it)
 	const FString Shown = bTyping && TypingField == 0 ? Typed + (FMath::Fmod(GetWorld()->GetTimeSeconds(), 1.0) < 0.5 ? TEXT("_") : TEXT(" ")) : Name();
 	PlateText->SetText(FText::FromString(Shown.IsEmpty() ? TEXT("— YOUR NAME —") : (TEXT("DET. ") + Shown).ToUpper()));
 	TickWeather(DeltaSeconds);
@@ -689,10 +690,9 @@ void AHUDeskMenu::BuildFigurine()
 		Figurine->SetupAttachment(RootComponent);
 		Figurine->SetRelativeLocation(FVector(52, 30, DeskZ));
 		Figurine->SetRelativeRotation(FRotator(0, 200, 0)); // facing you, a little turned
-		Figurine->SetRelativeScale3D(FVector(0.15f));
 		Figurine->RegisterComponent();
 	}
-	HULook::BuildFigure(this, Figurine, FigureParts, C->Look, false);
+	FigureModel = HUPeople::Detective(this, Figurine, FigureModel, C->Look, false, 0.15f);
 }
 void AHUDeskMenu::Up() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + N - 1) % N; }
 void AHUDeskMenu::Down() { const int32 N = RowsIn(Panel); if (!bTyping && N > 0) Row = (Row + 1) % N; }
@@ -987,4 +987,11 @@ void AHUDeskMenu::PanelText(FString& Title, TArray<FString>& Lines) const
 		break;
 	default: break;
 	}
+}
+
+void AHUDeskMenu::EndPlay(const EEndPlayReason::Type Reason)
+{
+	HUPeople::DestroyOwned(this);
+	FigureModel = nullptr;
+	Super::EndPlay(Reason);
 }

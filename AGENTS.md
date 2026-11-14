@@ -18,6 +18,9 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Create any missing levels | `UnrealEditor-Cmd.exe HomicideUnit.uproject -run=pythonscript -script="Tools\CreateLevels.py"` |
 | Package a standalone game (Shipping, ~5 min; `-NoAI` leaves out the 14 GB local AI) | `powershell -ExecutionPolicy Bypass -File Tools\Package.ps1` → `Packaged\Windows\HomicideUnit.exe` |
 | Score the suspects' AI (~6 min; see `Tools\InterviewBench\README.md`) | `powershell -ExecutionPolicy Bypass -File Tools\InterviewBench.ps1` → `Saved\InterviewBench\<date>\report.md` |
+| Build the cast of MetaHumans (full editor, signed in to Epic; minutes per person; skips anyone built) | `UnrealEditor.exe HomicideUnit.uproject -ExecutePythonScript="Tools/MakeCast.py" -unattended` → `Content/MetaHumans` (not in git) |
+| Photograph everyone (MetaHumans) in a level | add `-HUPeopleShots` (and `-HUCrime=homicide` on `L_Scene` for a body) → `Saved\Screenshots` |
+| Photograph every way a body moves (idle, walk, talk, flinch, cuffed, crouch, seated at a table...) | `L_Precinct` with `-HUBodyTest` → `Saved\Screenshots\...\Body_*.png` |
 
 - **Close the game/editor before building** (a running `UnrealEditor.exe` locks the DLL). `Build.ps1` does this for you.
 - A build is done when it prints `Result: Succeeded`. Fix every `error C####` it prints.
@@ -86,7 +89,7 @@ Everything in `AI\` runs on the player's own PC, on any maker's graphics card. T
 ## Not done yet (good next tasks)
 
 - Interrogation AI: a local LLM (llama.cpp) that acts out the suspect from their facts + pressure state (`HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`); offline voices (Kokoro / Chatterbox) whose emotion follows pressure. See the zero-cost plan: no per-use API calls in the final build.
-- Real characters (MetaHuman + Motion Matching), prop library for Fab/Megascans meshes, comic/noir post-process.
+- Real characters: the suspects, the uniforms at the tape, the Captain and a homicide's body are MetaHumans (`HUPeople`; built by `Tools/MakeCast.py`, reusing the existing cast when dedicated role models are absent). How they move: `HUPersonAnimation` - the engine's MetaHuman idle/walk/run clips (`HUPeople::Motion`) with sitting, crouching, cuffs, talking (`HUPeople::Talk`), flinching (`HUPeople::Flinch`), crossed/raised arms and head turns solved on top with IK; set its fields, never bone rotations by hand. Still to do: Motion Matching, real uniforms and coats (only the default garment exists), dedicated child meshes (the existing cast is scaled for those roles). Prop library for Fab/Megascans meshes, comic/noir post-process.
 - Offline voices (Kokoro via NNE) to replace paid TTS.
 
 ## Briefing and motor pool

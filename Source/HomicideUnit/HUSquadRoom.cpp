@@ -1,5 +1,8 @@
-﻿#include "HUSquadRoom.h"
+#include "HUSquadRoom.h"
 #include "HUSquadBoards.h"
+#include "HUPeople.h"
+#include "HUPersonAnimation.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUProps.h"
@@ -742,7 +745,7 @@ void AHUSquadRoom::UpdateHolding()
 	TArray<FString> Want = C && C->bAwaitingCaptain ? C->Arrested : TArray<FString>();
 	TArray<FString> Gone;
 	for (const TPair<FString, USceneComponent*>& P : Prisoners) if (!Want.Contains(P.Key)) Gone.Add(P.Key);
-	for (const FString& Id : Gone) { if (USceneComponent* G = Prisoners.FindRef(Id)) { TArray<USceneComponent*> Kids; G->GetChildrenComponents(true, Kids); for (USceneComponent* K : Kids) K->DestroyComponent(); G->DestroyComponent(); } Prisoners.Remove(Id); }
+	for (const FString& Id : Gone) { if (AActor* Model = PrisonerModels.FindRef(Id)) Model->Destroy(); PrisonerModels.Remove(Id); if (USceneComponent* G = Prisoners.FindRef(Id)) { TArray<USceneComponent*> Kids; G->GetChildrenComponents(true, Kids); for (USceneComponent* K : Kids) K->DestroyComponent(); G->DestroyComponent(); } Prisoners.Remove(Id); }
 	for (int32 i = 0; i < Want.Num(); i++)
 	{
 		const FString& Id = Want[i];
@@ -751,14 +754,21 @@ void AHUSquadRoom::UpdateHolding()
 		{
 			G = NewObject<USceneComponent>(this);
 			G->SetupAttachment(RootComponent);
-			G->SetRelativeLocation(FVector(150 + (i % 3) * 300, -1300 - (i / 3) * 110, 0)); // in a holding cell
-			G->SetRelativeRotation(FRotator(0, 90, 0)); // facing out through the bars
+			// the first one brought in waits in Interview 1, sat across the table from the detectives' chairs, hands on
+			// the table (HUStation: that chair's seat is at (1725, 455), facing -Y); the rest stand in the cells, cuffed
+			const bool bInterview = i == 0 && bPrecinct;
+			G->SetRelativeLocation(bInterview ? FVector(1725, 451, 0) : FVector(150 + (i % 3) * 300, -1300 - (i / 3) * 110, 0));
+			G->SetRelativeRotation(FRotator(0, bInterview ? -90.f : 90.f, 0)); // facing the table / out through the bars
 			G->RegisterComponent();
-			TArray<UStaticMeshComponent*> Parts;
-			const FLinearColor Coat = FLinearColor(0.15f + 0.05f * (i % 3), 0.13f, 0.12f + 0.04f * (i % 2));
-			Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 45), FVector(40, 46, 90), FLinearColor(0.05f, 0.05f, 0.06f), FRotator::ZeroRotator, false);
-			Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 125), FVector(52, 60, 76), Coat, FRotator::ZeroRotator, false);
-			Block(this, G, Parts, EShape::Sphere, FVector(0, 0, 178), FVector(26, 24, 30), FLinearColor(0.58f, 0.42f, 0.33f), FRotator::ZeroRotator, false);
+			AActor* Model = HUPeople::Stand(this, G, HUPeople::SuspectFace(C->Current, Id), FVector::ZeroVector, 0.f);
+			PrisonerModels.Add(Id, Model);
+			if (UHUPersonAnimation* Animation = HUPeople::AnimOf(Model))
+			{
+				Animation->bCuffed = !bInterview;
+				Animation->bSeated = Animation->bTable = bInterview;
+				Animation->SeatHeight = 47.f;
+			}
+
 			UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
 			T->SetupAttachment(G);
 			T->SetRelativeLocation(FVector(0, 0, 210));
@@ -788,4 +798,11 @@ float AHUSquadRoom::UseTime(APawn* User, bool bSecondary) const
 	if (CounterParts.Contains(I->FocusPart) && C && C->UnbookedCount() > 0) return 1.5f;
 	if (TrayParts.Contains(I->FocusPart) && C && C->bAwaitingCaptain && C->UnbookedCount() == 0) return 1.f;
 	return 0.f;
+}
+
+void AHUSquadRoom::EndPlay(const EEndPlayReason::Type Reason)
+{
+	HUPeople::DestroyOwned(this);
+	PrisonerModels.Empty();
+	Super::EndPlay(Reason);
 }

@@ -1,6 +1,8 @@
 #include "HUSecurityDesk.h"
 #include "HUBuild.h"
 #include "HUProps.h"
+#include "HUPeople.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "HUInteractComponent.h"
 #include "HUSuspectActor.h"
 #include "HUCaseSubsystem.h"
@@ -77,25 +79,31 @@ void AHUSecurityDesk::BeginPlay()
 		}
 		return;
 	}
-	// the people on the tape: a figure for each, visible only to the cameras
-	// (suspects in their coats, then strangers passing through, then the victim last)
-	const int32 N = Frames.Num() > 0 ? Frames[0].People.Num() : 0;
-	for (int32 i = 0; i < N; i++)
+	// Historical people use the same casting as the scene and holding, rendered only by the tape cameras.
+	const UHUCaseSubsystem* C = Cases();
+	const int32 Count = Frames.Num() > 0 ? Frames[0].People.Num() : 0;
+	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		USceneComponent* G = NewObject<USceneComponent>(this);
-		G->SetupAttachment(RootComponent);
-		G->SetUsingAbsoluteLocation(true);
-		G->RegisterComponent();
-		const bool bVictim = i == N - 1;
-		const FLinearColor Coat = bVictim ? FLinearColor(0.5f, 0.5f, 0.5f) : Coats.IsValidIndex(i) ? Coats[i] : FLinearColor(0.32f, 0.3f, 0.27f);
-		TArray<UStaticMeshComponent*> Parts;
-		Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 45), FVector(40, 46, 90), FLinearColor(0.05f, 0.05f, 0.06f), FRotator::ZeroRotator, false);
-		Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 125), FVector(52, 60, 76), Coat, FRotator::ZeroRotator, false);
-		Block(this, G, Parts, EShape::Sphere, FVector(0, 0, 178), FVector(26, 24, 30), FLinearColor(0.45f, 0.35f, 0.3f), FRotator::ZeroRotator, false);
-		if (!bVictim && !Coats.IsValidIndex(i)) Block(this, G, Parts, EShape::Cylinder, FVector(0, 0, 196), FVector(34, 34, 8), FLinearColor(0.08f, 0.08f, 0.08f), FRotator::ZeroRotator, false); // a stranger in a hat
-		for (UStaticMeshComponent* P : Parts) { P->SetVisibleInSceneCaptureOnly(true); P->SetCastShadow(false); }
-		Ghosts.Add(G);
+		const bool bSuspect = C && C->Current.Suspects.IsValidIndex(Index);
+		const bool bVictim = Index == Count - 1;
+		const FString Face = bSuspect ? HUPeople::SuspectFace(C->Current, C->Current.Suspects[Index].Id)
+			: bVictim && C ? HUPeople::VictimFace(C->Current.Victim, C->Current.Number) : HUPeople::CastFace(Index);
+		AActor* Person = HUPeople::Stand(this, RootComponent, Face, FVector::ZeroVector, 0.f);
+		Ghosts.Add(Person);
+		if (!Person) continue;
+		if (bVictim && C && C->Current.Victim.Contains(TEXT("age "))) Person->SetActorRelativeScale3D(FVector(0.65f));
+		TInlineComponentArray<UPrimitiveComponent*> Parts(Person);
+		for (UPrimitiveComponent* Part : Parts) { Part->SetVisibleInSceneCaptureOnly(true); Part->SetCastShadow(false); }
+		if (USkeletalMeshComponent* Body = HUPeople::BodyOf(Person))
+		{
+			Body->TickAnimation(0.f, false);
+			Body->RefreshBoneTransforms();
+			Body->bPauseAnims = true;
+		}
+		Person->SetActorHiddenInGame(true);
 	}
+
+
 }
 
 FString AHUSecurityDesk::CamLabel() const
@@ -156,6 +164,7 @@ void AHUSecurityDesk::PullTapes(APawn* User)
 			C->TapeFrames.Add(RT);
 		}
 	Capture->TextureTarget = nullptr;
+	for (AActor* Person : Ghosts) if (Person) Person->SetActorHiddenInGame(true);
 	C->bTapesPulled = true;
 	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
 	{
@@ -246,9 +255,16 @@ void AHUSecurityDesk::Show()
 	for (int32 i = 0; i < Ghosts.Num(); i++)
 	{
 		const bool bThere = F.People.IsValidIndex(i) && !F.People[i].IsNearlyZero();
-		Ghosts[i]->SetVisibility(bThere, true);
-		if (bThere) Ghosts[i]->SetWorldLocation(F.People[i]);
+		if (!Ghosts[i]) continue; Ghosts[i]->SetActorHiddenInGame(!bThere);
+		if (bThere) Ghosts[i]->SetActorLocation(F.People[i]);
 	}
+	// Owned MetaHuman actors render independently of their gameplay actor's HiddenActors entry.
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		if (It->ActorHasTag(TEXT("HUPerson")) && It->GetOwner() != this)
+		{
+			Capture->HiddenActors.Remove(*It);
+			if (It->GetOwner() != VictimActor || !F.bAfter) Capture->HiddenActors.Add(*It);
+		}
 	// and the body only once it's happened
 	Capture->HiddenActors.Remove(VictimActor);
 	if (VictimActor && !F.bAfter) Capture->HiddenActors.Add(VictimActor);
@@ -269,4 +285,12 @@ void AHUSecurityDesk::Tick(float DeltaSeconds)
 		Frame = (Frame + 1) % FMath::Max(1, Frames.Num());
 		Show();
 	}
+}
+
+void AHUSecurityDesk::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (bViewing) Close();
+	HUPeople::DestroyOwned(this);
+	Ghosts.Empty();
+	Super::EndPlay(Reason);
 }

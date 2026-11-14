@@ -64,13 +64,14 @@ public:
 	virtual void Interact_Implementation(APawn* User, bool bSecondary) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
-	UPROPERTY() TArray<USceneComponent*> Ghosts;   // one figure per person on the tape
+	UPROPERTY() TArray<AActor*> Ghosts; // the same cast, visible only to scene captures
 	TWeakObjectPtr<APawn> Viewer;
 	float Flicker = 0.f;
 	void Open(APawn* User);

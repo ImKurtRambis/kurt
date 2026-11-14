@@ -78,8 +78,10 @@ private:
 	UPROPERTY() class UTextRenderComponent* RosterNames = nullptr; // the duty roster's names column (the squad is on it)
 	float ShotClock = 0.f; // -HURollCallShots: a camera tour of roll call, saved as screenshots
 	void RollCallShots(float DeltaSeconds);
-	// the prisoners in holding (figures, by suspect id)
+	// Models retain the same faces as the suspects at the scene.
 	UPROPERTY() TMap<FString, USceneComponent*> Prisoners;
+	UPROPERTY() TMap<FString, AActor*> PrisonerModels;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	void UpdateHolding();
 	float Tock = 0.f;
 	bool bStarting = false;

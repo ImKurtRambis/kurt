@@ -57,7 +57,7 @@ private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	// every part of a chair -> the chair's cushion (local)
 	UPROPERTY() TMap<UPrimitiveComponent*, FVector> Seats;
-	UPROPERTY() TArray<UStaticMeshComponent*> CaptainParts;
+	UPROPERTY() class UCapsuleComponent* CaptainBody = nullptr;
 	UPROPERTY() TArray<UStaticMeshComponent*> PodiumParts;
 	UPROPERTY() UStaticMesh* Cube = nullptr;
 	UPROPERTY() UStaticMesh* Cylinder = nullptr;

@@ -179,6 +179,58 @@ void UHUInteractComponent::UpdateBeam()
 }
 
 // ---------- the hand, and what's in it ----------
+// whatever's in a hand, as parts (P makes one: shape, where, size, colour, rotation)
+void UHUInteractComponent::HeldItemParts(TFunctionRef<UStaticMeshComponent*(uint8, FVector, FVector, FLinearColor, FRotator)> P, int32 InHeld, UStaticMeshComponent*& OutLens)
+{
+	using namespace HUBuild;
+	const FRotator AlongX(90, 0, 0);
+	const FLinearColor Black(0.02f, 0.02f, 0.02f);
+	switch (InHeld)
+	{
+	case 1: // flashlight
+	case 2: // UV light
+	{
+		const FLinearColor Body = InHeld == 1 ? Black : FLinearColor(0.2f, 0.06f, 0.3f);
+		P((uint8)EShape::Cylinder, FVector(11, 0, 0), FVector(4, 4, 18), Body, AlongX);
+		P((uint8)EShape::Cylinder, FVector(21, 0, 0), FVector(6.5f, 6.5f, 4), Body, AlongX);
+		OutLens = P((uint8)EShape::Cylinder, FVector(23.2f, 0, 0), FVector(5.5f, 5.5f, 0.4f), FLinearColor(0.2f, 0.2f, 0.22f), AlongX);
+		break;
+	}
+	case 3: // print kit: the case in your hand, a brush across it
+		P((uint8)EShape::Cube, FVector(9, 0, 1), FVector(11, 9, 5), Black, FRotator::ZeroRotator);
+		P((uint8)EShape::Cylinder, FVector(12, 3, 5), FVector(1.6f, 1.6f, 11), FLinearColor(0.45f, 0.28f, 0.12f), AlongX);
+		P((uint8)EShape::Cylinder, FVector(18, 3, 5), FVector(3, 3, 3), FLinearColor(0.1f, 0.1f, 0.1f), AlongX);
+		break;
+	case 4: // crowbar, angled up
+		P((uint8)EShape::Cylinder, FVector(12, 0, 10), FVector(2.2f, 2.2f, 42), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(60, 0, 0));
+		P((uint8)EShape::Cube, FVector(23, 0, 28), FVector(6, 2, 2), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(-30, 0, 0));
+		break;
+	case 5: // scanner, screen up
+		P((uint8)EShape::Cube, FVector(10, 0, 2), FVector(13, 7, 3), FLinearColor(0.15f, 0.16f, 0.17f), FRotator(-20, 0, 0));
+		P((uint8)EShape::Cube, FVector(10.5f, 0, 3.8f), FVector(7, 5, 0.3f), FLinearColor(0.2f, 2.f, 0.6f), FRotator(-20, 0, 0));
+		break;
+	// off the belt
+	case SlotCount + HUBelt::Cuffs: // two steel rings and the chain
+		for (float Sd : { -1.f, 1.f }) P((uint8)EShape::Cylinder, FVector(10, Sd * 4.5f, 2), FVector(7, 7, 1.2f), FLinearColor(0.7f, 0.72f, 0.75f), FRotator(0, 0, 90));
+		P((uint8)EShape::Cube, FVector(10, 0, 2), FVector(1.5f, 4, 1.5f), FLinearColor(0.6f, 0.62f, 0.65f), FRotator::ZeroRotator);
+		break;
+	case SlotCount + HUBelt::Pepper: // the can upright, thumb on the button
+		P((uint8)EShape::Cylinder, FVector(8, 0, 4), FVector(4, 4, 12), FLinearColor(0.75f, 0.12f, 0.05f), FRotator::ZeroRotator);
+		P((uint8)EShape::Cube, FVector(8, 0, 11), FVector(3, 2.5f, 2), Black, FRotator::ZeroRotator);
+		break;
+	case SlotCount + HUBelt::Taser: // grip down, barrel forward
+		P((uint8)EShape::Cube, FVector(4, 0, -2), FVector(4, 3, 8), Black, FRotator(-15, 0, 0));
+		P((uint8)EShape::Cube, FVector(11, 0, 3), FVector(14, 3.5f, 4.5f), FLinearColor(0.85f, 0.7f, 0.05f), FRotator::ZeroRotator);
+		P((uint8)EShape::Cube, FVector(18.2f, 0, 3), FVector(0.5f, 3, 3.5f), Black, FRotator::ZeroRotator);
+		break;
+	case SlotCount + HUBelt::Radio: // held up, antenna high
+		P((uint8)EShape::Cube, FVector(8, 0, 5), FVector(4, 6, 12), FLinearColor(0.08f, 0.08f, 0.09f), FRotator::ZeroRotator);
+		P((uint8)EShape::Cylinder, FVector(8, 2, 15), FVector(1, 1, 9), FLinearColor(0.08f, 0.08f, 0.09f), FRotator::ZeroRotator);
+		break;
+	default: break; // empty hand
+	}
+}
+
 void UHUInteractComponent::BuildHand()
 {
 	if (!Hand) return;
@@ -192,58 +244,14 @@ void UHUInteractComponent::BuildHand()
 		if (M) { M->SetCastShadow(false); M->bOnlyOwnerSee = true; }
 		return M;
 	};
-	const FRotator AlongX(90, 0, 0); // lays a cylinder along the hand's forward axis
-	const FLinearColor Black(0.02f, 0.02f, 0.02f);
 	// your arms: your body's own arms - coat sleeve, shirt cuff, skin, build (HULook) - holding what's in your hands
 	// (both palms flat on furniture you're dragging)
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(O)) HandLook = Ch->Look;
 	HUArms::FirstPerson(O, Hand, HandParts, HandLook, Held, Grabbed.IsValid());
 	if (Grabbed.IsValid()) return;
-	switch (Held)
-	{
-	case 1: // flashlight
-	case 2: // UV light
-	{
-		const FLinearColor Body = Held == 1 ? Black : FLinearColor(0.2f, 0.06f, 0.3f);
-		P(EShape::Cylinder, FVector(11, 0, 0), FVector(4, 4, 18), Body, AlongX);
-		P(EShape::Cylinder, FVector(21, 0, 0), FVector(6.5f, 6.5f, 4), Body, AlongX);
-		Lens = P(EShape::Cylinder, FVector(23.2f, 0, 0), FVector(5.5f, 5.5f, 0.4f), FLinearColor(0.2f, 0.2f, 0.22f), AlongX);
-		break;
-	}
-	case 3: // print kit: the case in your hand, a brush across it
-		P(EShape::Cube, FVector(9, 0, 1), FVector(11, 9, 5), Black);
-		P(EShape::Cylinder, FVector(12, 3, 5), FVector(1.6f, 1.6f, 11), FLinearColor(0.45f, 0.28f, 0.12f), AlongX);
-		P(EShape::Cylinder, FVector(18, 3, 5), FVector(3, 3, 3), FLinearColor(0.1f, 0.1f, 0.1f), AlongX);
-		break;
-	case 4: // crowbar, angled up
-		P(EShape::Cylinder, FVector(12, 0, 10), FVector(2.2f, 2.2f, 42), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(60, 0, 0));
-		P(EShape::Cube, FVector(23, 0, 28), FVector(6, 2, 2), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(-30, 0, 0));
-		break;
-	case 5: // scanner, screen up
-		P(EShape::Cube, FVector(10, 0, 2), FVector(13, 7, 3), FLinearColor(0.15f, 0.16f, 0.17f), FRotator(-20, 0, 0));
-		P(EShape::Cube, FVector(10.5f, 0, 3.8f), FVector(7, 5, 0.3f), FLinearColor(0.2f, 2.f, 0.6f), FRotator(-20, 0, 0));
-		break;
-	// off the belt
-	case SlotCount + HUBelt::Cuffs: // two steel rings and the chain
-		for (float Sd : { -1.f, 1.f }) P(EShape::Cylinder, FVector(10, Sd * 4.5f, 2), FVector(7, 7, 1.2f), FLinearColor(0.7f, 0.72f, 0.75f), FRotator(0, 0, 90));
-		P(EShape::Cube, FVector(10, 0, 2), FVector(1.5f, 4, 1.5f), FLinearColor(0.6f, 0.62f, 0.65f));
-		break;
-	case SlotCount + HUBelt::Pepper: // the can upright, thumb on the button
-		P(EShape::Cylinder, FVector(8, 0, 4), FVector(4, 4, 12), FLinearColor(0.75f, 0.12f, 0.05f));
-		P(EShape::Cube, FVector(8, 0, 11), FVector(3, 2.5f, 2), Black);
-		break;
-	case SlotCount + HUBelt::Taser: // grip down, barrel forward
-		P(EShape::Cube, FVector(4, 0, -2), FVector(4, 3, 8), Black, FRotator(-15, 0, 0));
-		P(EShape::Cube, FVector(11, 0, 3), FVector(14, 3.5f, 4.5f), FLinearColor(0.85f, 0.7f, 0.05f));
-		P(EShape::Cube, FVector(18.2f, 0, 3), FVector(0.5f, 3, 3.5f), Black);
-		break;
-	case SlotCount + HUBelt::Radio: // held up, antenna high
-		P(EShape::Cube, FVector(8, 0, 5), FVector(4, 6, 12), FLinearColor(0.08f, 0.08f, 0.09f));
-		P(EShape::Cylinder, FVector(8, 2, 15), FVector(1, 1, 9), FLinearColor(0.08f, 0.08f, 0.09f));
-		break;
-	default: break; // empty hand
-	}
+	HeldItemParts([&](uint8 S, FVector Pos, FVector Size, FLinearColor Col, FRotator Rot) { return P((EShape)S, Pos, Size, Col, Rot); }, Held, Lens);
 }
+
 
 // ---------- the kit ----------
 bool UHUInteractComponent::InBeam(FVector Point, bool bUV) const
@@ -304,7 +312,7 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	if (!PC || !PC->IsLocalController())
 	{
 		// a partner's copy on this screen: just their light, aimed where they aim
-		if (Beam && Pawn) { Beam->SetWorldLocationAndRotation(Pawn->GetPawnViewLocation(), Pawn->GetBaseAimRotation()); }
+		if (Pawn) TickWorldGear(Pawn, DeltaTime);
 		return;
 	}
 	TickMarkers();
@@ -314,6 +322,7 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		if (bWant && !L->IsMonitoring()) L->StartMonitor(); else if (!bWant && L->IsMonitoring()) L->StopMonitor();
 	}
 	if (!Keys) Setup(PC);
+	SendGear();
 
 	// your arms are your body's: rebuild them when your look changes (the name plate, or it arriving from your save)
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && !(Ch->Look == HandLook)) BuildHand();
