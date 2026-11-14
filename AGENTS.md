@@ -47,6 +47,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Tools & concealment | `HUTools.h` |
 | Interrogation (pressure, moods, confession) | `HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`, interview UI in `AHUSuspectActor` + `HUPromptWidget` |
 | Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |
+| The local AI: suspects' brain, free offline voices, hearing the detective | `HUBrainSubsystem.*` (llama.cpp), `HUVoiceSubsystem.*` + `Tools\VoiceServer.py`, `HUListenSubsystem.*` (sherpa-onnx), all started through `HUProcess`. Files in `AI\` (`AI\README.txt`); what runs on which PC: **The local AI** below |
 | Placeholder geometry | `HUBuild.*` (`Block`, `WallWithDoor`, `Clear`) |
 | Real furniture (desks, chairs, CRTs, phones, lockers, filing cabinets, benches, water cooler, clocks, cork boards) | `HUProps.h` (`Prop(..., Name, Center, Size, Rot)` - same box as the blocks, returns null without the art so you build the blocks), meshes in `/Game/Art/Props` (`Content/Art/Props/README.md`, `Tools/PropKit/`, `Tools/ImportProps.py`) |
 | Screenshot tour of any level | `-HUShots=X,Y,Yaw,Pitch\|...` `-HUShotsName=Prefix` (`HUShotTour.*`); add `-HUNoProps` for the same views with blocks |
@@ -67,6 +68,20 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 7. **Working alongside another AI:** pull before you start (git pull), commit small focused changes, push when a change builds. Don't reformat files you aren't changing.
    **Helper programs** (AI servers, tools in `AI\`) start with `HUProcess::Launch`, never `FPlatformProcess::CreateProc`: it ties them to the game so they die with it, even on a crash. Players have no Visual Studio, Python or CUDA toolkit: anything in `AI\` must run with only what `Package.ps1` ships.
 8. Keep the style of the existing code: short functions, comments that say *why*, `HU` prefix, UPROPERTYs for anything Blueprint-tweakable.
+
+## The local AI: what runs on which PC
+
+Everything in `AI\` runs on the player's own PC, on any maker's graphics card. The game picks where each part runs by itself; nothing needs an NVIDIA card.
+
+| Part | Where it runs | How it's picked | Force it |
+|---|---|---|---|
+| Suspects' brain: `UHUBrainSubsystem`, llama.cpp's **Vulkan** build in `AI\llama` | The graphics card (NVIDIA, AMD or Intel). The processor when no card can run it. | `WarmUp` asks `llama-server --list-devices`, starts on the card, and uses it only once a test answer comes back at 6 tokens a second or better. A server that dies, stays silent for 120 s or writes slower than that hands over to the processor (`--device none`). | `-HUBrain=card`, `-HUBrain=cpu` |
+| Voices: `Tools\VoiceServer.py` | An NVIDIA card with 12 GB or more: Orpheus + CSM on the card (PyTorch CUDA). Any other PC: Supertonic on the processor (`AI\voice\supertonic`, run by `AI\voice\bin\sherpa-onnx-offline-tts.exe`). | `pick_voices()` asks the NVIDIA driver (`nvcuda.dll`) how much video memory there is. Supertonic also stands in when a big voice won't load or fails a line. | `-HUVoices=cuda`, `-HUVoices=cpu` (`HU_VOICES` when you run the server by hand) |
+| Hearing the detective: `UHUListenSubsystem`, sherpa-onnx | The processor, always. | | |
+
+- **Test a path on any PC by forcing it**, without a window. Brain: `UnrealEditor.exe HomicideUnit.uproject /Game/Maps/L_Menu -game -nullrhi -nosound -unattended -HUNoVoice -HUInterviewBench -HUBenchCases=1 -HUBrain=cpu -abslog=<log>`. The log says where the model runs (`HomicideUnit brain: ready on the processor after 2.7 s`) and what every answer took (`answered in 5.2 s (35 tokens at 17 a second, on the processor)`). `-HUBrainBreakCard` makes the card fail and `-HUBrainMinSpeed=9999` calls it too slow, to test both hand-overs. Voices: `... -game -nullrhi -unattended -HUNoBrain -HUVoiceTest -HUVoices=cpu` speaks a 911 call and four suspect lines twice and logs each (`HUVoiceTest: pass 2, suspect line, voice 1: 1.8 s of speech in 1.22 s`).
+- **Measured on one PC only** (RTX 5070 Ti, Ryzen 7 7800X3D); the numbers are in `SYSTEM_REQUIREMENTS.md`. The AMD and Intel paths are the same code, forced on that NVIDIA card. No AMD or Intel card has run the game yet.
+- **Keep it that way.** A new AI part must run without CUDA (Vulkan, or ONNX on the processor) or have a fallback that does, and `Package.ps1` must ship what the fallback needs. In `VoiceServer.py` every line is spoken on its one voice thread (`on_voice_thread`): compiled CSM breaks when a second thread runs it.
 
 ## Not done yet (good next tasks)
 

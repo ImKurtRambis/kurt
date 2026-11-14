@@ -3,8 +3,10 @@
 # program that needs them; Redist\vc_redist.x64.exe is there too, for Steam's installer settings).
 #
 # The local AI (AI\ + Tools\VoiceServer.*) is copied beside the game; the game starts it and ends it (HUProcess), so
-# suspects think, listen and speak with nothing for the player to set up. The voices need an NVIDIA card. Without
-# the AI the game still plays: suspects answer with written lines. -NoAI makes that small build.
+# suspects think, listen and speak with nothing for the player to set up, on any maker's graphics card: the brain runs
+# through Vulkan (or on the processor), speech recognition on the processor, and the voices are the big ones on an
+# NVIDIA card with 12 GB and the small one (AI\voice\supertonic, on the processor) everywhere else. AI\README.txt has
+# the list. Without the AI the game still plays: suspects answer with written lines. -NoAI makes that small build.
 #
 # Usage: powershell -ExecutionPolicy Bypass -File Tools\Package.ps1 [-Config Development] [-NoAI]
 #   Shipping (default) has no console and writes no log; Development keeps both, for chasing a packaged-only bug.
@@ -35,6 +37,13 @@ if ($NoAI) {
     if ($LASTEXITCODE -ge 8) { throw "Copying the AI folder failed (robocopy exit code $LASTEXITCODE)." }
     New-Item -ItemType Directory -Force "$Proj\Tools" | Out-Null
     Copy-Item "$Root\Tools\VoiceServer.bat", "$Root\Tools\VoiceServer.py" "$Proj\Tools" -Force
+    # what a PC without a big NVIDIA card runs on: say so here, rather than ship a game that is silent for those players
+    $Needs = [ordered]@{
+        "llama\ggml-vulkan.dll"                 = "the brain can't use AMD or Intel graphics cards (llama.cpp's Vulkan build isn't the one installed)"
+        "voice\supertonic\tts.json"             = "PCs without a 12 GB NVIDIA card get no voices (the small voice isn't installed)"
+        "voice\bin\sherpa-onnx-offline-tts.exe" = "PCs without a 12 GB NVIDIA card get no voices (sherpa-onnx's speech program isn't installed)"
+    }
+    foreach ($n in $Needs.Keys) { if (-not (Test-Path "$Proj\AI\$n")) { Write-Warning "AI\$n is missing: $($Needs[$n])." } }
 } else {
     Write-Warning "AI\llama isn't installed here, so the build has no local AI (suspects use written lines)."
 }
