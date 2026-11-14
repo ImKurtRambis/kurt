@@ -2,6 +2,8 @@ Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
+Packaged/
+Build/Windows/FileOpenOrder/
 .vs/
 *.sln
 *.VC.db
