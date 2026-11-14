@@ -305,7 +305,7 @@ void HUUsables::Use(UPrimitiveComponent* C, APawn* User, bool bSecondary)
 UStaticMeshComponent* HUUsables::AddSwitch(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, FVector Pos, float Yaw, FBox2D Room)
 {
 	const FRotator R(0, Yaw, 0);
-	UStaticMeshComponent* Plate = HUBuild::Block(Owner, Parent, Out, HUBuild::EShape::Cube, Pos, FVector(1.2f, 8, 12), FLinearColor(0.78f, 0.76f, 0.68f), R, true);
+	UStaticMeshComponent* Plate = HUBuild::Block(Owner, Parent, Out, HUBuild::EShape::Cube, Pos, FVector(1.2f, 8, 12), FLinearColor(0.55f, 0.5f, 0.42f), R, true, EHUSurface::Plastic); // almond plastic
 	HUBuild::Block(Owner, Parent, Out, HUBuild::EShape::Cube, Pos + R.Vector() * 1.f, FVector(1.5f, 1.6f, 3.6f), FLinearColor(0.08f, 0.08f, 0.08f), R, false);
 	if (Plate) { Mark(Plate, EHUUse::Switch); if (UHUUsableWorld::FUse* U = World(Plate) ? World(Plate)->Find(Plate) : nullptr) U->Room = Room; }
 	return Plate;
@@ -323,7 +323,7 @@ void UHUUsableWorld::PlaceTray(UPrimitiveComponent* C, FUse& U)
 		auto Part = [&](FLinearColor Col, EHUSurface S) { return HUBuild::Block(C->GetOwner(), C->GetAttachParent(), Tmp, HUBuild::EShape::Cube, FVector::ZeroVector, FVector(1, 1, 1), Col, FRotator::ZeroRotator, false, S); };
 		U.Tray = Part(bFiles ? FLinearColor(0.2f, 0.21f, 0.2f) : FLinearColor(0.06f, 0.035f, 0.02f), bFiles ? EHUSurface::PaintedMetal : EHUSurface::Walnut);
 		U.Front = Part(bFiles ? FLinearColor(0.42f, 0.43f, 0.4f) : FLinearColor(0.12f, 0.07f, 0.04f), bFiles ? EHUSurface::PaintedMetal : EHUSurface::Walnut);
-		U.Fill = Part(bFiles ? FLinearColor(0.72f, 0.58f, 0.32f) : FLinearColor(0.78f, 0.76f, 0.68f), EHUSurface::None);
+		U.Fill = Part(bFiles ? FLinearColor(0.72f, 0.58f, 0.32f) : FLinearColor(0.78f, 0.76f, 0.68f), EHUSurface::Paper); // manila folders, or papers
 		if (!U.Tray.IsValid()) return;
 	}
 	// on the front face (FrontYaw), near the top, slid out along the front

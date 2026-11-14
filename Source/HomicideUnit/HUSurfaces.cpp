@@ -7,12 +7,12 @@ namespace
 {
 	struct FInfo { const TCHAR* Name; FLinearColor Avg; bool bKeepHue; };
 	// Avg: each base colour map's average in linear colour (Content/Art/Textures/Source/surface_averages.json for the
-	// generated ones; plaster, linoleum and walnut measured the same way). Re-run make_surfaces.py -> update these.
+	// generated ones; the scans and linoleum measured the same way). Change a map -> update its line here.
 	const FInfo Info[] = {
 		{ TEXT("None"),         FLinearColor(1.f, 1.f, 1.f),         false },
-		{ TEXT("Plaster"),      FLinearColor(0.420f, 0.442f, 0.326f), false },
+		{ TEXT("Plaster"),      FLinearColor(0.681f, 0.655f, 0.632f), false }, // scan: near-white, so it takes any paint
 		{ TEXT("Linoleum"),     FLinearColor(0.214f, 0.186f, 0.137f), false },
-		{ TEXT("Walnut"),       FLinearColor(0.072f, 0.019f, 0.005f), false }, // so red that brightening it turns it orange: take the colour
+		{ TEXT("Walnut"),       FLinearColor(0.055f, 0.035f, 0.028f), false }, // scan: dark brown grain, takes the block's colour
 		{ TEXT("Brick"),        FLinearColor(0.295f, 0.129f, 0.093f), true },
 		{ TEXT("Concrete"),     FLinearColor(0.310f, 0.301f, 0.271f), false },
 		{ TEXT("Asphalt"),      FLinearColor(0.054f, 0.052f, 0.051f), true },
@@ -24,6 +24,9 @@ namespace
 		{ TEXT("Glass"),        FLinearColor(0.531f, 0.633f, 0.606f), false },
 		{ TEXT("Fabric"),       FLinearColor(0.329f, 0.288f, 0.228f), false },
 		{ TEXT("Leather"),      FLinearColor(0.074f, 0.028f, 0.013f), true },
+		{ TEXT("StoneTile"),    FLinearColor(0.455f, 0.349f, 0.254f), false }, // scan: worn cream stone tiles (lobby terrazzo)
+		{ TEXT("Plastic"),      FLinearColor(0.149f, 0.126f, 0.122f), false }, // scan: dark, so ask for no more than ~4x (beige ~0.55)
+		{ TEXT("Paper"),        FLinearColor(0.909f, 0.901f, 0.885f), false }, // scan: white paper, tints to manila, notices, folders
 	};
 	static_assert(UE_ARRAY_COUNT(Info) == (int32)EHUSurface::Count, "one entry per surface");
 

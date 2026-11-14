@@ -140,7 +140,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 9, S * 10, 115), FVector(4, 3, 18), FLinearColor(0.75f, 0.6f, 0.2f)));
 		}
 		// the time clock by the doors: punch in when you're ready
-		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 14, 260, 140), FVector(18, 36, 46), FLinearColor(0.55f, 0.5f, 0.38f)));
+		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 14, 260, 140), FVector(18, 36, 46), FLinearColor(0.55f, 0.5f, 0.38f), FRotator::ZeroRotator, true, EHUSurface::Plastic));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-RX + 23.5f, 260, 152), FVector(22, 22, 1), FLinearColor(0.9f, 0.88f, 0.8f), FRotator(0, 0, 90)));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 24, 260, 126), FVector(2, 14, 3), FLinearColor(0.05f, 0.05f, 0.05f)));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 8, 305, 140), FVector(6, 30, 60), FLinearColor(0.35f, 0.25f, 0.12f))); // the card rack
@@ -150,11 +150,11 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		// a light switch by the doors: the whole room (HUUsables)
 		HUUsables::AddSwitch(this, R, Blocks, FVector(-RX + 1.2f, 140, 120), 0, FBox2D(FVector2D(-RX, -RY), FVector2D(RX, RY)));
 		for (float DX : { -40.f, 40.f }) for (float DY : { -68.f, 68.f }) Block(this, R, Blocks, EShape::Cube, FVector(-420 + DX, -330 + DY, 35), FVector(5, 5, 70), Desk * 0.7f);
-		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f)));
-		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f)));
+		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f), FRotator::ZeroRotator, true, EHUSurface::Plastic));
+		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f), FRotator::ZeroRotator, true, EHUSurface::Plastic));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
-		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0)));
-		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f)));
+		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0), true, EHUSurface::Paper));
+		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f), FRotator::ZeroRotator, true, EHUSurface::Paper));
 
 		// ---- the room a shift starts in: benches facing the board, lockers, the duty roster, the notice boards ----
 		const FLinearColor Bench(0.28f, 0.17f, 0.08f), LockerGreen(0.2f, 0.26f, 0.22f), Paper(0.86f, 0.84f, 0.76f), Cork(0.5f, 0.34f, 0.18f), Brass(0.75f, 0.6f, 0.2f);
@@ -239,7 +239,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			for (const FNote& N : Notes)
 			{
 				const float X = CX + N.DX, Top = N.Z + N.H / 2;
-				Block(this, R, Blocks, EShape::Cube, FVector(X, -493.8f, N.Z), FVector(N.W, 0.4f, N.H), N.Col, FRotator(N.Tilt, 0, 0), false);
+				Block(this, R, Blocks, EShape::Cube, FVector(X, -493.8f, N.Z), FVector(N.W, 0.4f, N.H), N.Col, FRotator(N.Tilt, 0, 0), false, EHUSurface::Paper);
 				Block(this, R, Blocks, EShape::Sphere, FVector(X, -493.2f, Top - 3), FVector(1.6f, 1.6f, 1.6f), FLinearColor(0.7f, 0.08f, 0.06f), FRotator::ZeroRotator, false);
 				if (N.Head) RoomText(this, R, RoomTexts, FVector(X, -493.4f, Top - 6), 90, FMath::Min(9.f, N.W / 7.f), N.HeadCol, N.Head);
 				if (N.Body) RoomText(this, R, RoomTexts, FVector(X, -493.4f, Top - (N.BodyDrop > 0.f ? N.BodyDrop : N.Head ? 17.f : 7.f)), 90, 3.4f, Ink, N.Body);

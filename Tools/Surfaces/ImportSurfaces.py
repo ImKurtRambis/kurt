@@ -1,11 +1,15 @@
 # The game's surface library, in Unreal (run with the editor closed or from Tools > Execute Python Script):
 #   UnrealEditor-Cmd.exe HomicideUnit.uproject -run=pythonscript -script="<project>\Tools\Surfaces\ImportSurfaces.py"
-# 1. imports Content/Art/Textures/Source/T_<Name>_{BaseColor,Normal,Roughness}.png (made by make_surfaces.py) into
-#    /Game/Art/Materials/Textures, with the right settings for each kind of map
-# 2. makes two parents in /Game/Art/Materials/Surfaces: M_HU_Surface (opaque) and M_HU_SurfaceGlass (see-through),
-#    both world-aligned (no stretching on blocks of any size) with a Tint the game sets per block, and TileSizeCm
-# 3. makes MI_Surface_<Name> for every surface - the 11 new ones and ChatGPT's plaster, linoleum and walnut maps -
-#    which HUSurfaces.h loads by name.
+#   ... -script="<project>\Tools\Surfaces\ImportSurfaces.py Plaster Paper"   (only those surfaces)
+# 1. imports Content/Art/Textures/Source/<prefix>_{BaseColor,Normal,Roughness}.png or .jpg into
+#    /Game/Art/Materials/Textures, with the right settings for each kind of map (T_ maps come from make_surfaces.py;
+#    the scans are ambientCG CC0 - see Source/SOURCES.md)
+# 2. makes two parents in /Game/Art/Materials/Surfaces if they aren't there yet (or always, with --parents):
+#    M_HU_Surface (opaque) and M_HU_SurfaceGlass (see-through), both world-aligned (no stretching on blocks of any
+#    size) with a Tint the game sets per block, and TileSizeCm
+# 3. makes MI_Surface_<Name> for every surface, which HUSurfaces.h loads by name.
+import os
+import sys
 import unreal
 
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
@@ -28,19 +32,34 @@ SURFACES = {
     "Glass":        ("T_Glass", 150.0, 0.0),
     "Fabric":       ("T_Fabric", 60.0, 0.0),
     "Leather":      ("T_Leather", 80.0, 0.0),
-    "Plaster":      ("M_Plaster", 200.0, 0.0),   # ChatGPT's maps (named M_ when they were imported)
+    # from ChatGPT's precinct set (named M_ when they were first imported); plaster and walnut are ambientCG scans
+    "Plaster":      ("M_Plaster", 200.0, 0.0),   # Plaster001
     "Linoleum":     ("M_Linoleum", 100.0, 0.0),
-    "Walnut":       ("M_Walnut", 200.0, 0.0),
+    "Walnut":       ("M_Walnut", 120.0, 0.0),    # Wood051
+    # ambientCG scans
+    "StoneTile":    ("T_StoneTile", 180.0, 0.0), # Tiles139: 6 x 6 tiles a repeat, 30 cm each
+    "Plastic":      ("T_Plastic", 100.0, 0.0),   # Plastic004
+    "Paper":        ("T_Paper", 60.0, 0.0),      # Paper001 (squared to 1024 for mips)
 }
+
+args = [a for a in sys.argv[1:] if not a.startswith("-")]
+ONLY = [a for a in args if a in SURFACES] or list(SURFACES)
+REBUILD_PARENTS = "--parents" in sys.argv[1:]
+unreal.log("HU surfaces: " + ", ".join(ONLY))
+
+def source(asset):
+    for ext in (".png", ".jpg"):
+        if os.path.exists(SOURCE + asset + ext): return SOURCE + asset + ext
+    raise RuntimeError("No source map for " + asset + " in " + SOURCE)
 
 # ---------- 1. textures ----------
 tasks = []
-for name, (prefix, _, _) in SURFACES.items():
-    if not prefix.startswith("T_"): continue
+for name in ONLY:
+    prefix = SURFACES[name][0]
     for kind in ("BaseColor", "Normal", "Roughness"):
         asset = f"{prefix}_{kind}"
         t = unreal.AssetImportTask()
-        t.filename = SOURCE + asset + ".png"
+        t.filename = source(asset)
         t.destination_path = TEX
         t.destination_name = asset
         t.automated = True
@@ -48,8 +67,8 @@ for name, (prefix, _, _) in SURFACES.items():
         t.replace_existing = True   # re-running picks up regenerated maps
         tasks.append(t)
 TOOLS.import_asset_tasks(tasks)
-for name, (prefix, _, _) in SURFACES.items():
-    if not prefix.startswith("T_"): continue
+for name in ONLY:
+    prefix = SURFACES[name][0]
     for kind in ("BaseColor", "Normal", "Roughness"):
         tex = EAL.load_asset(f"{TEX}/{prefix}_{kind}")
         if not tex: raise RuntimeError("Missing texture after import: " + prefix + "_" + kind)
@@ -73,7 +92,9 @@ def node(m, cls, x, y):
 
 def parent(name, glass):
     path = f"{MAT}/{name}"
-    m = EAL.load_asset(path) or TOOLS.create_asset(name, MAT, unreal.Material, unreal.MaterialFactoryNew())
+    m = EAL.load_asset(path)
+    if m and not REBUILD_PARENTS: return m   # already built: leave it (and every instance on it) alone
+    m = m or TOOLS.create_asset(name, MAT, unreal.Material, unreal.MaterialFactoryNew())
     LIB.delete_all_material_expressions(m)
     if glass:
         m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -115,7 +136,8 @@ opaque = parent("M_HU_Surface", False)
 glass = parent("M_HU_SurfaceGlass", True)
 
 # ---------- 3. one instance per surface ----------
-for name, (prefix, tile, metallic) in SURFACES.items():
+for name in ONLY:
+    prefix, tile, metallic = SURFACES[name]
     iname = "MI_Surface_" + name
     mi = EAL.load_asset(f"{MAT}/{iname}") or TOOLS.create_asset(iname, MAT, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
     mi.set_editor_property("parent", glass if name == "Glass" else opaque)
@@ -127,4 +149,4 @@ for name, (prefix, tile, metallic) in SURFACES.items():
     LIB.set_material_instance_scalar_parameter_value(mi, "Metallic", metallic)
     EAL.save_loaded_asset(mi)
     unreal.log(f"HU surfaces: {iname} ({prefix}, {tile:.0f} cm)")
-unreal.log("HU surfaces: done - %d surfaces" % len(SURFACES))
+unreal.log("HU surfaces: done - %d surfaces" % len(ONLY))

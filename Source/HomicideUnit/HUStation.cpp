@@ -169,7 +169,7 @@ void AHUSquadRoom::BuildStation()
 	// ---- the floors ----
 	Floor(-1600, 2400, -150, 150, Lino);                           // main corridor
 	Floor(-150, 150, 150, 1600, Lino);                             // corridor B
-	Floor(-2400, -1600, -700, 700, FLinearColor(0.42f, 0.38f, 0.32f), SF::Tile);     // lobby terrazzo
+	Floor(-2400, -1600, -700, 700, FLinearColor(0.42f, 0.38f, 0.32f), SF::StoneTile);     // lobby terrazzo
 	Floor(-1600, -850, 150, 1600, FLinearColor(0.5f, 0.5f, 0.48f), SF::Tile);        // lockers (tiles)
 	Floor(-850, -150, 150, 900, FLinearColor(0.4f, 0.34f, 0.26f));                   // break room
 	Floor(-850, -150, 900, 1600, FLinearColor(0.25f, 0.08f, 0.07f), SF::Carpet);     // captain (red carpet)
@@ -360,7 +360,7 @@ void AHUSquadRoom::BuildStation()
 						B(P + FVector(0, -S * 10, 78), FVector(44, 16, 2), FLinearColor(0.55f, 0.53f, 0.46f), false);
 					Prop(this, R, Blocks, TEXT("DeskPhone"), P + FVector(52, S * 28, 82), FVector(0, 0, 12), Faces, false);
 					Chair(P + FVector(0, -S * 90, 0), 0, -S * 22, TEXT("OfficeChair"));
-					for (int32 k = 0; k < 3; k++) B(P + FVector(-50 + k * 6, S * 20, 80 + k * 1.2f), FVector(24, 32, 1.2f), Paper, false);
+					for (int32 k = 0; k < 3; k++) B(P + FVector(-50 + k * 6, S * 20, 80 + k * 1.2f), FVector(24, 32, 1.2f), Paper, false, SF::Paper);
 				}
 		// the water cooler, the printer, a whiteboard on the east wall
 		if (!Prop(this, R, Blocks, TEXT("WaterCooler"), FVector(-60, -300, 73.5f), FVector(0, 0, 147), FRotator(0, 180, 0)))
@@ -416,7 +416,7 @@ void AHUSquadRoom::BuildStation()
 
 	// ======== THE CORRIDORS: the odds and ends ========
 	B(FVector(-1000, 142, 150), FVector(200, 2, 110), FLinearColor(0.5f, 0.34f, 0.18f), false); // a notice board
-	for (int32 i = 0; i < 6; i++) B(FVector(-1070 + i * 28, 140, 130 + (i % 2) * 40), FVector(22, 1, 28), Paper, false);
+	for (int32 i = 0; i < 6; i++) B(FVector(-1070 + i * 28, 140, 130 + (i % 2) * 40), FVector(22, 1, 28), Paper, false, SF::Paper);
 	Cyl(FVector(1400, -138, 60), FVector(16, 16, 50), FLinearColor(0.75f, 0.08f, 0.05f), false);  // a fire extinguisher
 	Cyl(FVector(130, 1400, 60), FVector(16, 16, 50), FLinearColor(0.75f, 0.08f, 0.05f), false);
 

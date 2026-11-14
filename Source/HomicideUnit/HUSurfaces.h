@@ -1,6 +1,7 @@
-// The game's surface library: 14 tileable materials with colour, normal and roughness maps. The textures are made by
-// Tools/Surfaces/make_surfaces.py (plaster, linoleum and walnut came from ChatGPT's precinct set) and imported by
-// Tools/Surfaces/ImportSurfaces.py into /Game/Art/Materials/Surfaces/MI_Surface_<Name>.
+// The game's surface library: 17 tileable materials with colour, normal and roughness maps. Most textures are made by
+// Tools/Surfaces/make_surfaces.py; plaster, walnut, stone tile, plastic and paper are photo-scans (ambientCG, CC0,
+// from ChatGPT's precinct set) and linoleum is ChatGPT's own. Tools/Surfaces/ImportSurfaces.py imports them into
+// /Game/Art/Materials/Surfaces/MI_Surface_<Name>.
 //
 // Pass one to HUBuild::Block and the block gets that surface, tinted so it still averages to the block's colour: a room
 // keeps its palette and gains brick, grain, weave. Strongly coloured surfaces (brick, carpet, wood floor, leather,
@@ -16,7 +17,8 @@ class UPrimitiveComponent;
 
 enum class EHUSurface : uint8
 {
-	None, Plaster, Linoleum, Walnut, Brick, Concrete, Asphalt, Tile, Carpet, WoodFloor, CeilingTile, PaintedMetal, Glass, Fabric, Leather, Count
+	None, Plaster, Linoleum, Walnut, Brick, Concrete, Asphalt, Tile, Carpet, WoodFloor, CeilingTile, PaintedMetal, Glass, Fabric, Leather,
+	StoneTile, Plastic, Paper, Count
 };
 
 namespace HUSurfaces
