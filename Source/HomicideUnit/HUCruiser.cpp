@@ -2,6 +2,7 @@
 #include "HUSound.h"
 #include "HUMotorPoolDoor.h"
 #include "HUBuild.h"
+#include "HUProps.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
 #include "Components/PointLightComponent.h"
@@ -32,13 +33,20 @@ AHUCruiser::AHUCruiser()
 	BlueLight->SetIntensity(0.f);
 }
 
-// a black-and-white sedan out of blocks; +X is the nose
+void AHUCruiser::BeginPlay()
+{
+	Super::BeginPlay();
+	OnConstruction(GetActorTransform()); // refresh parked cars serialized in child-actor templates
+}
+
+// A fleet sedan; +X is the nose. Keep the block fallback for builds without the art.
 void AHUCruiser::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	using namespace HUBuild;
 	Clear(Blocks);
 	USceneComponent* R = RootComponent;
+	if (Prop(this, R, Blocks, TEXT("FleetCruiser"), FVector(0,0,83), FVector(512,220,166))) return;
 	const FLinearColor Black(0.015f, 0.015f, 0.018f), White(0.85f, 0.86f, 0.88f), Glass(0.02f, 0.03f, 0.05f), Chrome(0.6f, 0.6f, 0.62f), Tire(0.01f, 0.01f, 0.01f);
 	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 60), FVector(480, 190, 60), Black);            // body
 	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, 60), FVector(200, 192, 58), White);            // white doors

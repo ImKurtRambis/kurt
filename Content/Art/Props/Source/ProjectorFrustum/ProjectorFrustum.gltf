@@ -1,0 +1,120 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Homicide Unit PropKit"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "ProjectorFrustum",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "ProjectorFrustum",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Water",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.34239163959260344,
+     0.6038273388553378,
+     0.9114075004063535,
+     0.32
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.04
+   },
+   "alphaMode": "BLEND"
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "ProjectorFrustum.bin",
+   "byteLength": 5472
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 1728,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1728,
+   "byteLength": 1728,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3456,
+   "byteLength": 1152,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 4608,
+   "byteLength": 864,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 144,
+   "type": "VEC3",
+   "min": [
+    2.2699999809265137,
+    0.9399999976158142,
+    -2.4800000190734863
+   ],
+   "max": [
+    7.78000020980835,
+    3.6600000858306885,
+    2.4800000190734863
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 144,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 144,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5125,
+   "count": 216,
+   "type": "SCALAR"
+  }
+ ]
+}

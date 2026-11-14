@@ -1,7 +1,7 @@
 // Drop one of these in an empty level and press Play: it builds the whole briefing room (walls, carpet,
 // rows of chairs, podium, the Captain, the projector screen and the laptop table), seats you in the aisle,
 // and gives you E / Q. The slides show on the wall screen; the Captain's lines show as subtitles.
-// Everything is placeholder blocks for now — swap in real meshes later without touching the logic.
+// Precinct furniture, a drifting projection beam and the departmental route to the working garage.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -79,6 +79,11 @@ private:
 
 	void Build();
 	void BuildCorridor();
+	void BuildProjection();
+	UPROPERTY() TArray<UTextRenderComponent*> CorridorLabels;
+	UPROPERTY() TArray<UStaticMeshComponent*> Dust;
+	TArray<FVector> DustOrigins;
+	float DustClock=0.f;
 	UStaticMeshComponent* Block(UStaticMesh* Mesh, FVector Pos, FVector SizeCm, FLinearColor Color, FRotator Rot = FRotator::ZeroRotator);
 	UTextRenderComponent* Text(FName Name, FVector Pos, float Size, FColor Color);
 };

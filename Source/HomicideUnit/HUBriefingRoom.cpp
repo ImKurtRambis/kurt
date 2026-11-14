@@ -15,6 +15,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
+#include "Misc/CommandLine.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
@@ -103,6 +105,8 @@ void AHUBriefingRoom::Build()
 	for (UStaticMeshComponent* B : Blocks) if (B) B->DestroyComponent();
 	Blocks.Reset();
 	Seats.Reset();
+	for(UTextRenderComponent* T : CorridorLabels) if(T) T->DestroyComponent();
+	CorridorLabels.Reset();
 	if (!Cube) return;
 
 	const FLinearColor Carpet(0.05f, 0.07f, 0.10f), Wall(0.35f, 0.38f, 0.42f), Wainscot(0.18f, 0.10f, 0.06f), Ceiling(0.6f, 0.6f, 0.58f);
@@ -134,10 +138,21 @@ void AHUBriefingRoom::Build()
 	Block(Cube, FVector(200, 0, RoomH - 50), FVector(40, 30, 14), Steel);
 	Block(Cylinder, FVector(200, 0, RoomH - 20), FVector(3, 3, 40), Steel);
 
-	// podium and the Captain (a stand-in until there's a real character)
-	PodiumParts.Reset(); CaptainParts.Reset();
-	PodiumParts.Add(Made(Block(Cube, FVector(600, -380, 55), FVector(50, 70, 110), Wood), EHUSurface::Walnut, Wood));
-	PodiumParts.Add(Made(Block(Cube, FVector(600, -380, 112), FVector(56, 76, 4), Wood, FRotator(-10, 0, 0)), EHUSurface::Walnut, Wood));
+	// A hollow walnut lectern, sloped reading surface, microphone and paper notes.
+	PodiumParts.Reset();
+	if (UStaticMeshComponent* Real = HUBuild::Prop(this, Root, Blocks, TEXT("BriefingPodium"), FVector(600,-380,62), FVector(68,82,124), FRotator(0,180,0))) PodiumParts.Add(Real);
+	else
+	{
+		PodiumParts.Add(Made(Block(Cube,FVector(600,-380,5),FVector(64,82,10),Wood),EHUSurface::Walnut,Wood));
+		PodiumParts.Add(Made(Block(Cube,FVector(575,-380,58),FVector(6,76,106),Wood),EHUSurface::Walnut,Wood));
+		for(float Y : {-415.f,-345.f}) PodiumParts.Add(Made(Block(Cube,FVector(600,Y,58),FVector(50,6,106),Wood),EHUSurface::Walnut,Wood));
+		PodiumParts.Add(Made(Block(Cube,FVector(600,-380,114),FVector(68,82,6),Wood,FRotator(-10,0,0)),EHUSurface::Walnut,Wood));
+	}
+	Block(Cube,FVector(602,-382,120),FVector(27,38,1),FLinearColor(.65f,.61f,.48f),FRotator(-10,0,0));
+	Block(Cylinder,FVector(584,-354,130),FVector(1.3f,1.3f,26),Steel,FRotator(-20,0,0));
+	Block(Sphere,FVector(588,-354,143),FVector(4,4,7),FLinearColor(.012f,.012f,.012f));
+
+	CaptainParts.Reset();
 	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 80), FVector(50, 50, 160), FLinearColor(0.03f, 0.05f, 0.1f)));
 	CaptainParts.Add(Block(Sphere, FVector(670, -380, 180), FVector(34, 30, 38), FLinearColor(0.6f, 0.42f, 0.32f)));
 	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 200), FVector(40, 40, 8), FLinearColor(0.02f, 0.03f, 0.07f)));
@@ -173,35 +188,111 @@ void AHUBriefingRoom::Build()
 // out the back door: a corridor to the motor pool, with signs
 void AHUBriefingRoom::BuildCorridor()
 {
-	using namespace HUBuild;
-	const float X0 = -RoomHalfX - 10, X1 = MotorPoolPos.X + 900.f, Len = X0 - X1, MidX = (X0 + X1) / 2, HalfW = 160.f, H = 300.f;
-	const FLinearColor Floor(0.25f, 0.24f, 0.22f), Wall(0.42f, 0.44f, 0.46f), Trim(0.1f, 0.1f, 0.1f);
-	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, -5), FVector(Len, HalfW * 2, 10), Floor, FRotator::ZeroRotator, true, EHUSurface::Linoleum);
-	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, H + 5), FVector(Len, HalfW * 2, 10), Wall, FRotator::ZeroRotator, true, EHUSurface::CeilingTile);
-	for (int32 S = -1; S <= 1; S += 2)
+	const float X0=-RoomHalfX-10, X1=MotorPoolPos.X+900, Len=X0-X1, Mid=(X0+X1)/2;
+	const FLinearColor Cream=FLinearColor::FromSRGBColor(FColor(201,193,175));
+	const FLinearColor Sage=FLinearColor::FromSRGBColor(FColor(89,102,81));
+	const FLinearColor Wood=FLinearColor::FromSRGBColor(FColor(73,55,44));
+	const FLinearColor Steel=FLinearColor::FromSRGBColor(FColor(77,87,89));
+	auto B=[&](FVector P,FVector S,FLinearColor C,EHUSurface Mat=EHUSurface::Plaster)
+	{ return HUBuild::Block(this,Root,Blocks,HUBuild::EShape::Cube,P,S,C,FRotator::ZeroRotator,true,Mat); };
+	auto Sign=[&](FVector P,float Yaw,const FString& Words,float Size)
 	{
-		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, S * (HalfW + 5), H / 2), FVector(Len, 10, H), Wall, FRotator::ZeroRotator, true, EHUSurface::Plaster);
-		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, S * (HalfW - 1), 6), FVector(Len, 2, 12), Trim);
+		UTextRenderComponent* T=NewObject<UTextRenderComponent>(this); T->SetupAttachment(Root);
+		T->SetRelativeLocation(P); T->SetRelativeRotation(FRotator(0,Yaw,0)); T->SetWorldSize(Size);
+		T->SetHorizontalAlignment(EHTA_Center); T->SetTextRenderColor(FColor(224,216,191)); T->SetText(FText::FromString(Words));
+		T->RegisterComponent(); CorridorLabels.Add(T);
+	};
+	B(FVector(Mid,0,-5),FVector(Len,320,10),Sage,EHUSurface::Linoleum);
+	B(FVector(Mid,0,305),FVector(Len,320,10),Cream,EHUSurface::CeilingTile);
+	const TCHAR* Departments[]={TEXT("RECORDS  /  104"),TEXT("EVIDENCE  /  105"),TEXT("TRAFFIC  /  106"),TEXT("DETECTIVE BUREAU  /  107")};
+	for(int32 Side : {-1,1})
+	{
+		B(FVector(Mid,Side*165,150),FVector(Len,10,300),Cream);
+		B(FVector(Mid,Side*158,43),FVector(Len,3,86),Sage);
+		B(FVector(Mid,Side*155,88),FVector(Len,4,4),Steel,EHUSurface::PaintedMetal);
+		B(FVector(Mid,Side*154,7),FVector(Len,4,14),Steel,EHUSurface::PaintedMetal);
+		for(int32 i=0;i<2;i++)
+		{
+			const float X=X0-135-i*285;
+			B(FVector(X,Side*149,114),FVector(118,12,228),Steel,EHUSurface::PaintedMetal);
+			B(FVector(X,Side*141,111),FVector(104,6,216),Wood,EHUSurface::Walnut);
+			// Wired-glass vision panel, kick plate, institutional lever and room plaque.
+			B(FVector(X,Side*136,164),FVector(62,3,58),FLinearColor(.06f,.085f,.078f),EHUSurface::Glass);
+			for(int32 k=-2;k<=2;k++) B(FVector(X+k*11,Side*133,164),FVector(.5f,1,55),Steel,EHUSurface::PaintedMetal);
+			B(FVector(X,Side*135,24),FVector(98,2,32),Steel,EHUSurface::PaintedMetal);
+			B(FVector(X+37,Side*131,103),FVector(19,7,3),Steel,EHUSurface::PaintedMetal);
+			B(FVector(X,Side*132,220),FVector(108,3,18),Steel,EHUSurface::PaintedMetal);
+			Sign(FVector(X,Side*129,216),Side>0?-90:90,Departments[(Side>0?2:0)+i],8);
+		}
 	}
-	for (float X = X0 - 150; X > X1; X -= 300)
-		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(X, 0, H - 3), FVector(100, 30, 4), FLinearColor(3.f, 3.f, 2.6f), FRotator::ZeroRotator, false);
-	if (MotorPool && MotorPool->GetChildActorClass() != AHUMotorPool::StaticClass()) MotorPool->SetChildActorClass(AHUMotorPool::StaticClass());
-	if (MotorPool) MotorPool->SetRelativeLocation(MotorPoolPos);
+	for(float X=X0-100;X>X1;X-=240)
+	{
+		B(FVector(X,0,297),FVector(115,36,6),Steel,EHUSurface::PaintedMetal);
+		B(FVector(X,0,293),FVector(104,26,2),FLinearColor(2.7f,2.9f,2.7f),EHUSurface::None);
+	}
+	B(FVector(X1+35,0,267),FVector(5,250,30),Steel,EHUSurface::PaintedMetal);
+	Sign(FVector(X1+39,0,260),0,TEXT("MOTOR POOL  /  FLEET SERVICES"),13);
+	if(MotorPool && MotorPool->GetChildActorClass()!=AHUMotorPool::StaticClass()) MotorPool->SetChildActorClass(AHUMotorPool::StaticClass());
+	if(MotorPool) MotorPool->SetRelativeLocation(MotorPoolPos);
+}
+
+void AHUBriefingRoom::BuildProjection()
+{
+	// A soft additive frustum is bounded by the actual lens and screen, not room-wide haze.
+	const FVector Lens(227,0,350), Target(778,0,230);
+	UStaticMesh* BeamMesh=LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Art/Props/SM_ProjectorFrustum.SM_ProjectorFrustum"));
+	if(BeamMesh)
+	{
+		UStaticMeshComponent* Beam=NewObject<UStaticMeshComponent>(this); Beam->SetupAttachment(Root);
+		Beam->SetStaticMesh(BeamMesh); Beam->SetCollisionEnabled(ECollisionEnabled::NoCollision); Beam->SetCastShadow(false);
+		Beam->RegisterComponent(); Blocks.Add(Beam);
+	}
+	USpotLightComponent* Light=NewObject<USpotLightComponent>(this); Light->SetupAttachment(Root);
+	Light->SetRelativeLocation(Lens); Light->SetRelativeRotation((Target-Lens).Rotation());
+	Light->SetIntensity(1700); Light->SetAttenuationRadius(700); Light->SetInnerConeAngle(10); Light->SetOuterConeAngle(25);
+	Light->SetLightColor(FLinearColor(.72f,.83f,1)); Light->SetCastShadows(false); Light->RegisterComponent();
+	UMaterialInterface* DustMat=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Art/Materials/M_HU_ProjectorDust.M_HU_ProjectorDust"));
+	FRandomStream R(2005);
+	for(int32 i=0;i<72;i++)
+	{
+		const float A=R.FRand(), Radius=R.FRandRange(.05f,.88f), Angle=R.FRandRange(0,2*PI);
+		const FVector Pos=FMath::Lerp(Lens,Target,A)+FVector(0,FMath::Cos(Angle)*220*A*Radius,FMath::Sin(Angle)*110*A*Radius);
+		UStaticMeshComponent* D=Block(Sphere,Pos,FVector(.65f),FLinearColor(2.5f,2.9f,3.4f));
+		D->SetCollisionEnabled(ECollisionEnabled::NoCollision); D->SetCastShadow(false); if(DustMat) D->SetMaterial(0,DustMat); Dust.Add(D);
+		DustOrigins.Add(Pos);
+	}
 }
 
 void AHUBriefingRoom::BeginPlay()
 {
 	Super::BeginPlay();
-	// lights: a few points so the room reads even in an empty level
+	Build(); // refresh construction geometry serialized in the level before this rework
+	BuildProjection();
+#if !UE_BUILD_SHIPPING
+	if(FParse::Param(FCommandLine::Get(),TEXT("HUGarageTest")))
+	{
+		FHitResult Hit;
+		const bool Blocked=GetWorld()->LineTraceSingleByChannel(Hit,GetActorTransform().TransformPosition(FVector(-750,0,88)),
+			GetActorTransform().TransformPosition(FVector(MotorPoolPos.X+750,0,88)),ECC_Visibility);
+		UE_LOG(LogTemp,Display,TEXT("HUGarageTest: %s corridor clear at capsule height"),Blocked?TEXT("FAILED"):TEXT("PASSED"));
+	}
+#endif
+	// Dim the briefing while the projector is on; the corridor stays readable.
 	for (float X : { -400.f, 0.f, 400.f })
 	{
 		UPointLightComponent* L = NewObject<UPointLightComponent>(this);
 		L->SetupAttachment(RootComponent);
 		L->SetRelativeLocation(FVector(X, 0, RoomH - 40));
-		L->SetIntensity(8000.f);
+		L->SetIntensity(2400.f);
 		L->SetAttenuationRadius(1400.f);
-		L->SetLightColor(FLinearColor(1.f, 0.92f, 0.8f));
+		L->SetLightColor(FLinearColor(1.f, 0.96f, 0.88f));
 		L->RegisterComponent();
+	}
+	for(float X : {-960.f,-1230.f})
+	{
+		UPointLightComponent* L=NewObject<UPointLightComponent>(this); L->SetupAttachment(Root);
+		L->SetRelativeLocation(FVector(X,0,260)); L->SetIntensity(2400); L->SetAttenuationRadius(340);
+		L->SetLightColor(FLinearColor(.89f,.94f,.87f)); L->RegisterComponent();
 	}
 	// the laptop, wired to this room's screen
 	const FTransform T = FTransform(FRotator::ZeroRotator, FVector(560, 420, 78)) * GetActorTransform();
@@ -219,6 +310,9 @@ void AHUBriefingRoom::BeginPlay()
 void AHUBriefingRoom::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	DustClock+=DeltaSeconds;
+	for(int32 i=0;i<Dust.Num();i++) if(Dust[i])
+		Dust[i]->SetRelativeLocation(DustOrigins[i]+FVector(0,FMath::Sin(DustClock*.23f+i)*2.2f,FMath::Sin(DustClock*.31f+i*1.7f)*3.f));
 	Play911(DeltaSeconds);
 	SeatSquad();
 	if (bPlayerReady) return;

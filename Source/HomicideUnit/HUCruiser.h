@@ -41,6 +41,7 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 protected:
+	virtual void BeginPlay() override;
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	bool bLeaving = false;
 private:

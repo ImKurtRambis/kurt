@@ -73,3 +73,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 - Interrogation AI: a local LLM (llama.cpp) that acts out the suspect from their facts + pressure state (`HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`); offline voices (Kokoro / Chatterbox) whose emotion follows pressure. See the zero-cost plan: no per-use API calls in the final build.
 - Real characters (MetaHuman + Motion Matching), prop library for Fab/Megascans meshes, comic/noir post-process.
 - Offline voices (Kokoro via NNE) to replace paid TTS.
+
+## Briefing and motor pool
+
+`Docs/BriefingRework.md` covers the lectern, projector dust, department corridor and three working sectional garage shutters. Press E on a shutter or its wall control. The centre cruiser is the squad car. Regenerate their meshes with `Tools/PropKit/make_briefing_props.py` and `Tools/ImportBriefingProps.py`; validate on `L_Briefing` with `-HUGarageTest`. Existing saved construction geometry refreshes at play start.
