@@ -5,6 +5,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
 #include "HUBuild.h"
+#include "HUArms.h"
 #include "HUCharacter.h"
 #include "HUSuspectActor.h"
 #include "GameFramework/Pawn.h"
@@ -191,23 +192,12 @@ void UHUInteractComponent::BuildHand()
 		return M;
 	};
 	const FRotator AlongX(90, 0, 0); // lays a cylinder along the hand's forward axis
-	const FLinearColor Coat(0.07f, 0.08f, 0.11f), Skin(0.6f, 0.42f, 0.32f), Black(0.02f, 0.02f, 0.02f);
-	// dragging furniture: both hands out in front, palms flat against it
-	if (Grabbed.IsValid())
-	{
-		for (float Side : { -1.f, 1.f })
-		{
-			P(EShape::Cylinder, FVector(-16, Side * 17, -2), FVector(10, 10, 30), Coat, FRotator(90, -Side * 8, 0));
-			P(EShape::Cylinder, FVector(-1, Side * 15, -1), FVector(10.5f, 10.5f, 2), FLinearColor(0.75f, 0.75f, 0.72f), AlongX);
-			P(EShape::Cube, FVector(4, Side * 15, 0), FVector(4, 9, 10), Skin);           // the palm, flat
-			P(EShape::Cube, FVector(5.5f, Side * 15, 6.5f), FVector(3, 8, 4), Skin);      // fingers
-		}
-		return;
-	}
-	// sleeve, cuff, hand
-	P(EShape::Cylinder, FVector(-14, 0, -3), FVector(10, 10, 26), Coat, AlongX);
-	P(EShape::Cylinder, FVector(-1, 0, -3), FVector(10.5f, 10.5f, 2), FLinearColor(0.75f, 0.75f, 0.72f), AlongX);
-	P(EShape::Cube, FVector(4, 0, -2.5f), FVector(7, 8, 5), Skin);
+	const FLinearColor Black(0.02f, 0.02f, 0.02f);
+	// your arms: your body's own arms - coat sleeve, shirt cuff, skin, build (HULook) - holding what's in your hands
+	// (both palms flat on furniture you're dragging)
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(O)) HandLook = Ch->Look;
+	HUArms::FirstPerson(O, Hand, HandParts, HandLook, Held, Grabbed.IsValid());
+	if (Grabbed.IsValid()) return;
 	switch (Held)
 	{
 	case 1: // flashlight
@@ -324,13 +314,17 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	}
 	if (!Keys) Setup(PC);
 
+	// your arms are your body's: rebuild them when your look changes (the name plate, or it arriving from your save)
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && !(Ch->Look == HandLook)) BuildHand();
+	HandShots(DeltaTime);
 	// the hand sways a little as you walk
 	if (Hand)
 	{
 		const float Speed = Pawn->GetVelocity().Size2D();
 		Bob += DeltaTime * (2.f + Speed * 0.025f);
 		const float Amt = FMath::Clamp(Speed / 400.f, 0.f, 1.f);
-		FVector Pos(30, 15 + FMath::Cos(Bob * 0.5f) * 0.6f * Amt, -15 + FMath::Sin(Bob) * (0.25f + 0.8f * Amt));
+		// (a little further out and lower than a lone hand sat: the arms behind it are full-size now)
+		FVector Pos(36, 16 + FMath::Cos(Bob * 0.5f) * 0.6f * Amt, -18 + FMath::Sin(Bob) * (0.25f + 0.8f * Amt));
 		// dragging: hands centred and pushed out, shoving in rhythm with your steps (leaning in to push, back to pull)
 		GrabBlend = FMath::FInterpTo(GrabBlend, Grabbed.IsValid() ? 1.f : 0.f, DeltaTime, 10.f);
 		if (GrabBlend > 0.01f)

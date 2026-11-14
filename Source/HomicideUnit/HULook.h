@@ -33,4 +33,17 @@ namespace HULook
 
 	// builds the figure: feet at the parent's origin, facing +X. bOwnerNoSee hides it from its own player's camera.
 	HOMICIDEUNIT_API void BuildFigure(AActor* Owner, USceneComponent* Parent, TArray<class UStaticMeshComponent*>& Out, const FHULook& L, bool bOwnerNoSee);
+
+	// ---- ONE ARM, shared by the body everyone sees and your own first-person view, so they're the same arm ----
+	// the coat sleeve (SleeveLen back from the wrist), the shirt cuff, and the hand in a shape. Built in frame Xf: the
+	// wrist at its origin, forearm along -X, fingers along +X, back of the hand +Z; a right hand's thumb is on -Y
+	// (palm down, it points across you), a left hand's on +Y.
+	enum class EHand : uint8 { Relaxed, Fist, Flat, Pinch };
+	enum class ESeen : uint8 { Everyone, NotByOwner, OnlyOwner }; // a body / your own body / your first-person arms
+	// ForearmDir (in Parent's space): bend at the wrist, the sleeve running that way instead of straight back from the hand
+	// (first person: back, down and out to the side, so the arm leaves the view). Thickness scales the sleeve.
+	HOMICIDEUNIT_API void BuildArm(AActor* Owner, USceneComponent* Parent, TArray<class UStaticMeshComponent*>& Out, const FHULook& L,
+		const FTransform& Xf, float SleeveLen, bool bLeft, EHand Shape, ESeen Seen, FVector ForearmDir = FVector::ZeroVector, float Thickness = 1.f);
+	// the sleeve's thickness for this build (tools in the hand are placed around the fist)
+	HOMICIDEUNIT_API float SleeveThickness(const FHULook& L);
 }
