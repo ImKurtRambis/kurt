@@ -63,7 +63,8 @@ void AHUOffice::ChangeRow(int32 Row, FHUOfficeLook& L)
 
 FHUOfficeLook AHUOffice::LoadSaved()
 {
-	if (const UHUOfficeSave* S = Cast<UHUOfficeSave>(UGameplayStatics::LoadGameFromSlot(TEXT("HUOffice"), 0))) if (S->bSet) return S->Look;
+	if (UGameplayStatics::DoesSaveGameExist(TEXT("HUOffice"), 0))
+		if (const UHUOfficeSave* S = Cast<UHUOfficeSave>(UGameplayStatics::LoadGameFromSlot(TEXT("HUOffice"), 0))) if (S->bSet) return S->Look;
 	FHUOfficeLook Def;
 	Def.Items = (1 << 0) | (1 << 6); // a plant and a desk lamp to start
 	return Def;
