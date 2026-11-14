@@ -36,6 +36,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Detective") void StandUp();
 	// the host seating you (in a squad): sit on your own screen too
 	UFUNCTION(Client, Reliable) void ClientSitDown(FVector SeatTop, float Yaw);
+	// getting up with a move key (or SPACE) happens on your own PC only: in a squad it's sent on, so the host (whose copy
+	// of you decides where you are) and everyone else get you up too - otherwise the host keeps you in the seat
+	UFUNCTION(Server, Reliable) void ServerStandUp();
+	UFUNCTION(NetMulticast, Reliable) void MulticastStandUp();
 
 	// ---- coffee: for a while, careful work goes quicker and you're quicker on your feet ----
 	UFUNCTION(BlueprintCallable, Category = "Detective") void DrinkCoffee(float Seconds = 150.f);

@@ -10,6 +10,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -75,10 +77,13 @@ void AHUCruiser::OnConstruction(const FTransform& Transform)
 void AHUCruiser::CountSquad(int32& AtCar, int32& Total) const
 {
 	AtCar = 0; Total = 0;
-	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	// everyone in the game state's list: a partner's PC has only its own player controller, so counting controllers
+	// there would always find the whole "squad" (just them) at the car
+	const AGameStateBase* GS = GetWorld()->GetGameState();
+	if (!GS) return;
+	for (const APlayerState* PS : GS->PlayerArray)
 	{
-		const APlayerController* PC = It->Get();
-		const APawn* P = PC ? PC->GetPawn() : nullptr;
+		const APawn* P = PS ? PS->GetPawn() : nullptr;
 		if (!P) continue;
 		Total++;
 		if (FVector::Dist2D(P->GetActorLocation(), GetActorLocation()) <= GatherRadius) AtCar++;
@@ -110,6 +115,9 @@ void AHUCruiser::Interact_Implementation(APawn* User, bool bSecondary)
 	if (!bPlayerCar || bSecondary || bLeaving || !Ready()) return;
 	// heading back out: the squad's already been briefed on this case (their car at the scene brings them home again)
 	if (bReturnTrip) if (UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>()) Cases->bBriefed = true;
+	// in a squad only the host decides the car leaves (it moves everyone); a partner whose own count passed while the
+	// host's didn't would otherwise fade to black and stay frozen. Depart fades the partners' screens itself.
+	if (GetNetMode() == NM_Client) return;
 	Depart();
 }
 
@@ -123,6 +131,13 @@ void AHUCruiser::Depart()
 	{
 		APlayerController* PC = It->Get();
 		if (!PC) continue;
+		if (!PC->IsLocalController())
+		{
+			// a partner's screen, from the host: fade it and hold them still (their own game didn't start this)
+			PC->ClientSetCameraFade(true, FColor::Black, FVector2D(0.f, 1.f), 1.2f, false, true);
+			PC->ClientIgnoreMoveInput(true);
+			continue;
+		}
 		if (PC->PlayerCameraManager) PC->PlayerCameraManager->StartCameraFade(0.f, 1.f, 1.2f, FLinearColor::Black, false, true);
 		if (APawn* P = PC->GetPawn())
 			if (UHUInteractComponent* I = P->FindComponentByClass<UHUInteractComponent>()) I->Subtitle = FText::FromString(Line);

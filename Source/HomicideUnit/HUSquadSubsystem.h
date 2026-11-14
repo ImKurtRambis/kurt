@@ -5,9 +5,13 @@
 //   LeaveSquad()     - ends / leaves the squad (going back to the desk does this).
 // Uses Unreal's online sessions: over Steam when Steam is running (anyone, anywhere), otherwise on the local
 // network (same Wi-Fi / same PC). The code is stored on the session, and joining searches for it.
+// Unreal's Steam search only looks at squads in your own part of the world, so when it finds nothing the code is
+// asked of Steam again worldwide (SearchWorldwide). A Steam invite, or "Join game" on a friend in the Steam friends
+// list, joins that friend's squad too (OnInviteAccepted).
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Ticker.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
 #include "HUSquadSubsystem.generated.h"
@@ -46,5 +50,19 @@ private:
 	void OnFound(bool bOk);
 	void OnJoined(FName Session, EOnJoinSessionCompleteResult::Type Result);
 	TSharedPtr<class FOnlineSessionSearch> Search;
-	FDelegateHandle CreateH, FindH, JoinH, DestroyH;
+	FDelegateHandle CreateH, FindH, JoinH, DestroyH, InviteH;
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+	void OnInviteAccepted(const bool bOk, const int32 User, FUniqueNetIdPtr From, const FOnlineSessionSearchResult& Invite);
+	void JoinResult(const FOnlineSessionSearchResult& R);
+	void OnDestroyedThenJoin(FName Session, bool bOk);
+	TSharedPtr<FOnlineSessionSearchResult> PendingJoin;   // an invite waiting for our old squad to close
+	// the worldwide search: Steam's lobby list asked directly, polled on the game thread
+	bool SearchWorldwide();
+	bool PollWorldwide(float Dt);
+	void StopWorldwide();
+	uint64 WorldCall = 0;
+	double WorldStarted = 0;
+	FTSTicker::FDelegateHandle WorldTick;
 };

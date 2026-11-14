@@ -173,7 +173,16 @@ void AHUCharacter::StandUp()
 	SetActorEnableCollision(true);
 	Eyes->SetRelativeLocation(FVector(0, 0, 64));
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	// your own getting up, in a squad: everyone's copy of you gets up (a no-op where a replayed use already did it)
+	if (IsLocallyControlled() && GetNetMode() != NM_Standalone)
+	{
+		if (HasAuthority()) MulticastStandUp();
+		else ServerStandUp();
+	}
 }
+
+void AHUCharacter::ServerStandUp_Implementation() { MulticastStandUp(); }
+void AHUCharacter::MulticastStandUp_Implementation() { StandUp(); }
 
 void AHUCharacter::ToggleCrouch()
 {

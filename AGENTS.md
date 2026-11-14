@@ -15,6 +15,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Play in a window | `powershell -ExecutionPolicy Bypass -File Tools\Run.ps1` |
 | Smoke-test a level headless (loads it, scans the log for errors) | `powershell -ExecutionPolicy Bypass -File Tools\TestLevel.ps1 -Map L_Scene` |
 | Two-player test on one PC (host + client over LAN) | `powershell -ExecutionPolicy Bypass -File Tools\TestSquad.ps1` |
+| A whole squad shift by script, two players over a laggy network, both PCs' cases compared step by step (~4 min) | `powershell -ExecutionPolicy Bypass -File Tools\TestSquadShift.ps1 [-Lag 60 -Jitter 20 -Loss 1]` (the script: `HUSquadRun.*`, `-HUSquadRun=host\|partner`). Two homes over Steam: `Docs/SquadOnlineTest.md` |
 | Create any missing levels | `UnrealEditor-Cmd.exe HomicideUnit.uproject -run=pythonscript -script="Tools\CreateLevels.py"` |
 | Package a standalone game (Shipping, ~5 min; `-NoAI` leaves out the 14 GB local AI) | `powershell -ExecutionPolicy Bypass -File Tools\Package.ps1` → `Packaged\Windows\HomicideUnit.exe` |
 | Score the suspects' AI (~6 min; see `Tools\InterviewBench\README.md`) | `powershell -ExecutionPolicy Bypass -File Tools\InterviewBench.ps1` → `Saved\InterviewBench\<date>\report.md` |
@@ -43,7 +44,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Case data structs | `HUCaseTypes.h` |
 | Case generator (incident × hidden offender profile × place) | `HUCaseGen.*`, profiles in `HUProfiles.h` |
 | The case in play, money, kit, save, rules, verdict | `HUCaseSubsystem.*`, `HUSave.h` |
-| Squads / online (Steam or LAN sessions, 6-digit codes) | `HUSquadSubsystem.*`, `HUPlayerState.*`, `HUGameModes.*` |
+| Squads / online (Steam or LAN sessions, 6-digit codes) | `HUSquadSubsystem.*`, `HUPlayerState.*`, `HUGameModes.*`. Unreal's Steam lobby search only looks in your region: finding nothing, the code is asked of Steam worldwide directly (`SearchWorldwide`, Steamworks; `-HUWorldSearch` goes straight there). Steam invites / "Join Game" land in `OnInviteAccepted` |
 | The player | `HUCharacter.*` (movement, sitting), `HUInteractComponent.*` (look-at, E/Q, hotbar 1–7, flashlight/UV/scanner, hand viewmodel, hover glow, notifications, **squad interaction replay**) |
 | HUD & menus (drawn in C++, no UMG assets) | `HUPromptWidget.*`, `HUMenuWidget.*`, shared kit `HUDraw.h` |
 | Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker`, `HUCaseBoard` |
@@ -63,7 +64,9 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 1. **Interactables** implement `IHUInteractable` (`GetPrompt`, `Interact`; optional `HoverParts`, `Highlights`). Show text with `UHUInteractComponent::Say()` / `Notify()`.
 2. **Multiplayer = replay.** Every machine builds the *same* scene from the squad code. `UHUInteractComponent::Use()` sends an interaction to the host, which multicasts it; **every machine runs `Interact` on its own copy**. So `Interact` must be **deterministic** and must not assume the user is the local player:
    - Personal things (shop, own ready state, clipboard) → guard with `User->IsLocallyControlled()`.
-   - Host-only things (travel, case choice) → also check `GetNetMode() != NM_Client`.
+   - Host-only things (travel, case choice) → also check `GetNetMode() != NM_Client`; the host tells partners' screens itself (client RPCs, as `AHUCruiser::Depart` fades them).
+   - Counting the squad → the game state's `PlayerArray` (a partner's PC has only its own player controller, so a controller loop there finds a "squad" of one).
+   - Something only your own PC does (a key that stands you up) → send it on (`AHUCharacter::ServerStandUp`): the host's copy of you decides where you are.
 3. **Spawn scene actors with fixed names** (`AHUCrimeScene::SpawnNamed<T>`), never auto-named — squad replay finds actors by path name.
 4. **Randomness:** layout uses the case's `MapSeed`; evidence placement uses `SquadSeed` in a squad (random solo). Don't use `FMath::Rand` for anything that must match across players.
 5. **No assets required:** if you add a mesh/material slot, keep the block fallback so the game runs without art.
