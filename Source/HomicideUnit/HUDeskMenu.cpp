@@ -480,6 +480,10 @@ void AHUDeskMenu::OnConstruction(const FTransform& Transform)
 void AHUDeskMenu::BeginPlay()
 {
 	Super::BeginPlay();
+	// a cooked (packaged) game loads the office as it was saved in L_Menu and doesn't build it again, so what the
+	// build works out without saving (the sky's colours, the neon's, where each thing on the desk is) would be
+	// missing: build it here. The editor's -game rebuilds it on load by itself.
+	if (FPlatformProperties::RequiresCookedData()) OnConstruction(GetActorTransform());
 	BuildFigurine();
 	// the rain: streaks falling past the window, drops beading and running on the glass
 	Weather.Initialize((int32)FPlatformTime::Cycles());
