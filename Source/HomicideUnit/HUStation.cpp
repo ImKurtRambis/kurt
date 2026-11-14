@@ -424,17 +424,33 @@ void AHUSquadRoom::BuildStation()
 	{
 		const FVector2D DS = OfficeDesk(k);
 		const float X = DS.X, Y = DS.Y;
-		B(FVector(X, Y, 74), FVector(150, 150, 6), Desk);
-		for (float DX : { -68.f, 68.f }) for (float DY : { -68.f, 68.f }) B(FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
-		B(FVector(X + 15, Y + 55, 50), FVector(100, 34, 44), Desk * 0.8f);
-		ComputerParts.Add(B(FVector(X + 45, Y + 10, 83), FVector(40, 46, 12), FLinearColor(0.6f, 0.57f, 0.48f)));
-		ComputerParts.Add(B(FVector(X + 45, Y + 10, 108), FVector(36, 44, 38), FLinearColor(0.62f, 0.59f, 0.5f)));
-		ComputerParts.Add(B(FVector(X + 26.8f, Y + 10, 109), FVector(1, 36, 28), FLinearColor(0.05f, 0.12f, 0.25f)));
-		ComputerParts.Add(B(FVector(X + 5, Y + 10, 78), FVector(16, 44, 2), FLinearColor(0.55f, 0.53f, 0.46f)));
-		ChairParts.Add(B(FVector(X - 115, Y, 46), FVector(48, 48, 8), Steel));
-		ChairParts.Add(B(FVector(X - 138, Y, 78), FVector(5, 46, 56), Steel));
-		B(FVector(X - 115, Y, 21), FVector(6, 6, 42), Steel * 0.6f);
-		B(FVector(X - 115, Y, 3), FVector(50, 50, 6), Steel * 0.6f);
+		// the desk: its knee side toward the chair (-X); top at 77 (the folders and the computer sit on it)
+		if (!Prop(this, R, Blocks, TEXT("Desk"), FVector(X, Y, 38.5f), FVector(150, 150, 77), FRotator(0, 180, 0)))
+		{
+			B(FVector(X, Y, 74), FVector(150, 150, 6), Desk);
+			for (float DX : { -68.f, 68.f }) for (float DY : { -68.f, 68.f }) B(FVector(X + DX, Y + DY, 36), FVector(5, 5, 72), Desk * 0.7f);
+			B(FVector(X + 15, Y + 55, 50), FVector(100, 34, 44), Desk * 0.8f);
+		}
+		// the computer at the back, its screen facing the chair; the keyboard in front; a desk phone to the side
+		if (UStaticMeshComponent* Mon = Prop(this, R, Blocks, TEXT("CRTMonitor"), FVector(X + 45, Y + 10, 96), FVector(0, 0, 38), FRotator(0, 180, 0))) ComputerParts.Add(Mon);
+		else
+		{
+			ComputerParts.Add(B(FVector(X + 45, Y + 10, 83), FVector(40, 46, 12), FLinearColor(0.6f, 0.57f, 0.48f)));
+			ComputerParts.Add(B(FVector(X + 45, Y + 10, 108), FVector(36, 44, 38), FLinearColor(0.62f, 0.59f, 0.5f)));
+			ComputerParts.Add(B(FVector(X + 26.8f, Y + 10, 109), FVector(1, 36, 28), FLinearColor(0.05f, 0.12f, 0.25f)));
+		}
+		if (UStaticMeshComponent* Kb = Prop(this, R, Blocks, TEXT("Keyboard"), FVector(X + 5, Y + 10, 78.5f), FVector(16, 44, 0), FRotator(0, 180, 0), false)) ComputerParts.Add(Kb);
+		else ComputerParts.Add(B(FVector(X + 5, Y + 10, 78), FVector(16, 44, 2), FLinearColor(0.55f, 0.53f, 0.46f)));
+		Prop(this, R, Blocks, TEXT("DeskPhone"), FVector(X + 40, Y - 55, 83), FVector(0, 0, 12), FRotator(0, 180, 0), false);
+		// the chair (two entries per chair: sitting counts ChairParts in pairs)
+		if (UStaticMeshComponent* Ch = Prop(this, R, Blocks, TEXT("OfficeChair"), FVector(X - 115, Y, 50), FVector(0, 0, 100))) { ChairParts.Add(Ch); ChairParts.Add(Ch); }
+		else
+		{
+			ChairParts.Add(B(FVector(X - 115, Y, 46), FVector(48, 48, 8), Steel));
+			ChairParts.Add(B(FVector(X - 138, Y, 78), FVector(5, 46, 56), Steel));
+			B(FVector(X - 115, Y, 21), FVector(6, 6, 42), Steel * 0.6f);
+			B(FVector(X - 115, Y, 3), FVector(50, 50, 6), Steel * 0.6f);
+		}
 	}
 }
 
