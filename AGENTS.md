@@ -43,6 +43,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | The player | `HUCharacter.*` (movement, sitting), `HUInteractComponent.*` (look-at, E/Q, hotbar 1–7, flashlight/UV/scanner, hand viewmodel, hover glow, notifications, **squad interaction replay**) |
 | HUD & menus (drawn in C++, no UMG assets) | `HUPromptWidget.*`, `HUMenuWidget.*`, shared kit `HUDraw.h` |
 | Interactable things | `HUInteractable.h` (interface), `HUEvidence`, `HUPushable`, `HUSuspectActor`, `HUVictim`, `HUPoliceVan`, `HUOfficer`, `HULadder`, `HUCruiser`, `HUSupplyLocker`, `HUCaseBoard` |
+| Usable props (drawers, filing cabinets, lockers, phones, seats, light switches, TV, lamps, things to read) | `HUUsables.*`: `MarkProp` marks real furniture where `HUBuild::Prop` places it; `Mark(Block(...), EHUUse::...)` marks a block; `AddSwitch` puts a room's light switch on a wall. The room's own `GetPrompt` wins over a mark. Room-by-room list and what's still to do: `Docs/UsableProps.md`. `-HUUseTest` on `L_Precinct`/`L_Lobby` uses one of each and screenshots it |
 | Tools & concealment | `HUTools.h` |
 | Interrogation (pressure, moods, confession) | `HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`, interview UI in `AHUSuspectActor` + `HUPromptWidget` |
 | Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |
