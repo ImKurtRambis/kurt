@@ -19,4 +19,12 @@ Free offline VOICES (no keys, no tokens; needs a strong GPU). The game starts To
   Each voice number's first CSM line is kept in AIoices\, so a suspect keeps the same voice; premade lines are cached there too.
   The server: http://127.0.0.1:8005  (/health, POST /tts). Log it by running Tools\VoiceServer.bat by hand.
 
-SPEAK QUESTIONS (optional, Settings > Speak questions): Moonshine tiny English (sherpa-onnx ASR model) in AI\stt\ (*.onnx + tokens.txt). Uses AI\voice\bin\sherpa-onnx-offline.exe.
+HEARING THE DETECTIVE (hold V in an interview, talk, let go). Uses sherpa-onnx (Apache-2.0) from AI\voice\bin\. The best model present is used:
+  AI\stt-accurate\  NVIDIA Parakeet TDT 0.6B v2, int8 (encoder/decoder/joiner .int8.onnx + tokens.txt, ~630 MB)
+      from github.com/k2-fsa/sherpa-onnx releases "asr-models": sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2
+      License: CC-BY-4.0 - credit "Parakeet TDT 0.6B v2 by NVIDIA" in the game's credits.
+      Loaded once when an interview opens (sherpa-onnx-offline-websocket-server.exe on 127.0.0.1:8096, ~2 s), then ~0.3 s a question.
+  AI\stt\           Moonshine tiny English (*.onnx + tokens.txt) - the small fallback, ~0.6 s a question.
+  Tested on 80 accented-English clips (EdAcc, 20 accents) and 61 interview lines, clean / with chatter / with noise:
+      words wrong on accents  - Moonshine tiny 38% / 61% / 60%,  Parakeet 0.6B v2 21% / 33% / 32%.
+  Test the installed model: UnrealEditor.exe HomicideUnit.uproject -game -HUListenTest=C:\path\question.wav (16-bit .wav; logs what it heard).

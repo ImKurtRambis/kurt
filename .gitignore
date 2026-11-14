@@ -22,6 +22,7 @@ AI/chatterbox-install.log
 AI/*.err
 AI/*.out
 AI/stt/
+AI/stt-accurate/
 AI/orpheus/
 AI/csm/
 AI/snac/

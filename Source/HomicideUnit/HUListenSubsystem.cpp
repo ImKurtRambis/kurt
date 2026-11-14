@@ -12,6 +12,10 @@
 #include "HUInteractComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
+#include "WebSocketsModule.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 FString UHUListenSubsystem::Dir() const { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI")); }
 
@@ -23,11 +27,59 @@ static FString FindModel(const FString& Folder, const TCHAR* Prefix)
 	return Found.Num() ? Folder / Found.Last() : FString();
 }
 
+bool UHUListenSubsystem::HasAccurate() const
+{
+	const FString D = Dir() / TEXT("stt-accurate");
+	return FPlatformFileManager::Get().GetPlatformFile().FileExists(*(D / TEXT("tokens.txt")))
+		&& !FindModel(D, TEXT("encoder")).IsEmpty() && !FindModel(D, TEXT("decoder")).IsEmpty() && !FindModel(D, TEXT("joiner")).IsEmpty();
+}
+
+bool UHUListenSubsystem::HasFast() const
+{
+	const FString D = Dir() / TEXT("stt");
+	return FPlatformFileManager::Get().GetPlatformFile().FileExists(*(D / TEXT("tokens.txt"))) && !FindModel(D, TEXT("encode")).IsEmpty();
+}
+
 bool UHUListenSubsystem::IsInstalled() const
 {
+	return FPlatformFileManager::Get().GetPlatformFile().FileExists(*(Dir() / TEXT("voice/bin/sherpa-onnx-offline.exe"))) && (HasAccurate() || HasFast());
+}
+
+FString UHUListenSubsystem::ModelName() const
+{
+	return HasAccurate() ? TEXT("Parakeet TDT 0.6B v2") : HasFast() ? TEXT("Moonshine tiny") : TEXT("none");
+}
+
+// the same flags work for the one-off exe and the always-on server
+FString UHUListenSubsystem::ModelArgs() const
+{
+	if (HasAccurate())
+	{
+		const FString D = Dir() / TEXT("stt-accurate");
+		return FString::Printf(TEXT("--encoder=\"%s\" --decoder=\"%s\" --joiner=\"%s\" --tokens=\"%s/tokens.txt\" --model-type=nemo_transducer"),
+			*FindModel(D, TEXT("encoder")), *FindModel(D, TEXT("decoder")), *FindModel(D, TEXT("joiner")), *D);
+	}
 	const FString Stt = Dir() / TEXT("stt");
-	return FPlatformFileManager::Get().GetPlatformFile().FileExists(*(Dir() / TEXT("voice/bin/sherpa-onnx-offline.exe")))
-		&& FPlatformFileManager::Get().GetPlatformFile().FileExists(*(Stt / TEXT("tokens.txt"))) && !FindModel(Stt, TEXT("encode")).IsEmpty();
+	return FString::Printf(TEXT("--tokens=\"%s/tokens.txt\" --moonshine-preprocessor=\"%s\" --moonshine-encoder=\"%s\" --moonshine-uncached-decoder=\"%s\" --moonshine-cached-decoder=\"%s\""),
+		*Stt, *FindModel(Stt, TEXT("preprocess")), *FindModel(Stt, TEXT("encode")), *FindModel(Stt, TEXT("uncached_decode")), *FindModel(Stt, TEXT("cached_decode")));
+}
+
+// drop stray quote marks some models put around the sentence
+static FString CleanHeard(FString Text)
+{
+	Text = Text.Replace(TEXT("\""), TEXT("")).TrimStartAndEnd();
+	Text.TrimCharInline('\'', nullptr);
+	return Text.TrimStartAndEnd();
+}
+
+// sherpa-onnx answers with {"lang": "", ..., "text": " where were you", ...}
+static FString TextFromJson(const FString& Json)
+{
+	TSharedPtr<FJsonObject> J;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), J) || !J.IsValid()) return FString();
+	FString Text;
+	J->TryGetStringField(TEXT("text"), Text);
+	return CleanHeard(Text);
 }
 
 bool UHUListenSubsystem::IsEnabled() const
@@ -39,7 +91,117 @@ bool UHUListenSubsystem::IsEnabled() const
 void UHUListenSubsystem::Deinitialize()
 {
 	if (Capture) { Capture->StopStream(); Capture->CloseStream(); Capture.Reset(); }
+	Pending.Unbind();
+	DropSocket();
+	if (Server.IsValid()) { FPlatformProcess::TerminateProc(Server, true); FPlatformProcess::CloseProc(Server); }
 	Super::Deinitialize();
+}
+
+// ---------- the always-on speech server (the accurate model) ----------
+// Parakeet takes ~2 s to load and ~0.3 s to hear a question, so it's loaded once and kept: the game starts
+// sherpa-onnx-offline-websocket-server on 127.0.0.1:8096 when an interview opens and talks to it over a websocket.
+// A second copy of the game on this PC (squad testing) can't bind the port, and simply shares the first one's.
+void UHUListenSubsystem::WarmUp()
+{
+	if (!HasAccurate() || bSocketOpen || bConnecting) return;
+	const FString Exe = Dir() / TEXT("voice/bin/sherpa-onnx-offline-websocket-server.exe");
+	if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*Exe)) return;
+	if (!Server.IsValid() || !FPlatformProcess::IsProcRunning(Server))
+	{
+		if (Server.IsValid()) FPlatformProcess::CloseProc(Server);
+		const FString Args = ModelArgs() + FString::Printf(TEXT(" --port=%d --num-work-threads=1 --num-threads=2"), ServerPort);
+		Server = FPlatformProcess::CreateProc(*Exe, *Args, false, true, true, nullptr, 0, *FPaths::GetPath(Exe), nullptr);
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: loading %s (%s)"), *ModelName(), Server.IsValid() ? TEXT("ok") : TEXT("failed to start"));
+	}
+	ServerStartedAt = FPlatformTime::Seconds();
+	bConnecting = true;
+	Connect();
+}
+
+void UHUListenSubsystem::DropSocket()
+{
+	if (Socket.IsValid())
+	{
+		Socket->OnConnected().Clear(); Socket->OnConnectionError().Clear(); Socket->OnClosed().Clear(); Socket->OnMessage().Clear();
+		if (Socket->IsConnected()) Socket->Close();
+		Socket.Reset();
+	}
+	bSocketOpen = false;
+}
+
+void UHUListenSubsystem::Connect()
+{
+	DropSocket();
+	Socket = FWebSocketsModule::Get().CreateWebSocket(FString::Printf(TEXT("ws://127.0.0.1:%d"), ServerPort), TEXT(""));
+	TWeakObjectPtr<UHUListenSubsystem> Self(this);
+	Socket->OnConnected().AddLambda([Self]()
+	{
+		if (!Self.IsValid()) return;
+		Self->bSocketOpen = true; Self->bConnecting = false;
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: %s ready after %.1f s"), *Self->ModelName(), FPlatformTime::Seconds() - Self->ServerStartedAt);
+	});
+	Socket->OnConnectionError().AddLambda([Self](const FString& Error)
+	{
+		if (!Self.IsValid()) return;
+		Self->bSocketOpen = false;
+		// still loading the model: knock again shortly, for up to 30 s (the old socket is replaced from the timer, not from inside its own callback)
+		if (FPlatformTime::Seconds() - Self->ServerStartedAt < 30.0)
+		{
+			if (UGameInstance* GI = Self->GetGameInstance()) GI->GetTimerManager().SetTimer(Self->RetryTimer, FTimerDelegate::CreateUObject(Self.Get(), &UHUListenSubsystem::Connect), 0.5f, false);
+			return;
+		}
+		Self->bConnecting = false;
+		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: the speech server never answered (%s) - questions are heard the slow way"), *Error);
+	});
+	Socket->OnClosed().AddLambda([Self](int32, const FString&, bool)
+	{
+		if (!Self.IsValid()) return;
+		Self->bSocketOpen = false; Self->bConnecting = false;
+		Self->OnReply(FString()); // a question in flight is heard the slow way instead
+	});
+	Socket->OnMessage().AddLambda([Self](const FString& Msg) { if (Self.IsValid()) Self->OnReply(Msg); });
+	Socket->Connect();
+}
+
+// the server's answer (or, with an empty message, its silence): finish the question in flight
+void UHUListenSubsystem::OnReply(const FString& Msg)
+{
+	if (!Pending.IsBound()) return;
+	if (UGameInstance* GI = GetGameInstance()) GI->GetTimerManager().ClearTimer(PendingTimer);
+	FHUHeard Done = Pending;
+	Pending.Unbind();
+	if (Msg.IsEmpty()) { RunExe(PendingFile, Done); return; }
+	Finish(TextFromJson(Msg), Done);
+}
+
+void UHUListenSubsystem::Finish(const FString& Text, FHUHeard Done)
+{
+	bWorking = false;
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: heard \"%s\""), *Text);
+	Done.ExecuteIfBound(Text);
+}
+
+// one question, one sherpa-onnx process (the model loads each time: ~0.6 s for Moonshine, ~1.7 s for Parakeet)
+void UHUListenSubsystem::RunExe(const FString& File, FHUHeard Done)
+{
+	const FString Exe = Dir() / TEXT("voice/bin/sherpa-onnx-offline.exe");
+	const FString Args = ModelArgs() + FString::Printf(TEXT(" --num-threads=2 \"%s\""), *File);
+	bWorking = true;
+	TWeakObjectPtr<UHUListenSubsystem> Self(this);
+	Async(EAsyncExecution::Thread, [Self, Exe, Args, Done]()
+	{
+		int32 Code = -1; FString StdOut, StdErr;
+		FPlatformProcess::ExecProcess(*Exe, *Args, &Code, &StdOut, &StdErr, *FPaths::GetPath(Exe));
+		FString Text;
+		TArray<FString> Lines; StdOut.ParseIntoArrayLines(Lines);
+		for (const FString& L : Lines) if (L.TrimStart().StartsWith(TEXT("{")) && L.Contains(TEXT("\"text\""))) { Text = TextFromJson(L); break; }
+		if (Code != 0) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: speech-to-text failed (%d) %s"), Code, *StdErr.Right(200));
+		AsyncTask(ENamedThreads::GameThread, [Self, Text, Done]()
+		{
+			if (Self.IsValid()) Self->Finish(Text, Done);
+			else Done.ExecuteIfBound(Text);
+		});
+	});
 }
 
 // ---------- the microphone ----------
@@ -114,6 +276,7 @@ bool UHUListenSubsystem::OpenMic()
 // disconnected input reads as pure silence; a real microphone always picks up a little room noise.
 void UHUListenSubsystem::AutoPickMic(bool bAfterSilence)
 {
+	if (!bAfterSilence) WarmUp(); // an interview is opening: load the speech model while they say hello
 	if (bProbing || (bProbedOnce && !bAfterSilence)) return;
 	bProbing = true; bProbedOnce = true;
 	TWeakObjectPtr<UHUListenSubsystem> Self(this);
@@ -201,6 +364,7 @@ void UHUListenSubsystem::StopMonitor()
 bool UHUListenSubsystem::StartListening()
 {
 	if (bListening || bWorking || !IsInstalled()) return false; // interviews are spoken: no setting needed
+	WarmUp(); // usually loaded already; if not, it's ready by the time they let go of V
 	StopMonitor();
 	{ FScopeLock L(&Lock); Samples.Reset(); }
 	bListening = true;
@@ -219,7 +383,11 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 	bLastSilent = Mono.Num() >= Rate / 4 && Peak < 0.01f;
 	if (bLastSilent) { AutoPickMic(true); Done.ExecuteIfBound(FString()); return; } // that mic heard nothing: try the others
 	if (Mono.Num() < Rate / 4) { Done.ExecuteIfBound(FString()); return; } // under a quarter second: nothing said
+	Hear(Mono, Rate, Done);
+}
 
+void UHUListenSubsystem::Hear(const TArray<float>& Mono, int32 Rate, FHUHeard Done)
+{
 	// 16 kHz, 16-bit mono .wav - what the model wants
 	const int32 Out = (int32)((int64)Mono.Num() * 16000 / FMath::Max(1, Rate));
 	TArray<uint8> Wav; Wav.SetNumZeroed(44 + Out * 2);
@@ -240,36 +408,77 @@ void UHUListenSubsystem::StopListening(FHUHeard Done)
 	IFileManager::Get().MakeDirectory(*FPaths::GetPath(File), true);
 	FFileHelper::SaveArrayToFile(Wav, *File);
 
-	const FString Stt = Dir() / TEXT("stt");
-	const FString Exe = Dir() / TEXT("voice/bin/sherpa-onnx-offline.exe");
-	const FString Args = FString::Printf(TEXT("--tokens=\"%s/tokens.txt\" --moonshine-preprocessor=\"%s\" --moonshine-encoder=\"%s\" --moonshine-uncached-decoder=\"%s\" --moonshine-cached-decoder=\"%s\" --num-threads=2 \"%s\""),
-		*Stt, *FindModel(Stt, TEXT("preprocess")), *FindModel(Stt, TEXT("encode")), *FindModel(Stt, TEXT("uncached_decode")), *FindModel(Stt, TEXT("cached_decode")), *File);
-	bWorking = true;
-	TWeakObjectPtr<UHUListenSubsystem> Self(this);
-	Async(EAsyncExecution::Thread, [Self, Exe, Args, Done]()
+	// the accurate model, already loaded: send the samples, the answer comes back in ~0.3 s (OnReply)
+	if (bSocketOpen && Socket.IsValid() && Socket->IsConnected())
 	{
-		int32 Code = -1; FString StdOut, StdErr;
-		FPlatformProcess::ExecProcess(*Exe, *Args, &Code, &StdOut, &StdErr, *FPaths::GetPath(Exe));
-		// the result line looks like {"lang": "", ..., "text": " where were you", ...}
-		FString Text;
-		FRegexMatcher M(FRegexPattern(TEXT("\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")), StdOut + TEXT("\n") + StdErr);
-		if (M.FindNext())
+		// <int32 sample rate><int32 byte count><float32 samples>, in 10 KB pieces
+		TArray<uint8> Msg; Msg.SetNumUninitialized(8 + Out * 4);
+		const int32 Rate16 = 16000, Bytes = Out * 4;
+		FMemory::Memcpy(Msg.GetData(), &Rate16, 4); FMemory::Memcpy(Msg.GetData() + 4, &Bytes, 4);
+		for (int32 i = 0; i < Out; i++) { const float F = Pcm[i] / 32768.f; FMemory::Memcpy(Msg.GetData() + 8 + i * 4, &F, 4); }
+		bWorking = true;
+		Pending = Done; PendingFile = File;
+		for (int32 At = 0; At < Msg.Num(); At += 10240) Socket->Send(Msg.GetData() + At, FMath::Min(10240, Msg.Num() - At), true);
+		// no answer in 6 s: hear it the slow way
+		TWeakObjectPtr<UHUListenSubsystem> Self(this);
+		GetGameInstance()->GetTimerManager().SetTimer(PendingTimer, FTimerDelegate::CreateLambda([Self]()
 		{
-			// unescape, then drop stray quote marks the model sometimes adds around the sentence
-			Text = M.GetCaptureGroup(1).Replace(TEXT("\\\""), TEXT("\"")).Replace(TEXT("\\\\"), TEXT("\\"));
-			Text = Text.Replace(TEXT("\""), TEXT("")).TrimStartAndEnd();
-			Text.TrimCharInline('\'', nullptr);
-			Text.TrimStartAndEndInline();
-		}
-		if (Code != 0) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: speech-to-text failed (%d) %s"), Code, *StdErr.Right(200));
-		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: heard \"%s\""), *Text);
-		AsyncTask(ENamedThreads::GameThread, [Self, Text, Done]()
-		{
-			if (Self.IsValid()) Self->bWorking = false;
-			Done.ExecuteIfBound(Text);
-		});
-	});
+			if (!Self.IsValid() || !Self->Pending.IsBound()) return;
+			UE_LOG(LogTemp, Warning, TEXT("HomicideUnit listen: the speech server didn't answer - asking the slow way"));
+			Self->OnReply(FString());
+		}), 6.f, false);
+		return;
+	}
+	RunExe(File, Done);
 }
+
+#if !UE_BUILD_SHIPPING
+// -HUListenTest=<16-bit mono .wav>: hear a recording through the always-on model and the slow way, log both, quit
+void UHUListenSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	FString Wav;
+	if (!FParse::Value(FCommandLine::Get(), TEXT("HUListenTest="), Wav)) return;
+	TArray<uint8> Bytes;
+	if (!FFileHelper::LoadFileToArray(Bytes, *Wav) || Bytes.Num() < 44) { UE_LOG(LogTemp, Error, TEXT("HUListenTest: can't read %s"), *Wav); return; }
+	// find "fmt " and "data"
+	int32 Rate = 16000, Channels = 1, Bits = 16, DataAt = -1, DataLen = 0;
+	for (int32 At = 12; At + 8 <= Bytes.Num();)
+	{
+		int32 Len; FMemory::Memcpy(&Len, Bytes.GetData() + At + 4, 4);
+		if (!FMemory::Memcmp(Bytes.GetData() + At, "fmt ", 4)) { uint16 C, B; FMemory::Memcpy(&C, Bytes.GetData() + At + 10, 2); FMemory::Memcpy(&Rate, Bytes.GetData() + At + 12, 4); FMemory::Memcpy(&B, Bytes.GetData() + At + 22, 2); Channels = C; Bits = B; }
+		if (!FMemory::Memcmp(Bytes.GetData() + At, "data", 4)) { DataAt = At + 8; DataLen = FMath::Min(Len, Bytes.Num() - DataAt); break; }
+		At += 8 + Len + (Len & 1);
+	}
+	if (DataAt < 0 || Bits != 16) { UE_LOG(LogTemp, Error, TEXT("HUListenTest: %s isn't 16-bit PCM"), *Wav); return; }
+	TArray<float> Mono;
+	for (int32 i = 0; (i + 1) * Channels * 2 <= DataLen; i++) { int16 S; FMemory::Memcpy(&S, Bytes.GetData() + DataAt + i * Channels * 2, 2); Mono.Add(S / 32768.f); }
+	UE_LOG(LogTemp, Log, TEXT("HUListenTest: %s, %.1f s, model %s"), *FPaths::GetCleanFilename(Wav), Mono.Num() / (float)Rate, *ModelName());
+	WarmUp();
+	// wait for the model to load, then ask it three times (the first warms caches), then the slow way once
+	TSharedRef<int32> Step = MakeShared<int32>(0);
+	TSharedRef<double> T0 = MakeShared<double>(FPlatformTime::Seconds());
+	TWeakObjectPtr<UHUListenSubsystem> Self(this);
+	TSharedRef<FTimerHandle> Tick = MakeShared<FTimerHandle>();
+	GetGameInstance()->GetTimerManager().SetTimer(*Tick, FTimerDelegate::CreateLambda([Self, Mono, Rate, Step, T0, Tick]()
+	{
+		if (!Self.IsValid() || Self->bWorking) return;
+		const bool bLoaded = Self->bSocketOpen;
+		if (*Step < 3 && !bLoaded && FPlatformTime::Seconds() - *T0 < 30.0) return; // still loading
+		if (*Step >= 4) { Self->GetGameInstance()->GetTimerManager().ClearTimer(*Tick); FPlatformMisc::RequestExit(false); return; }
+		const bool bSlow = *Step == 3 || !bLoaded;
+		const double Asked = FPlatformTime::Seconds();
+		const int32 N = ++*Step;
+		if (bSlow) *Step = 4;
+		auto Report = FHUHeard::CreateLambda([Asked, N, bSlow](const FString& Text)
+		{
+			UE_LOG(LogTemp, Log, TEXT("HUListenTest: %s #%d heard \"%s\" in %.2f s"), bSlow ? TEXT("slow way") : TEXT("always-on model"), N, *Text, FPlatformTime::Seconds() - Asked);
+		});
+		if (bSlow) { Self->bSocketOpen = false; } // force the one-process path for the comparison
+		Self->Hear(Mono, Rate, Report);
+	}), 0.25f, true);
+}
+#endif
 
 #if !UE_BUILD_SHIPPING
 #include "HAL/IConsoleManager.h"
