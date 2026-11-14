@@ -18,9 +18,13 @@ $Out = Join-Path $Root "Packaged"
 # which build this is (the build stamps it too; this is for the folder and the summary)
 $Version = & "$PSScriptRoot\StampVersion.ps1"
 
+# -ubtargs: left to itself, Unreal's build tool refuses to build while any editor has Live Coding on - even an editor
+# open on another copy of the project - so packaging failed whenever one was open. These switches make it build
+# anyway.
 & "$Engine\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun "-project=$Root\HomicideUnit.uproject" -platform=Win64 `
     "-clientconfig=$Config" -build -cook -stage -pak -iostore -compressed -prereqs -package -archive `
-    "-archivedirectory=$Out" -nop4 -utf8output -unattended
+    "-archivedirectory=$Out" -nop4 -utf8output -unattended "-ubtargs=-NoHotReload -NoHotReloadFromIDE"
+# ("ConflictingInstance" above means another build was running at that moment: run this again)
 if ($LASTEXITCODE -ne 0) { throw "Packaging failed (RunUAT exit code $LASTEXITCODE) - the errors are above." }
 
 $Game = Join-Path $Out "Windows"

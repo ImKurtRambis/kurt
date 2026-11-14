@@ -31,8 +31,12 @@ Free offline VOICES (no keys, no tokens). The game starts Tools\VoiceServer.bat 
       AI\csm\model\   (unsloth/csm-1b: model.safetensors, tokenizer + config files)
   AI\python\  - portable Python 3.10 with torch (CUDA 12.8), transformers 4.57, snac, triton-windows 3.5
       plus Python's include\ and libs\ (python_3.10.11_include_libs.zip from woct0rdho/triton-windows) so Triton can compile.
-  With Visual Studio's C++ tools installed, CSM is compiled on first use (15 to 45 s once) and runs ~4x faster.
+  CSM is compiled on first use (15 to 45 s once) and then runs ~4x faster. It needs no Visual Studio for that: without
+  Visual Studio's C++ tools, Triton's own compiler does it (measured: 6.4 s a line either way on an RTX 5070 Ti).
   Each voice number's first CSM line is kept in AI\voices\, so a suspect keeps the same voice; premade lines are cached there too.
+  The big voices only load from a short folder: Python's files sit deep, and Windows stops at 260 characters, so the
+  folder holding HomicideUnit.exe may be at most 122 characters long (a Steam library is about 50). In a longer one
+  CSM can't load, and the small voice speaks its lines instead.
  On every other PC (AMD, Intel, a smaller NVIDIA card, no card) - the small voice, on the processor:
   Supertonic 3 (code MIT, model BigScience OpenRAIL-M) - ten voices (0-4 women, 5-9 men), for the 911 call and everyone else
       AI\voice\supertonic\   duration_predictor, text_encoder, vector_estimator, vocoder (.int8.onnx), tts.json, unicode_indexer.bin, voice.bin

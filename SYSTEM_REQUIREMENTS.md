@@ -74,6 +74,27 @@ never touches the card.
 - The 5 seconds on the processor is mostly re-reading: the last six exchanges slide along every turn, and a
   processor reads about 130 tokens a second where the card reads 5000.
 
+### The same paths from a packaged build
+
+A Development package (`Tools\Package.ps1 -Config Development`, 20.7 GB with the AI) built from main at `f652cac`,
+its own `HomicideUnit.exe` run without a window from the roll-call map:
+
+| Path | Forced with | What the packaged game did |
+|---|---|---|
+| Brain on the card | (its own choice) | found the card, ready in 4.5 s; 151 answers, half under 0.24 s |
+| Brain on the processor | `-HUBrain=cpu` | ready in 2.4 s; 30 answers, half under 5.1 s |
+| The card fails | `-HUBrainBreakCard` | handed over to the processor; ready 5.3 s after it was asked for |
+| The card is too slow | `-HUBrainMinSpeed=9999` | handed over to the processor; ready 6.0 s after it was asked for |
+| Voices, its own choice | | Orpheus + CSM, twelve lines, none lost: 2.4 s a 911 line, 8.1 s a suspect line |
+| Small voice | `-HUVoices=cpu` | Supertonic for both, twelve lines, none lost: 1.6 s a suspect line |
+| Big voices with no Visual Studio compiler (as on a player's PC) | server started by hand | CSM still compiles itself: 6.4 s a suspect line, none lost |
+
+- Killing the packaged game by force left no brain or voice program running.
+- The package had all the files each path needs, and the Visual C++ runtime DLLs the brain and the game load sat
+  beside them (the small voice's program needs none).
+- The big voices need a short folder: with the game in a folder path longer than 122 characters, CSM can't load
+  (Windows' 260-character limit meets Python's deep folders) and the small voice speaks instead. Seen happening.
+
 ## Not measured yet
 
 - **Any AMD or Intel card, and any PC without a 12 GB NVIDIA card.** Everything above ran on one RTX 5070 Ti.
@@ -81,7 +102,8 @@ never touches the card.
 - A 12 GB NVIDIA card: the big voices are picked from 11.5 GB up, which is the measured 10.2 GB plus room for
   Windows. On less the small voice speaks.
 - A processor slower than the Ryzen 7 7800X3D running the brain.
-- A packaged (shipping) build on a PC with nothing installed.
+- A Shipping package (the packaged runs above were a Development one), and any package on a PC with nothing
+  installed: no Visual C++ runtime, no Visual Studio, no Python.
 
 ## Measure it again
 
