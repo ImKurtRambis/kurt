@@ -1,0 +1,83 @@
+{
+ "overall": 86.8,
+ "scores": {
+  "character": {
+   "culprit": 87.3,
+   "liar": 91.0,
+   "honest": 89.0,
+   "all": 89.1
+  },
+  "facts": {
+   "culprit": 84.8,
+   "liar": 75.8,
+   "honest": 64.3,
+   "all": 74.8
+  },
+  "story": {
+   "culprit": 87.5,
+   "liar": 85.7,
+   "honest": 100.0,
+   "all": 90.0
+  },
+  "proof": {
+   "culprit": 100.0,
+   "liar": 66.7,
+   "honest": null,
+   "all": 80.0
+  },
+  "no_confession": {
+   "culprit": 100.0,
+   "liar": 100.0,
+   "honest": 100.0,
+   "all": 100.0
+  }
+ },
+ "checked": {
+  "character": {
+   "culprit": 102,
+   "liar": 100,
+   "honest": 100,
+   "all": 302
+  },
+  "facts": {
+   "culprit": 66,
+   "liar": 66,
+   "honest": 70,
+   "all": 202
+  },
+  "story": {
+   "culprit": 16,
+   "liar": 14,
+   "honest": 10,
+   "all": 40
+  },
+  "proof": {
+   "culprit": 4,
+   "liar": 6,
+   "honest": 0,
+   "all": 10
+  },
+  "no_confession": {
+   "culprit": 22,
+   "liar": 22,
+   "honest": 24,
+   "all": 68
+  }
+ },
+ "latency": {
+  "median_ms": 412,
+  "p90_ms": 581
+ },
+ "turns": 302,
+ "no_answer": 0,
+ "model": "suspect.gguf",
+ "model_bytes": 2497280448,
+ "model_date": "2026-11-06T14:23:35.000Z",
+ "judge": "judge.gguf",
+ "cases": [
+  1101,
+  2203
+ ],
+ "run": "baseline-run",
+ "date": "2026-11-14 05:19"
+}

@@ -51,6 +51,12 @@ public:
 	// a prewritten answer for this question, if there's a fresh one (it's then used up, remembered, and rewritten)
 	bool TakeReady(const FString& SuspectId, const FString& Said, FHUReaction& Out);
 	int32 ReadyCount() const { return Pre.Num(); }
+	// stop writing answers ahead (the interview test bench measures live answers only)
+	void StopPrewrite();
+	// >= 0: the model samples with this seed, so the same model gives the same answers run to run (the test bench)
+	int32 SampleSeed = -1;
+	// the suspect's whole brief as the model gets it right now (the interview test bench logs it)
+	FString PromptFor(const FString& SuspectId) const { return SystemPrompt(SuspectId); }
 	bool IsWriting() const { return bPreBusy || LiveBusy > 0; }
 
 	UPROPERTY(EditAnywhere, Category = "Brain") int32 Port = 8089;

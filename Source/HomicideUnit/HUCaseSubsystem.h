@@ -97,6 +97,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString Confront(const FString& Id, int32 Statement, const FString& ClueId);
 	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString Press(const FString& Id, int32 Statement);
 	UFUNCTION(BlueprintCallable, Category = "Interrogation") FString RaiseRecord(const FString& Id);
+	// the "GAME:" line the suspect's brain gets after one of the three above (Action 1 = record, a ClueId = evidence,
+	// else pressing a statement): what really happened, and what their answer must mean. bWasBroken: that statement
+	// was already on the record before. Shared by the interview and the interview test bench.
+	FString InterrogationSituation(const FString& Id, uint8 Action, int32 Statement, const FString& ClueId, bool bWasBroken, const FString& Reply) const;
 
 	// ---- the offender profile ----
 	UPROPERTY(BlueprintReadOnly, Category = "Profile") EHUProfile TrueProfile = EHUProfile::None;

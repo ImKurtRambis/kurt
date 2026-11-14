@@ -548,6 +548,25 @@ FString UHUCaseSubsystem::RaiseRecord(const FString& Id)
 	return TEXT("\"My record? Go ahead and read it. It won't tell you anything about tonight.\"");
 }
 
+FString UHUCaseSubsystem::InterrogationSituation(const FString& Id, uint8 Action, int32 Statement, const FString& ClueId, bool bWasBroken, const FString& Reply) const
+{
+	FHUSuspect S;
+	GetSuspect(Id, S);
+	const FString St = S.Statements.IsValidIndex(Statement) ? S.Statements[Statement].Text : FString();
+	FString Sit;
+	if (Action == 1) { const FString* Rec = SuspectRecord.Find(Id); Sit = FString::Printf(TEXT("The detective brings up your criminal record (%s)."), Rec ? **Rec : TEXT("nothing on it")); }
+	else if (!ClueId.IsEmpty())
+	{
+		FHUClue K; GetClue(ClueId, K);
+		const bool bCaught = !bWasBroken && IsBroken(Id, Statement);
+		Sit = FString::Printf(TEXT("The detective shows you evidence: %s - %s. "), *K.Name, *K.Detail)
+			+ (bCaught ? FString::Printf(TEXT("It PROVES you lied when you said \"%s\". You're caught: admit what the truth was."), *St)
+				: TEXT("It does not prove anything you said is false. Stay with your story."));
+	}
+	else Sit = FString::Printf(TEXT("The detective calls you a liar about \"%s\" - with no evidence to show."), *St);
+	return Sit + FString::Printf(TEXT(" Your answer must mean this: \"%s\""), *Reply);
+}
+
 // at full pressure: the one who did it confesses (if enough of their lies are on the record); anyone else breaks down
 FString UHUCaseSubsystem::CheckBreaking(const FString& Id, const FString& Line)
 {

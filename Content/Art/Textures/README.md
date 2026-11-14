@@ -19,7 +19,12 @@ convention) and a Roughness map. The game uses them through `Source/HomicideUnit
 | PaintedMetal | `T_PaintedMetal_*` | 200 | lockers, roll-up doors, tool chests, the hotel's boiler and air-con |
 | Glass | `T_Glass_*` | 150 | door panels (see-through: its own parent, `M_HU_SurfaceGlass`) |
 | Fabric | `T_Fabric_*` | 60 | the briefing room's carpet and chairs, hotel beds, awnings |
-| Leather | `T_Leather_*` | 80 | (ready for chairs, booths, coats) |
+| Leather | `T_Leather_*` | 80 | the Captain's couch (ready for chairs, booths, coats) |
+
+The precinct (`HUStation.cpp`) uses them room by room: linoleum corridors, a tiled lobby and locker room, the Captain's
+red carpet, carpeted bullpen, concrete interview rooms and holding, old boards in records, plaster walls with walnut
+skirting and door frames, an acoustic ceiling, painted-steel lockers, shelving, cells and cabinets, and glass at the
+front desk. The personal offices (`HUOffice.cpp`) paint plaster and weave carpet in whatever colours the owner picks.
 
 The `T_*` maps are drawn by `Tools/Surfaces/make_surfaces.py` from seeded noise (1024 × 1024, same output every run),
 which also writes `Source/surface_averages.json`, each base colour's average: the reference the game tints against

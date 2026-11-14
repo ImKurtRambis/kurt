@@ -190,19 +190,20 @@ void AHUOffice::Dress(const FHUOfficeLook& L)
 {
 	Built = L; bBuiltOnce = true;
 	Clear(Decor);
-	auto B = [&](FVector P, FVector S, FLinearColor C, bool bCollide = true) { return Block(this, Root, Decor, EShape::Cube, P, S, C, FRotator::ZeroRotator, bCollide); };
+	auto B = [&](FVector P, FVector S, FLinearColor C, bool bCollide = true, EHUSurface Sf = EHUSurface::None) { return Block(this, Root, Decor, EShape::Cube, P, S, C, FRotator::ZeroRotator, bCollide, Sf); };
 	auto Cyl = [&](FVector P, FVector S, FLinearColor C, bool bCollide = true) { return Block(this, Root, Decor, EShape::Cylinder, P, S, C, FRotator::ZeroRotator, bCollide); };
 	auto Ball = [&](FVector P, FVector S, FLinearColor C) { return Block(this, Root, Decor, EShape::Sphere, P, S, C, FRotator::ZeroRotator, false); };
 	const FLinearColor Paint = Paints[L.Wall % UE_ARRAY_COUNT(Paints)].Color, Carpet = Carpets[L.Floor % UE_ARRAY_COUNT(Carpets)].Color;
 	const FLinearColor Wood(0.32f, 0.19f, 0.09f), Steel(0.3f, 0.32f, 0.34f), Brass(0.75f, 0.6f, 0.2f);
 	// the paint: a skin over each wall, inside (the door wall in pieces around the doorway)
-	B(FVector(OW - In, OD / 2, OH / 2), FVector(1, OD - 2 * In, OH), Paint, false);
-	B(FVector(OW / 2, In, OH / 2), FVector(OW - 2 * In, 1, OH), Paint, false);
-	B(FVector(OW / 2, OD - In, OH / 2), FVector(OW - 2 * In, 1, OH), Paint, false);
-	B(FVector(In, (In + 40) / 2, OH / 2), FVector(1, 40 - In, OH), Paint, false);
-	B(FVector(In, (140 + OD - In) / 2, OH / 2), FVector(1, OD - In - 140, OH), Paint, false);
-	B(FVector(In, 90, (220 + OH) / 2), FVector(1, 100, OH - 220), Paint, false);
-	B(FVector(OW / 2, OD / 2, 1.4f), FVector(OW - 2 * In, OD - 2 * In, 1.2f), Carpet, false);
+	// (painted plaster and a woven carpet, tinted to exactly the colours the owner picked - HUSurfaces.h)
+	B(FVector(OW - In, OD / 2, OH / 2), FVector(1, OD - 2 * In, OH), Paint, false, EHUSurface::Plaster);
+	B(FVector(OW / 2, In, OH / 2), FVector(OW - 2 * In, 1, OH), Paint, false, EHUSurface::Plaster);
+	B(FVector(OW / 2, OD - In, OH / 2), FVector(OW - 2 * In, 1, OH), Paint, false, EHUSurface::Plaster);
+	B(FVector(In, (In + 40) / 2, OH / 2), FVector(1, 40 - In, OH), Paint, false, EHUSurface::Plaster);
+	B(FVector(In, (140 + OD - In) / 2, OH / 2), FVector(1, OD - In - 140, OH), Paint, false, EHUSurface::Plaster);
+	B(FVector(In, 90, (220 + OH) / 2), FVector(1, 100, OH - 220), Paint, false, EHUSurface::Plaster);
+	B(FVector(OW / 2, OD / 2, 1.4f), FVector(OW - 2 * In, OD - 2 * In, 1.2f), Carpet, false, EHUSurface::Fabric);
 	// what hangs on the wall over the couch side
 	switch (L.Poster % UE_ARRAY_COUNT(Posters))
 	{
