@@ -18,6 +18,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Engine/World.h"
+#include "HUSurfaces.h"
 #include "HUCrimeScene.generated.h"
 
 class AHUEvidence;
@@ -36,7 +37,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scene") int32 ForceCase = -1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scene") bool bPlacePlayer = true;
 
-	// ---- Fab / Quixel slots (all optional) ----
+	// ---- Fab / Quixel slots (all optional). Empty: each place uses the surface library (HUSurfaces.h) - carpet in the
+	// hotel, tile in the hospital, brick and concrete in the warehouse...; set a material here to override it ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Fab Assets") UMaterialInterface* FloorMaterial = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Fab Assets") UMaterialInterface* WallMaterial = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Fab Assets") UMaterialInterface* WoodMaterial = nullptr;
@@ -78,6 +80,10 @@ private:
 		return GetWorld()->SpawnActor<T>(T::StaticClass(), Where, P);
 	}
 	UStaticMeshComponent* Box(FVector Pos, FVector Size, FLinearColor Color, UMaterialInterface* Override = nullptr, bool bCollide = true);
+	// a box made of a surface (tinted to Color); a designer's Floor/Wall/Wood material, if set, wins for those roles
+	UStaticMeshComponent* Box(FVector Pos, FVector Size, FLinearColor Color, EHUSurface Surface, bool bCollide = true);
+	// what this place is made of (set from the place at the start of Build)
+	EHUSurface FloorS, WallS, WoodS, CeilingS;
 	void Sign(const FString& Text, FVector Pos, float Yaw, float Size, FColor Color);
 
 	UFUNCTION() void OnCrawlEnter(UPrimitiveComponent* Comp, AActor* Other, UPrimitiveComponent* OtherComp, int32 Body, bool bSweep, const FHitResult& Hit);

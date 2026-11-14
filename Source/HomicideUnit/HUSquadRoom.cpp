@@ -107,13 +107,15 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	const FLinearColor Floor(0.16f, 0.12f, 0.08f), Wall(0.32f, 0.36f, 0.33f), Trim(0.12f, 0.08f, 0.05f), Desk(0.25f, 0.14f, 0.06f), Steel(0.3f, 0.32f, 0.34f);
 	if (bPrecinct) { BuildStation(); return; } // THE PRECINCT: a whole station (HUStation.cpp)
 	const float W = RX, D = RY;
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(W * 2, D * 2, 10), Floor);
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, RH + 5), FVector(W * 2, D * 2, 10), Wall * 0.6f);
+	// what roll call is made of (HUSurfaces.h): linoleum, acoustic tiles, plaster over walnut, painted steel, oak benches
+	const FRotator Z0 = FRotator::ZeroRotator;
+	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(W * 2, D * 2, 10), Floor, Z0, true, EHUSurface::Linoleum);
+	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, RH + 5), FVector(W * 2, D * 2, 10), Wall * 0.6f, Z0, true, EHUSurface::CeilingTile);
 	for (float S : { -1.f, 1.f })
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(S * (W + 5), 0, RH / 2), FVector(10, D * 2, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall);
-		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim);
+		Block(this, R, Blocks, EShape::Cube, FVector(S * (W + 5), 0, RH / 2), FVector(10, D * 2, RH), Wall, Z0, true, EHUSurface::Plaster);
+		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall, Z0, true, EHUSurface::Plaster);
+		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim, Z0, true, EHUSurface::Walnut);
 	}
 	for (float X = -W + 250.f; X <= W - 250.f; X += (W - 250.f) / 2.f) for (float Y : { -D * 0.45f, D * 0.45f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
 
@@ -123,13 +125,13 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		// the chalkboard: the squad code and who's punched in
 		// (the frame sits behind the slate, and the chalk text 2 cm in front of it - a frame in front hid the board)
 		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 5, 0, 200), FVector(2, 560, 190), FLinearColor(0.03f, 0.06f, 0.04f)));
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 2, 0, 200), FVector(4, 580, 210), Trim));
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 12, 0, 96), FVector(14, 560, 4), Trim));
+		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 2, 0, 200), FVector(4, 580, 210), Trim, Z0, true, EHUSurface::Walnut));
+		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 12, 0, 96), FVector(14, 560, 4), Trim, Z0, true, EHUSurface::Walnut));
 		// the roll-call door to the briefing: double doors with a glass panel
 		for (float S : { -1.f, 1.f })
 		{
-			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 4, S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f)));
-			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 7.5f, S * 46, 170), FVector(1, 50, 60), FLinearColor(0.6f, 0.75f, 0.85f)));
+			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 4, S * 46, 120), FVector(6, 90, 240), FLinearColor(0.2f, 0.12f, 0.05f), Z0, true, EHUSurface::Walnut));
+			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 7.5f, S * 46, 170), FVector(1, 50, 60), FLinearColor(0.6f, 0.75f, 0.85f), Z0, true, EHUSurface::Glass));
 			DoorParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 9, S * 10, 115), FVector(4, 3, 18), FLinearColor(0.75f, 0.6f, 0.2f)));
 		}
 		// the time clock by the doors: punch in when you're ready
@@ -138,7 +140,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 24, 260, 126), FVector(2, 14, 3), FLinearColor(0.05f, 0.05f, 0.05f)));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 8, 305, 140), FVector(6, 30, 60), FLinearColor(0.35f, 0.25f, 0.12f))); // the card rack
 		// the case-selection table: a laptop (where) and a case folder (how hard) - the host's picks for the shift
-		Block(this, R, Blocks, EShape::Cube, FVector(-420, -330, 72), FVector(90, 150, 6), Desk);
+		Block(this, R, Blocks, EShape::Cube, FVector(-420, -330, 72), FVector(90, 150, 6), Desk, Z0, true, EHUSurface::Walnut);
 		for (float DX : { -40.f, 40.f }) for (float DY : { -68.f, 68.f }) Block(this, R, Blocks, EShape::Cube, FVector(-420 + DX, -330 + DY, 35), FVector(5, 5, 70), Desk * 0.7f);
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f)));
@@ -154,15 +156,15 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			for (float S : { -1.f, 1.f })
 			{
 				const float BY = S * BenchMidY;
-				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX, BY, BenchSeatZ - 2.5f), FVector(42, BenchLen, 5), Bench));
-				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY, 75), FVector(4, BenchLen, 26), Bench));
-				for (float DY : { -BenchLen / 2 + 15.f, 0.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX, BY + DY, 21), FVector(34, 5, 42), Steel * 0.6f);
+				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX, BY, BenchSeatZ - 2.5f), FVector(42, BenchLen, 5), Bench, Z0, true, EHUSurface::WoodFloor));
+				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY, 75), FVector(4, BenchLen, 26), Bench, Z0, true, EHUSurface::WoodFloor));
+				for (float DY : { -BenchLen / 2 + 15.f, 0.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX, BY + DY, 21), FVector(34, 5, 42), Steel * 0.6f, Z0, true, EHUSurface::PaintedMetal);
 				for (float DY : { -BenchLen / 2 + 15.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY + DY, 58), FVector(4, 5, 30), Steel * 0.6f, FRotator::ZeroRotator, false);
 			}
 		// the sergeant's lectern, front corner beside the board, facing the benches
 		const FVector Lec(585, -390, 0);
-		Block(this, R, Blocks, EShape::Cube, Lec + FVector(0, 0, 52), FVector(40, 56, 104), Desk);
-		Block(this, R, Blocks, EShape::Cube, Lec + FVector(2, 0, 108), FVector(48, 62, 5), Desk * 1.2f, FRotator(-12, 0, 0));
+		Block(this, R, Blocks, EShape::Cube, Lec + FVector(0, 0, 52), FVector(40, 56, 104), Desk, Z0, true, EHUSurface::Walnut);
+		Block(this, R, Blocks, EShape::Cube, Lec + FVector(2, 0, 108), FVector(48, 62, 5), Desk * 1.2f, FRotator(-12, 0, 0), true, EHUSurface::Walnut);
 		Block(this, R, Blocks, EShape::Cube, Lec + FVector(-20.5f, 0, 72), FVector(1, 34, 34), Brass, FRotator::ZeroRotator, false);
 		Block(this, R, Blocks, EShape::Cylinder, Lec + FVector(-12, 14, 124), FVector(1.5f, 1.5f, 24), Steel * 0.4f, FRotator(0, 0, 0), false);
 		Block(this, R, Blocks, EShape::Sphere, Lec + FVector(-14, 14, 137), FVector(4, 4, 6), FLinearColor(0.04f, 0.04f, 0.04f), FRotator::ZeroRotator, false);
@@ -174,17 +176,17 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			const float LX = -575.f + i * 50.f;
 			const FLinearColor LC = LockerGreen * (i % 3 == 0 ? 0.9f : 1.f);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 5), FVector(50, 44, 10), Trim);
-			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 100), FVector(50, 46, 180), LC);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 100), FVector(50, 46, 180), LC, Z0, true, EHUSurface::PaintedMetal);
 			if (i == 4)
 			{
 				// left open: the dark inside, a coat on the hook, the door swung out on its hinge
 				Block(this, R, Blocks, EShape::Cube, FVector(LX, 451.4f, 100), FVector(44, 1, 172), FLinearColor(0.02f, 0.02f, 0.02f), FRotator::ZeroRotator, false);
 				Block(this, R, Blocks, EShape::Cube, FVector(LX, 449, 120), FVector(30, 4, 70), FLinearColor(0.16f, 0.13f, 0.1f), FRotator::ZeroRotator, false);
 				const float A = FMath::DegreesToRadians(75.f), HX = LX - 23.f;
-				Block(this, R, Blocks, EShape::Cube, FVector(HX + 23.f * FMath::Cos(A), 451.f - 23.f * FMath::Sin(A), 100), FVector(46, 1.5f, 174), LC * 1.1f, FRotator(0, -75, 0));
+				Block(this, R, Blocks, EShape::Cube, FVector(HX + 23.f * FMath::Cos(A), 451.f - 23.f * FMath::Sin(A), 100), FVector(46, 1.5f, 174), LC * 1.1f, FRotator(0, -75, 0), true, EHUSurface::PaintedMetal);
 				continue;
 			}
-			Block(this, R, Blocks, EShape::Cube, FVector(LX, 451.5f, 100), FVector(46, 1, 174), LC * 1.1f, FRotator::ZeroRotator, false);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 451.5f, 100), FVector(46, 1, 174), LC * 1.1f, FRotator::ZeroRotator, false, EHUSurface::PaintedMetal);
 			for (int32 k = 0; k < 3; k++) Block(this, R, Blocks, EShape::Cube, FVector(LX, 450.8f, 168 + k * 6), FVector(24, 0.6f, 2), FLinearColor(0.03f, 0.03f, 0.03f), FRotator::ZeroRotator, false);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX + 16, 450.5f, 105), FVector(3, 2, 14), Steel * 1.4f, FRotator::ZeroRotator, false);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX, 450.8f, 150), FVector(22, 0.5f, 6), Paper, FRotator::ZeroRotator, false);
@@ -192,7 +194,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 
 		// DUTY ROSTER on the back wall, across the doors from the time clock: tonight's watch - and the squad
 		const FVector Ros(-700, -300, 0);
-		Block(this, R, Blocks, EShape::Cube, Ros + FVector(1.5f, 0, 190), FVector(3, 300, 160), Trim, FRotator::ZeroRotator, false);
+		Block(this, R, Blocks, EShape::Cube, Ros + FVector(1.5f, 0, 190), FVector(3, 300, 160), Trim, FRotator::ZeroRotator, false, EHUSurface::Walnut);
 		Block(this, R, Blocks, EShape::Cube, Ros + FVector(3.5f, 0, 190), FVector(1, 288, 148), FLinearColor(0.85f, 0.86f, 0.82f), FRotator::ZeroRotator, false);
 		Block(this, R, Blocks, EShape::Cube, Ros + FVector(4.2f, 0, 254), FVector(0.4f, 288, 18), FLinearColor(0.06f, 0.1f, 0.22f), FRotator::ZeroRotator, false);
 		RoomText(this, R, RoomTexts, Ros + FVector(4.6f, 0, 260), 0, 8.f, FColor(235, 235, 225), TEXT("DUTY ROSTER  ·  NIGHT WATCH"));

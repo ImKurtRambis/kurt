@@ -104,10 +104,8 @@ namespace
 
 AHUCrimeScene::AHUCrimeScene()
 {
-	// Sensible precinct surfaces out of the box; designers can still override them per map.
-	FloorMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Linoleum.MI_HU_Linoleum"));
-	WallMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Plaster.MI_HU_Plaster"));
-	WoodMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Materials/Precinct/MI_HU_Walnut.MI_HU_Walnut"));
+	// surfaces come from the place (Build); the Floor/Wall/Wood material slots are only for a designer's override
+	FloorS = EHUSurface::Linoleum; WallS = EHUSurface::Plaster; WoodS = EHUSurface::Walnut; CeilingS = EHUSurface::Plaster;
 	PrimaryActorTick.bCanEverTick = true;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	RootComponent = Root;
@@ -126,6 +124,14 @@ UStaticMeshComponent* AHUCrimeScene::Box(FVector Pos, FVector Size, FLinearColor
 	UStaticMeshComponent* C = HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cube, Pos, Size, Color, FRotator::ZeroRotator, bCollide);
 	if (C && Override) C->SetMaterial(0, Override);
 	return C;
+}
+
+UStaticMeshComponent* AHUCrimeScene::Box(FVector Pos, FVector Size, FLinearColor Color, EHUSurface Surface, bool bCollide)
+{
+	UMaterialInterface* Override = Surface == FloorS && FloorMaterial ? FloorMaterial : Surface == WallS && WallMaterial ? WallMaterial
+		: Surface == WoodS && WoodMaterial ? WoodMaterial : nullptr;
+	if (Override) return Box(Pos, Size, Color, Override, bCollide);
+	return HUBuild::Block(this, RootComponent, Blocks, HUBuild::EShape::Cube, Pos, Size, Color, FRotator::ZeroRotator, bCollide, Surface);
 }
 
 void AHUCrimeScene::Sign(const FString& Text, FVector Pos, float Yaw, float Size, FColor Color)
@@ -163,6 +169,18 @@ void AHUCrimeScene::Build()
 	// the case's map seed decides the floor plan; the place decides the look and leans the style
 	FRandomStream Rng(C.MapSeed != 0 ? C.MapSeed : C.Number * 7919 + GetTypeHash(C.Place));
 	const FString Key = T.Key;
+	// what the place is made of (HUSurfaces.h), tinted to the place's own colours
+	{
+		auto Is = [&Key](std::initializer_list<const TCHAR*> Keys) { for (const TCHAR* K : Keys) if (Key == K) return true; return false; };
+		const bool bWork = Is({ TEXT("WAREHOUSE"), TEXT("PIER"), TEXT("STABLES") });
+		FloorS = Is({ TEXT("HOTEL"), TEXT("THEATRE"), TEXT("BALLROOM"), TEXT("LOUNGE") }) ? EHUSurface::Carpet
+			: Is({ TEXT("BOWLING"), TEXT("LODGE") }) ? EHUSurface::WoodFloor
+			: Is({ TEXT("HOSPITAL"), TEXT("BANK"), TEXT("SALON") }) ? EHUSurface::Tile
+			: bWork ? EHUSurface::Concrete : EHUSurface::Linoleum;
+		WallS = bWork ? EHUSurface::Brick : EHUSurface::Plaster;
+		WoodS = bWork ? EHUSurface::WoodFloor : EHUSurface::Walnut; // rough boards out back, polished walnut indoors
+		CeilingS = bWork ? EHUSurface::Concrete : Is({ TEXT("HOSPITAL"), TEXT("BANK"), TEXT("SALON"), TEXT("DINER") }) ? EHUSurface::CeilingTile : EHUSurface::Plaster;
+	}
 	float StyleW[4] = { 1, 1, 1, 1 };
 	if (Key == TEXT("WAREHOUSE") || Key == TEXT("PIER") || Key == TEXT("STABLES")) StyleW[(int32)EStyle::Racks] += 2.5f;
 	if (Key == TEXT("HOTEL") || Key == TEXT("HOSPITAL") || Key == TEXT("BANK") || Key == TEXT("SALON")) StyleW[(int32)EStyle::Rooms] += 2.5f;
@@ -195,12 +213,12 @@ void AHUCrimeScene::Build()
 	const float TunY = FMath::GridSnap(Rng.FRandRange(Plan.Y0 + 300.f, Plan.Y1 - 300.f), 50.f);
 	if (!bHotel)
 	{
-		Box(FVector(0, 0, -5), FVector(W, D, 10), T.Floor, FloorMaterial);
-		Box(FVector(0, 0, H + 5), FVector(W, D, 10), T.Wall * 0.5f, WallMaterial);
-		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X0 - 5, 0, H / 2), D, H, 10, EntY, 200, 260, T.Wall);
-		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X1 + 5, 0, H / 2), D, H, 10, TunY, TunnelW, TunnelH, T.Wall);
-		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 + 5), H / 2), FVector(W, 10, H), T.Wall, WallMaterial);
-		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 - 2), 40), FVector(W, 4, 80), T.Trim, WoodMaterial, false);
+		Box(FVector(0, 0, -5), FVector(W, D, 10), T.Floor, FloorS);
+		Box(FVector(0, 0, H + 5), FVector(W, D, 10), T.Wall * 0.5f, CeilingS);
+		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X0 - 5, 0, H / 2), D, H, 10, EntY, 200, 260, T.Wall, WallS);
+		WallWithDoor(this, RootComponent, Blocks, true, FVector(Plan.X1 + 5, 0, H / 2), D, H, 10, TunY, TunnelW, TunnelH, T.Wall, WallS);
+		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 + 5), H / 2), FVector(W, 10, H), T.Wall, WallS);
+		for (float Side : { -1.f, 1.f }) Box(FVector(0, Side * (D / 2 - 2), 40), FVector(W, 4, 80), T.Trim, WoodS, false);
 		Keep.Add({ Plan.X1 - 300, TunY - 200, Plan.X1, TunY + 200 });
 		Sign(C.Place.ToUpper(), FVector(Plan.X0 + 4, EntY, 300), 0, 30, Gold);
 	}
@@ -210,15 +228,15 @@ void AHUCrimeScene::Build()
 	{
 		const float X0 = Plan.X0, YA = Plan.Y0 - 700.f, YB = Plan.Y1 + 700.f, Len = YB - YA, MidY = (YA + YB) / 2;
 		const FLinearColor Sidewalk(0.3f, 0.3f, 0.29f), Road(0.04f, 0.04f, 0.045f), Curb(0.45f, 0.45f, 0.43f), Line(0.7f, 0.6f, 0.2f), Pole(0.12f, 0.13f, 0.14f);
-		Box(FVector(X0 - 225, MidY, -5), FVector(450, Len, 10), Sidewalk);                                   // sidewalk out front
-		Box(FVector(X0 - 452, MidY, 2), FVector(6, Len, 14), Curb);                                          // curb
-		Box(FVector(X0 - 900, MidY, -6), FVector(900, Len, 10), Road);                                       // the street
+		Box(FVector(X0 - 225, MidY, -5), FVector(450, Len, 10), Sidewalk, EHUSurface::Concrete);             // sidewalk out front
+		Box(FVector(X0 - 452, MidY, 2), FVector(6, Len, 14), Curb, EHUSurface::Concrete);                    // curb
+		Box(FVector(X0 - 900, MidY, -6), FVector(900, Len, 10), Road, EHUSurface::Asphalt);                  // the street
 		for (float Y = YA + 150; Y < YB; Y += 500) Box(FVector(X0 - 900, Y, -0.8f), FVector(10, 250, 1), Line, nullptr, false); // centre line
-		Box(FVector(X0 - 1500, MidY, -5), FVector(300, Len, 10), Sidewalk);                                  // far sidewalk
-		Box(FVector(X0 - 1660, MidY, 300), FVector(20, Len, 600), T.Wall * 0.35f, WallMaterial);            // buildings across the street
+		Box(FVector(X0 - 1500, MidY, -5), FVector(300, Len, 10), Sidewalk, EHUSurface::Concrete);            // far sidewalk
+		Box(FVector(X0 - 1660, MidY, 300), FVector(20, Len, 600), T.Wall * 0.35f, EHUSurface::Brick);       // buildings across the street
 		for (float Y = YA + 300; Y < YB; Y += 520) Box(FVector(X0 - 1648, Y, 260), FVector(4, 120, 160), FLinearColor(1.6f, 1.2f, 0.5f) * (FMath::Fmod(Y, 3.f) < 1.f ? 0.15f : 1.f), nullptr, false); // their windows
 		// the front of this building: an awning and the name over the door
-		Box(FVector(X0 - 60, EntY, 285), FVector(120, 340, 8), T.Trim * 1.2f);
+		Box(FVector(X0 - 60, EntY, 285), FVector(120, 340, 8), T.Trim * 1.2f, EHUSurface::Fabric);
 		Sign(C.Place.ToUpper(), FVector(X0 - 12, EntY, 330), 180, 34, Gold);
 		// streetlights along the sidewalk
 		auto Lamp = [this](FVector Pos, float I, float R, FLinearColor Col)
@@ -295,8 +313,8 @@ void AHUCrimeScene::Build()
 		{
 			if (B - A < 1.f) return;
 			const float M = (A + B) / 2;
-			if (S.bAtX) Box(FVector(S.At, M, (Z0 + Z1) / 2), FVector(12, B - A, Z1 - Z0), InnerWall, WallMaterial);
-			else Box(FVector(M, S.At, (Z0 + Z1) / 2), FVector(B - A, 12, Z1 - Z0), InnerWall, WallMaterial);
+			if (S.bAtX) Box(FVector(S.At, M, (Z0 + Z1) / 2), FVector(12, B - A, Z1 - Z0), InnerWall, WallS);
+			else Box(FVector(M, S.At, (Z0 + Z1) / 2), FVector(B - A, 12, Z1 - Z0), InnerWall, WallS);
 		};
 		for (float Dc : DoorsAt)
 		{
@@ -327,11 +345,11 @@ void AHUCrimeScene::Build()
 		for (int32 i = 0; i < 16; i++)
 		{
 			const float Top = (i + 1) * StepRise;
-			Box(FVector(SX0 + 37.f * (i + 0.5f), WallY + In * 175.f, Top / 2), FVector(37, 200, Top), T.Trim * 1.6f, WoodMaterial);
+			Box(FVector(SX0 + 37.f * (i + 0.5f), WallY + In * 175.f, Top / 2), FVector(37, 200, Top), T.Trim * 1.6f, WoodS);
 		}
 		AddSolid(SX0, WallY + In * 60.f, SX1, WallY + In * 290.f);
 		const float LY = WallY + In * 175.f;
-		Box(FVector((LX0 + LX1) / 2, LY, LoftZ - 10), FVector(LX1 - LX0, 350, 20), T.Trim * 1.6f, WoodMaterial);
+		Box(FVector((LX0 + LX1) / 2, LY, LoftZ - 10), FVector(LX1 - LX0, 350, 20), T.Trim * 1.6f, WoodS);
 		Box(FVector((LX0 + LX1) / 2, WallY + In * 350.f, LoftZ + 50), FVector(LX1 - LX0, 5, 100), T.Trim * 0.4f); // railing
 		for (float Y : { WallY + In * 37.f, WallY + In * 320.f }) Box(FVector(LX0, Y, LoftZ + 50), FVector(5, 60, 100), T.Trim * 0.4f);
 		for (float X = LX0; X <= LX1; X += FMath::Max(300.f, (LX1 - LX0) / 3)) { Box(FVector(X, WallY + In * 340.f, (LoftZ - 20) / 2), FVector(20, 20, LoftZ - 20), T.Trim); AddSolid(X - 15, WallY + In * 330.f, X + 15, WallY + In * 350.f); }
@@ -364,7 +382,7 @@ void AHUCrimeScene::Build()
 		{
 			const FR Rack = { RX0, Y, RX1, Y + 110.f };
 			if (!FreeRect(Rack)) continue;
-			Box(FVector(Rack.CX(), Rack.CY(), RH / 2), FVector(Rack.W(), 110, RH), T.Trim * 1.2f, WoodMaterial);
+			Box(FVector(Rack.CX(), Rack.CY(), RH / 2), FVector(Rack.W(), 110, RH), T.Trim * 1.2f, WoodS);
 			for (float Z = 70.f; Z < RH; Z += 70.f) for (float Sd : { -1.f, 1.f }) Box(FVector(Rack.CX(), Rack.CY() + Sd * 56.f, Z), FVector(Rack.W() - 10, 3, 5), T.Trim * 0.5f, nullptr, false);
 			AddSolid(Rack.X0, Rack.Y0, Rack.X1, Rack.Y1);
 			if (Rows > 0) Areas.Add({ { RX0 + 60, Y - 135, RX1 - 60, Y - 5 }, 0, ANarrow }); // the aisle before this rack
@@ -392,7 +410,7 @@ void AHUCrimeScene::Build()
 		const float Len = FMath::Min(650.f, Rm.W() - 400.f), UX1 = Rm.X1 - 40.f, UX0 = UX1 - Len;
 		const FR U = { UX0 - 160.f, FMath::Min(WallY, WallY + In * 220.f), UX1, FMath::Max(WallY, WallY + In * 220.f) };
 		if (!FreeRect(U)) return false;
-		Box(FVector((UX0 + UX1) / 2, WallY + In * 110.f, HighZ / 2), FVector(Len, 220, HighZ), T.Trim * 1.2f, WoodMaterial);
+		Box(FVector((UX0 + UX1) / 2, WallY + In * 110.f, HighZ / 2), FVector(Len, 220, HighZ), T.Trim * 1.2f, WoodS);
 		for (float Z = 80.f; Z < HighZ; Z += 80.f) Box(FVector((UX0 + UX1) / 2, WallY + In * 222.f, Z), FVector(Len - 10, 4, 6), T.Trim * 0.6f, nullptr, false);
 		AddSolid(UX0, U.Y0, UX1, U.Y1);
 		const FTransform LT(FRotator(0, 180, 0), FVector(UX0 - 5, WallY + In * 110.f, 0));
@@ -416,8 +434,8 @@ void AHUCrimeScene::Build()
 			const FR P = { X0, Y - 85.f, X0 + Len, Y + 85.f };
 			if (!FreeRect({ P.X0 - 150, P.Y0 - 60, P.X1 + 60, P.Y1 + 60 })) continue;
 			const bool bOpenLeft = Rng.FRand() < 0.5f;
-			for (float Sd : { -1.f, 1.f }) Box(FVector(P.CX(), Y + Sd * 75.f, 150), FVector(Len, 20, 300), T.Wall * 0.8f, WallMaterial);
-			Box(FVector(bOpenLeft ? P.X1 : P.X0, Y, 150), FVector(20, 170, 300), T.Wall * 0.8f, WallMaterial);
+			for (float Sd : { -1.f, 1.f }) Box(FVector(P.CX(), Y + Sd * 75.f, 150), FVector(Len, 20, 300), T.Wall * 0.8f, WallS);
+			Box(FVector(bOpenLeft ? P.X1 : P.X0, Y, 150), FVector(20, 170, 300), T.Wall * 0.8f, WallS);
 			AddSolid(P.X0, P.Y0, P.X1, Y - 60); AddSolid(P.X0, Y + 60, P.X1, P.Y1);
 			Areas.Add({ { P.X0 + 60, Y - 18, P.X1 - 60, Y + 18 }, 0, ANarrow });
 			Keep.Add({ bOpenLeft ? P.X0 - 150 : P.X1, Y - 100, bOpenLeft ? P.X0 : P.X1 + 150, Y + 100 });
@@ -441,14 +459,14 @@ void AHUCrimeScene::Build()
 	if (!bHotel)
 	{
 	const float TX0 = Plan.X1 + 10, TX1 = TX0 + TunnelLen, BackX = TX1 + BackW / 2;
-	Box(FVector((TX0 + TX1) / 2, TunY, -5), FVector(TunnelLen, TunnelW + 20, 10), T.Floor * 0.6f, FloorMaterial);
+	Box(FVector((TX0 + TX1) / 2, TunY, -5), FVector(TunnelLen, TunnelW + 20, 10), T.Floor * 0.6f, FloorS);
 	Box(FVector((TX0 + TX1) / 2, TunY, TunnelH + 5), FVector(TunnelLen, TunnelW + 20, 10), T.Wall * 0.4f);
 	for (float Side : { -1.f, 1.f }) Box(FVector((TX0 + TX1) / 2, TunY + Side * (TunnelW / 2 + 5), TunnelH / 2), FVector(TunnelLen, 10, TunnelH), T.Wall * 0.4f);
-	Box(FVector(BackX, TunY, -5), FVector(BackW, BackW, 10), T.Floor * 0.8f, FloorMaterial);
+	Box(FVector(BackX, TunY, -5), FVector(BackW, BackW, 10), T.Floor * 0.8f, FloorS);
 	Box(FVector(BackX, TunY, BackH + 5), FVector(BackW, BackW, 10), T.Wall * 0.4f);
 	WallWithDoor(this, RootComponent, Blocks, true, FVector(TX1 + 5, TunY, BackH / 2), BackW, BackH, 10, 0, TunnelW, TunnelH, T.Wall * 0.7f);
-	Box(FVector(TX1 + BackW + 5, TunY, BackH / 2), FVector(10, BackW, BackH), T.Wall * 0.7f, WallMaterial);
-	for (float Side : { -1.f, 1.f }) Box(FVector(BackX, TunY + Side * (BackW / 2 + 5), BackH / 2), FVector(BackW, 10, BackH), T.Wall * 0.7f, WallMaterial);
+	Box(FVector(TX1 + BackW + 5, TunY, BackH / 2), FVector(10, BackW, BackH), T.Wall * 0.7f, WallS);
+	for (float Side : { -1.f, 1.f }) Box(FVector(BackX, TunY + Side * (BackW / 2 + 5), BackH / 2), FVector(BackW, 10, BackH), T.Wall * 0.7f, WallS);
 	Sign(T.Crawl, FVector(Plan.X1 - 4, TunY, TunnelH + 30), 180, 16, Gold);
 	Sign(T.Back, FVector(TX1 + BackW, TunY, 200), 180, 22, Gold);
 	Areas.Add({ { TX1 + 80, TunY - 240, TX1 + BackW - 60, TunY + 240 }, 0, ABack });
@@ -502,15 +520,17 @@ void AHUCrimeScene::Build()
 		const FLinearColor Carpet = T.Floor, Paper = T.Wall, Wood = T.Trim, Brick(0.28f, 0.14f, 0.1f), Concrete(0.22f, 0.22f, 0.21f), Steel(0.18f, 0.19f, 0.2f);
 		const FColor SignCol(232, 200, 106);
 		// a wall at X=At (bAtX) or Y=At, From..To, standing on Z0, with doorways (2.4 m high) centred on Doors
-		auto Wall = [&](bool bAtX, float At, float From, float To, float Z0, TArray<float> Doors, FLinearColor Col, float DoorW = 120.f)
+		// (Surf: what it's made of - None = the hotel's papered plaster)
+		auto Wall = [&](bool bAtX, float At, float From, float To, float Z0, TArray<float> Doors, FLinearColor Col, float DoorW = 120.f, EHUSurface Surf = EHUSurface::None)
 		{
 			Doors.Sort();
+			const EHUSurface S = Surf == EHUSurface::None ? WallS : Surf;
 			auto Seg = [&](float A, float B, float Za, float Zb)
 			{
 				if (B - A < 1.f) return;
 				const float M = (A + B) / 2;
-				if (bAtX) Box(FVector(At, M, Z0 + (Za + Zb) / 2), FVector(Th, B - A, Zb - Za), Col, WallMaterial);
-				else Box(FVector(M, At, Z0 + (Za + Zb) / 2), FVector(B - A, Th, Zb - Za), Col, WallMaterial);
+				if (bAtX) Box(FVector(At, M, Z0 + (Za + Zb) / 2), FVector(Th, B - A, Zb - Za), Col, S);
+				else Box(FVector(M, At, Z0 + (Za + Zb) / 2), FVector(B - A, Th, Zb - Za), Col, S);
 			};
 			float Cur = From;
 			for (float Dc : Doors)
@@ -524,9 +544,16 @@ void AHUCrimeScene::Build()
 			if (FMath::Abs(Z0) < 1.f) { if (bAtX) AddSolid(At - 10, From, At + 10, To); else AddSolid(From, At - 10, To, At + 10); }
 		};
 		// a floor slab whose top is at Z, with one stairwell hole (or none)
-		auto Slab = [&](float Z, FR Hole, FLinearColor Col)
+		auto Slab = [&](float Z, FR Hole, FLinearColor Col, EHUSurface Surf = EHUSurface::None)
 		{
-			auto Piece = [&](float A0, float B0, float A1, float B1) { if (A1 - A0 > 1.f && B1 - B0 > 1.f) Box(FVector((A0 + A1) / 2, (B0 + B1) / 2, Z - 10), FVector(A1 - A0, B1 - B0, 20), Col, FloorMaterial); };
+			const EHUSurface S = Surf == EHUSurface::None ? FloorS : Surf;
+			// the slab is the floor above and the ceiling below: a thin plaster ceiling under it, so carpet isn't overhead
+			auto Piece = [&](float A0, float B0, float A1, float B1)
+			{
+				if (A1 - A0 <= 1.f || B1 - B0 <= 1.f) return;
+				Box(FVector((A0 + A1) / 2, (B0 + B1) / 2, Z - 10), FVector(A1 - A0, B1 - B0, 20), Col, S);
+				Box(FVector((A0 + A1) / 2, (B0 + B1) / 2, Z - 20.5f), FVector(A1 - A0, B1 - B0, 1), Paper * 0.7f, CeilingS, false);
+			};
 			if (Hole.W() <= 0.f) { Piece(X0, Y0, X1, Y1); return; }
 			Piece(X0, Y0, X1, Hole.Y0); Piece(X0, Hole.Y1, X1, Y1); Piece(X0, Hole.Y0, Hole.X0, Hole.Y1); Piece(Hole.X1, Hole.Y0, X1, Hole.Y1);
 		};
@@ -536,7 +563,7 @@ void AHUCrimeScene::Build()
 			for (int32 i = 0; i < 16; i++)
 			{
 				const float Top = (i + 1) * FH / 16.f;
-				Box(FVector(XFrom + Dir * 37.f * (i + 0.5f), Y, Z0 + Top / 2), FVector(37, 200, Top), Wood * 1.4f, WoodMaterial);
+				Box(FVector(XFrom + Dir * 37.f * (i + 0.5f), Y, Z0 + Top / 2), FVector(37, 200, Top), Wood * 1.4f, WoodS);
 			}
 			const float XA = FMath::Min(XFrom, XFrom + Dir * 592.f), XB = FMath::Max(XFrom, XFrom + Dir * 592.f);
 			if (Z0 < 1.f) AddSolid(XA, Y - 100, XB, Y + 100);
@@ -558,12 +585,12 @@ void AHUCrimeScene::Build()
 		Slab(0, HoleB, Carpet);
 		Slab(FH, HoleG2, Carpet * 0.9f);
 		Slab(2 * FH, Hole23, Carpet * 0.8f);
-		Slab(3 * FH, FR(), Concrete);
+		Slab(3 * FH, FR(), Concrete, EHUSurface::Concrete);
 		// the basement: under the service room
-		Box(FVector(800, -500, -FH - 10), FVector(1200, 1000, 20), Concrete, FloorMaterial);
-		Wall(true, 200, -1000, 0, -FH, {}, Concrete * 0.8f); Wall(true, 1400, -1000, 0, -FH, {}, Concrete * 0.8f);
-		Wall(false, -1000, 200, 1400, -FH, {}, Concrete * 0.8f); Wall(false, 0, 200, 1400, -FH, {}, Concrete * 0.8f);
-		Box(FVector(330, -200, -FH + 110), FVector(160, 160, 220), Steel); AddSolid(250, -280, 410, -120);                 // the boiler
+		Box(FVector(800, -500, -FH - 10), FVector(1200, 1000, 20), Concrete, EHUSurface::Concrete);
+		Wall(true, 200, -1000, 0, -FH, {}, Concrete * 0.8f, 120.f, EHUSurface::Concrete); Wall(true, 1400, -1000, 0, -FH, {}, Concrete * 0.8f, 120.f, EHUSurface::Concrete);
+		Wall(false, -1000, 200, 1400, -FH, {}, Concrete * 0.8f, 120.f, EHUSurface::Concrete); Wall(false, 0, 200, 1400, -FH, {}, Concrete * 0.8f, 120.f, EHUSurface::Concrete);
+		Box(FVector(330, -200, -FH + 110), FVector(160, 160, 220), Steel, EHUSurface::PaintedMetal); AddSolid(250, -280, 410, -120); // the boiler
 		for (int32 k = 0; k < 3; k++) { Box(FVector(560 + k * 110, -80, -FH + 50), FVector(90, 80, 100), FLinearColor(0.75f, 0.75f, 0.72f)); } // washers
 		AddSolid(510, -120, 840, -40);
 		Sign(TEXT("LAUNDRY"), FVector(800, -15, -120), 90, 18, SignCol);
@@ -573,31 +600,31 @@ void AHUCrimeScene::Build()
 		{
 			const float Z = F * FH;
 			Wall(true, X0, Y0, Y1, Z, F == 0 ? TArray<float>{ 0.f } : TArray<float>{}, Paper * 0.9f, 220.f);
-			Wall(true, X1, Y0, Y1, Z, F == 0 ? TArray<float>{ 500.f } : TArray<float>{ 0.f }, Brick);
-			Wall(false, Y0, X0, X1, Z, {}, Brick); Wall(false, Y1, X0, X1, Z, {}, Brick);
+			Wall(true, X1, Y0, Y1, Z, F == 0 ? TArray<float>{ 500.f } : TArray<float>{ 0.f }, Brick, 120.f, EHUSurface::Brick);
+			Wall(false, Y0, X0, X1, Z, {}, Brick, 120.f, EHUSurface::Brick); Wall(false, Y1, X0, X1, Z, {}, Brick, 120.f, EHUSurface::Brick);
 			// lit windows on the street side
 			if (F > 0) for (float Y : { -700.f, -250.f, 250.f, 700.f }) Box(FVector(X0 - 8, Y, Z + 200), FVector(4, 140, 160), FLinearColor(1.6f, 1.2f, 0.55f) * (FMath::Abs(Y) > 500.f ? 0.25f : 1.f), nullptr, false);
 		}
 		// the roof: a parapet all round, with a gap where the fire escape ladder comes up
 		{
 			const float RZ = 3 * FH;
-			Box(FVector(X0 + 6, 0, RZ + 50), FVector(12, Y1 - Y0, 100), Brick);
-			Box(FVector(0, Y0 + 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick);
-			Box(FVector(0, Y1 - 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick);
-			Box(FVector(X1 - 6, (Y0 + 240) / 2, RZ + 50), FVector(12, 240 - Y0, 100), Brick);
-			Box(FVector(X1 - 6, (360 + Y1) / 2, RZ + 50), FVector(12, Y1 - 360, 100), Brick);
-			Box(FVector(-600, 500, RZ + 120), FVector(240, 240, 240), Concrete * 1.2f);  // the water tank's housing
-			Box(FVector(500, -400, RZ + 60), FVector(300, 160, 120), Steel);             // air-con unit
+			Box(FVector(X0 + 6, 0, RZ + 50), FVector(12, Y1 - Y0, 100), Brick, EHUSurface::Brick);
+			Box(FVector(0, Y0 + 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick, EHUSurface::Brick);
+			Box(FVector(0, Y1 - 6, RZ + 50), FVector(X1 - X0, 12, 100), Brick, EHUSurface::Brick);
+			Box(FVector(X1 - 6, (Y0 + 240) / 2, RZ + 50), FVector(12, 240 - Y0, 100), Brick, EHUSurface::Brick);
+			Box(FVector(X1 - 6, (360 + Y1) / 2, RZ + 50), FVector(12, Y1 - 360, 100), Brick, EHUSurface::Brick);
+			Box(FVector(-600, 500, RZ + 120), FVector(240, 240, 240), Concrete * 1.2f, EHUSurface::Concrete);  // the water tank's housing
+			Box(FVector(500, -400, RZ + 60), FVector(300, 160, 120), Steel, EHUSurface::PaintedMetal);         // air-con unit
 			Sign(C.Place.ToUpper(), FVector(X0 - 14, 0, RZ + 120), 180, 60, SignCol);    // the big sign over the street
 		}
 
 		// ---- GROUND: the lobby, the bar, the service room ----
 		Wall(true, 200, Y0, Y1, 0, { -500.f, 500.f }, Paper);
 		Wall(false, 0, 200, X1, 0, { 450.f }, Paper);
-		Box(FVector(-300, 600, 55), FVector(100, 500, 110), Wood * 1.3f, WoodMaterial); AddSolid(-350, 350, -250, 850);  // the front desk
-		Box(FVector(-200, 600, 160), FVector(10, 420, 200), Wood * 0.6f, WoodMaterial);                                    // key boxes behind it
-		Box(FVector(850, 680, 55), FVector(700, 80, 110), Wood * 1.2f, WoodMaterial); AddSolid(500, 640, 1200, 720);      // the bar
-		Box(FVector(850, 960, 120), FVector(700, 60, 240), Wood * 0.7f, WoodMaterial); AddSolid(500, 930, 1200, 990);     // bottles
+		Box(FVector(-300, 600, 55), FVector(100, 500, 110), Wood * 1.3f, WoodS); AddSolid(-350, 350, -250, 850);  // the front desk
+		Box(FVector(-200, 600, 160), FVector(10, 420, 200), Wood * 0.6f, WoodS);                                    // key boxes behind it
+		Box(FVector(850, 680, 55), FVector(700, 80, 110), Wood * 1.2f, WoodS); AddSolid(500, 640, 1200, 720);      // the bar
+		Box(FVector(850, 960, 120), FVector(700, 60, 240), Wood * 0.7f, WoodS); AddSolid(500, 930, 1200, 990);     // bottles
 		Box(FVector(1100, -300, 45), FVector(260, 120, 90), Steel); AddSolid(970, -360, 1230, -240);                       // service: a steel worktable
 		Sign(TEXT("LOBBY"), FVector(-1380, 600, 300), 0, 20, SignCol);
 		Sign(TEXT("BAR"), FVector(206, 500, 300), 0, 20, SignCol);
@@ -618,7 +645,7 @@ void AHUCrimeScene::Build()
 			Wall(true, 0, Y0, -150, Z, {}, Paper); Wall(true, 700, Y0, -150, Z, {}, Paper);
 			Sign(FString::Printf(TEXT("FLOOR %d"), F + 1), FVector(-1380, -500, Z + 280), 0, 20, SignCol);
 			// the corridor: a runner and lamps
-			Box(FVector(0, 0, Z + 1), FVector(2700, 160, 2), FLinearColor(0.3f, 0.05f, 0.05f), nullptr, false);
+			Box(FVector(0, 0, Z + 1), FVector(2700, 160, 2), FLinearColor(0.3f, 0.05f, 0.05f), EHUSurface::Carpet, false);
 			for (float X : { -900.f, 0.f, 900.f }) Lamp(FVector(X, 0, Z + FH - 50), 2200.f, 700.f, Warm);
 			Areas.Add({ { X0 + 30, -120, X1 - 30, 120 }, Z, ANarrow });
 			// the stair landing (west of the stairs)
@@ -628,9 +655,9 @@ void AHUCrimeScene::Build()
 			auto Guest = [&](const FR& Rm, bool bNorth)
 			{
 				const float BedY = bNorth ? Rm.Y1 - 110 : Rm.Y0 + 110;
-				Box(FVector(Rm.CX(), BedY, Z + 28), FVector(170, 200, 56), FLinearColor(0.7f, 0.68f, 0.6f));
-				Box(FVector(Rm.CX(), bNorth ? Rm.Y1 - 12 : Rm.Y0 + 12, Z + 80), FVector(180, 12, 160), Wood * 0.8f, WoodMaterial);
-				Box(FVector(Rm.CX() + 140, BedY + (bNorth ? 60 : -60), Z + 30), FVector(50, 50, 60), Wood, WoodMaterial);
+				Box(FVector(Rm.CX(), BedY, Z + 28), FVector(170, 200, 56), FLinearColor(0.7f, 0.68f, 0.6f), EHUSurface::Fabric);
+				Box(FVector(Rm.CX(), bNorth ? Rm.Y1 - 12 : Rm.Y0 + 12, Z + 80), FVector(180, 12, 160), Wood * 0.8f, WoodS);
+				Box(FVector(Rm.CX() + 140, BedY + (bNorth ? 60 : -60), Z + 30), FVector(50, 50, 60), Wood, WoodS);
 				const int32 Num = (F + 1) * 100 + (++GuestN);
 				Sign(FString::FromInt(Num), FVector(Rm.CX() + 90, bNorth ? 144 : -144, Z + 230), bNorth ? -90.f : 90.f, 14, SignCol);
 				const FR A = bNorth ? FR{ Rm.X0 + 30, Rm.Y0 + 30, Rm.X1 - 30, Rm.Y1 - 240 } : FR{ Rm.X0 + 30, Rm.Y0 + 240, Rm.X1 - 30, Rm.Y1 - 30 };
@@ -645,10 +672,10 @@ void AHUCrimeScene::Build()
 
 		// ---- THE ALLEY out back, and the FIRE ESCAPE up the back wall ----
 		const float AX1 = X1 + 600;
-		Box(FVector((X1 + AX1) / 2, 0, -5), FVector(600, Y1 - Y0, 10), Concrete * 0.8f, FloorMaterial);
-		Box(FVector(AX1 + 6, 0, 250), FVector(12, Y1 - Y0, 500), Brick * 0.7f, WallMaterial);
-		for (float Y : { Y0, Y1 }) Box(FVector((X1 + AX1) / 2, Y, 250), FVector(600, 12, 500), Brick * 0.7f, WallMaterial);
-		Box(FVector(AX1 - 80, -500, 70), FVector(120, 220, 140), FLinearColor(0.1f, 0.25f, 0.12f)); AddSolid(AX1 - 140, -610, AX1 - 20, -390); // the dumpster
+		Box(FVector((X1 + AX1) / 2, 0, -5), FVector(600, Y1 - Y0, 10), Concrete * 0.8f, EHUSurface::Concrete);
+		Box(FVector(AX1 + 6, 0, 250), FVector(12, Y1 - Y0, 500), Brick * 0.7f, EHUSurface::Brick);
+		for (float Y : { Y0, Y1 }) Box(FVector((X1 + AX1) / 2, Y, 250), FVector(600, 12, 500), Brick * 0.7f, EHUSurface::Brick);
+		Box(FVector(AX1 - 80, -500, 70), FVector(120, 220, 140), FLinearColor(0.1f, 0.25f, 0.12f), EHUSurface::PaintedMetal); AddSolid(AX1 - 140, -610, AX1 - 20, -390); // the dumpster
 		Sign(TEXT("FIRE ESCAPE"), FVector(X1 + 8, 300, 280), 0, 16, SignCol);
 		Lamp(FVector(X1 + 60, 500, 330), 1800.f, 900.f, FLinearColor(1.f, 0.75f, 0.45f));   // the light over the back door
 		Areas.Add({ { X1 + 80, Y0 + 80, AX1 - 80, Y1 - 80 }, 0, AOpen });

@@ -107,19 +107,20 @@ void AHUBriefingRoom::Build()
 	const FLinearColor Carpet(0.05f, 0.07f, 0.10f), Wall(0.35f, 0.38f, 0.42f), Wainscot(0.18f, 0.10f, 0.06f), Ceiling(0.6f, 0.6f, 0.58f);
 	const FLinearColor Wood(0.22f, 0.12f, 0.05f), Steel(0.25f, 0.27f, 0.3f), Seat(0.08f, 0.12f, 0.2f);
 
-	// shell
-	Block(Cube, FVector(0, 0, -5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Carpet);
-	Block(Cube, FVector(0, 0, RoomH + 5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Ceiling);
-	Block(Cube, FVector(RoomHalfX + 5, 0, RoomH / 2), FVector(10, RoomHalfY * 2, RoomH), Wall);
+	// shell: navy commercial carpet, acoustic tiles overhead, plaster over a walnut wainscot (HUSurfaces.h)
+	auto Made = [](UStaticMeshComponent* C, EHUSurface S, const FLinearColor& Col) { HUSurfaces::Apply(C, S, Col); return C; };
+	Made(Block(Cube, FVector(0, 0, -5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Carpet), EHUSurface::Fabric, Carpet);
+	Made(Block(Cube, FVector(0, 0, RoomH + 5), FVector(RoomHalfX * 2, RoomHalfY * 2, 10), Ceiling), EHUSurface::CeilingTile, Ceiling);
+	Made(Block(Cube, FVector(RoomHalfX + 5, 0, RoomH / 2), FVector(10, RoomHalfY * 2, RoomH), Wall), EHUSurface::Plaster, Wall);
 	// the back wall has the doorway out to the corridor and the motor pool
-	HUBuild::WallWithDoor(this, RootComponent, Blocks, true, FVector(-RoomHalfX - 5, 0, RoomH / 2), RoomHalfY * 2, RoomH, 10, 0, 180, 250, Wall);
+	HUBuild::WallWithDoor(this, RootComponent, Blocks, true, FVector(-RoomHalfX - 5, 0, RoomH / 2), RoomHalfY * 2, RoomH, 10, 0, 180, 250, Wall, EHUSurface::Plaster);
 	BuildCorridor();
-	Block(Cube, FVector(0, RoomHalfY + 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall);
-	Block(Cube, FVector(0, -RoomHalfY - 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall);
+	Made(Block(Cube, FVector(0, RoomHalfY + 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall), EHUSurface::Plaster, Wall);
+	Made(Block(Cube, FVector(0, -RoomHalfY - 5, RoomH / 2), FVector(RoomHalfX * 2, 10, RoomH), Wall), EHUSurface::Plaster, Wall);
 	// dark wood wainscot round the bottom of the walls
-	for (int32 S = -1; S <= 1; S += 2) Block(Cube, FVector(-RoomHalfX + 2, S * (RoomHalfY + 90) / 2, 50), FVector(4, RoomHalfY - 90, 100), Wainscot);
-	Block(Cube, FVector(0, RoomHalfY - 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot);
-	Block(Cube, FVector(0, -RoomHalfY + 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot);
+	for (int32 S = -1; S <= 1; S += 2) Made(Block(Cube, FVector(-RoomHalfX + 2, S * (RoomHalfY + 90) / 2, 50), FVector(4, RoomHalfY - 90, 100), Wainscot), EHUSurface::Walnut, Wainscot);
+	Made(Block(Cube, FVector(0, RoomHalfY - 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot), EHUSurface::Walnut, Wainscot);
+	Made(Block(Cube, FVector(0, -RoomHalfY + 2, 50), FVector(RoomHalfX * 2, 4, 100), Wainscot), EHUSurface::Walnut, Wainscot);
 	// ceiling lights
 	for (float X : { -400.f, 0.f, 400.f }) for (float Y : { -500.f, 0.f, 500.f })
 		Block(Cube, FVector(X, Y, RoomH - 4), FVector(120, 40, 4), FLinearColor(3.f, 3.f, 2.8f));
@@ -134,14 +135,14 @@ void AHUBriefingRoom::Build()
 
 	// podium and the Captain (a stand-in until there's a real character)
 	PodiumParts.Reset(); CaptainParts.Reset();
-	PodiumParts.Add(Block(Cube, FVector(600, -380, 55), FVector(50, 70, 110), Wood));
-	PodiumParts.Add(Block(Cube, FVector(600, -380, 112), FVector(56, 76, 4), Wood, FRotator(-10, 0, 0)));
+	PodiumParts.Add(Made(Block(Cube, FVector(600, -380, 55), FVector(50, 70, 110), Wood), EHUSurface::Walnut, Wood));
+	PodiumParts.Add(Made(Block(Cube, FVector(600, -380, 112), FVector(56, 76, 4), Wood, FRotator(-10, 0, 0)), EHUSurface::Walnut, Wood));
 	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 80), FVector(50, 50, 160), FLinearColor(0.03f, 0.05f, 0.1f)));
 	CaptainParts.Add(Block(Sphere, FVector(670, -380, 180), FVector(34, 30, 38), FLinearColor(0.6f, 0.42f, 0.32f)));
 	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 200), FVector(40, 40, 8), FLinearColor(0.02f, 0.03f, 0.07f)));
 
 	// the laptop table (the laptop itself is its own actor, spawned at play)
-	Block(Cube, FVector(560, 420, 75), FVector(90, 140, 4), Wood);
+	Made(Block(Cube, FVector(560, 420, 75), FVector(90, 140, 4), Wood), EHUSurface::Walnut, Wood);
 	for (float DX : { -40.f, 40.f }) for (float DY : { -60.f, 60.f })
 		Block(Cube, FVector(560 + DX, 420 + DY, 37), FVector(4, 4, 74), Steel);
 
@@ -152,8 +153,8 @@ void AHUBriefingRoom::Build()
 			{
 				const float Y = Side * (180.f + i * 130.f);
 				// remember both the cushion and the backrest as "this chair"
-				Seats.Add(Block(Cube, FVector(X, Y, 45), FVector(50, 50, 6), Seat), FVector(X, Y, 48));
-				Seats.Add(Block(Cube, FVector(X - 24, Y, 75), FVector(4, 50, 50), Seat), FVector(X, Y, 48));
+				Seats.Add(Made(Block(Cube, FVector(X, Y, 45), FVector(50, 50, 6), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));
+				Seats.Add(Made(Block(Cube, FVector(X - 24, Y, 75), FVector(4, 50, 50), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));
 				for (float DX : { -20.f, 20.f }) for (float DY : { -20.f, 20.f })
 					Block(Cube, FVector(X + DX, Y + DY, 21), FVector(3, 3, 42), Steel);
 			}
@@ -165,11 +166,11 @@ void AHUBriefingRoom::BuildCorridor()
 	using namespace HUBuild;
 	const float X0 = -RoomHalfX - 10, X1 = MotorPoolPos.X + 900.f, Len = X0 - X1, MidX = (X0 + X1) / 2, HalfW = 160.f, H = 300.f;
 	const FLinearColor Floor(0.25f, 0.24f, 0.22f), Wall(0.42f, 0.44f, 0.46f), Trim(0.1f, 0.1f, 0.1f);
-	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, -5), FVector(Len, HalfW * 2, 10), Floor);
-	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, H + 5), FVector(Len, HalfW * 2, 10), Wall);
+	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, -5), FVector(Len, HalfW * 2, 10), Floor, FRotator::ZeroRotator, true, EHUSurface::Linoleum);
+	HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, 0, H + 5), FVector(Len, HalfW * 2, 10), Wall, FRotator::ZeroRotator, true, EHUSurface::CeilingTile);
 	for (int32 S = -1; S <= 1; S += 2)
 	{
-		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, S * (HalfW + 5), H / 2), FVector(Len, 10, H), Wall);
+		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, S * (HalfW + 5), H / 2), FVector(Len, 10, H), Wall, FRotator::ZeroRotator, true, EHUSurface::Plaster);
 		HUBuild::Block(this, RootComponent, Blocks, EShape::Cube, FVector(MidX, S * (HalfW - 1), 6), FVector(Len, 2, 12), Trim);
 	}
 	for (float X = X0 - 150; X > X1; X -= 300)

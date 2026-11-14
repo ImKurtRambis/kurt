@@ -45,15 +45,17 @@ void AHUMotorPool::OnConstruction(const FTransform& Transform)
 	const FLinearColor Concrete(0.3f, 0.3f, 0.29f), Wall(0.5f, 0.5f, 0.48f), Stripe(0.9f, 0.75f, 0.1f), Roll(0.45f, 0.48f, 0.52f), Red(0.6f, 0.05f, 0.03f), Rubber(0.02f, 0.02f, 0.02f);
 	USceneComponent* R = RootComponent;
 
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(HalfX * 2, HalfY * 2, 10), Concrete);
-	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, PoolH + 5), FVector(HalfX * 2, HalfY * 2, 10), Wall * 0.6f);
+	// a concrete garage (HUSurfaces.h): poured floor and ceiling, block walls, painted steel doors and chests
+	const FRotator Z0 = FRotator::ZeroRotator;
+	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, -5), FVector(HalfX * 2, HalfY * 2, 10), Concrete, Z0, true, EHUSurface::Concrete);
+	Block(this, R, Blocks, EShape::Cube, FVector(0, 0, PoolH + 5), FVector(HalfX * 2, HalfY * 2, 10), Wall * 0.6f, Z0, true, EHUSurface::Concrete);
 	// the doorway from the corridor is in the +X wall; the roll-up doors fill the -X wall
-	WallWithDoor(this, R, Blocks, true, FVector(HalfX + 5, 0, PoolH / 2), HalfY * 2, PoolH, 10, 0, 180, 250, Wall);
-	Block(this, R, Blocks, EShape::Cube, FVector(-HalfX - 5, 0, PoolH / 2), FVector(10, HalfY * 2, PoolH), Wall);
-	for (int32 S = -1; S <= 1; S += 2) Block(this, R, Blocks, EShape::Cube, FVector(0, S * (HalfY + 5), PoolH / 2), FVector(HalfX * 2, 10, PoolH), Wall);
+	WallWithDoor(this, R, Blocks, true, FVector(HalfX + 5, 0, PoolH / 2), HalfY * 2, PoolH, 10, 0, 180, 250, Wall, EHUSurface::Concrete);
+	Block(this, R, Blocks, EShape::Cube, FVector(-HalfX - 5, 0, PoolH / 2), FVector(10, HalfY * 2, PoolH), Wall, Z0, true, EHUSurface::Concrete);
+	for (int32 S = -1; S <= 1; S += 2) Block(this, R, Blocks, EShape::Cube, FVector(0, S * (HalfY + 5), PoolH / 2), FVector(HalfX * 2, 10, PoolH), Wall, Z0, true, EHUSurface::Concrete);
 	for (float Y : BayY)
 	{
-		Block(this, R, Blocks, EShape::Cube, FVector(-HalfX + 3, Y, 180), FVector(6, 420, 360), Roll);
+		Block(this, R, Blocks, EShape::Cube, FVector(-HalfX + 3, Y, 180), FVector(6, 420, 360), Roll, Z0, true, EHUSurface::PaintedMetal);
 		for (int32 k = 0; k < 12; k++) Block(this, R, Blocks, EShape::Cube, FVector(-HalfX + 7, Y, 20 + k * 30), FVector(2, 420, 3), Roll * 0.6f, FRotator::ZeroRotator, false);
 	}
 	// yellow bay lines and the walkway to the door
@@ -63,7 +65,7 @@ void AHUMotorPool::OnConstruction(const FTransform& Transform)
 	for (float X : { -500.f, 0.f, 500.f }) for (float Y : { -600.f, 0.f, 600.f })
 		Block(this, R, Blocks, EShape::Cube, FVector(X, Y, PoolH - 4), FVector(160, 30, 4), FLinearColor(3.f, 3.f, 2.8f), FRotator::ZeroRotator, false);
 	// tool chests and a stack of tires along the side walls
-	for (float X : { 200.f, 400.f }) Block(this, R, Blocks, EShape::Cube, FVector(X, HalfY - 40, 55), FVector(120, 60, 110), Red);
+	for (float X : { 200.f, 400.f }) Block(this, R, Blocks, EShape::Cube, FVector(X, HalfY - 40, 55), FVector(120, 60, 110), Red, Z0, true, EHUSurface::PaintedMetal);
 	for (int32 i = 0; i < 4; i++) Block(this, R, Blocks, EShape::Cylinder, FVector(600, HalfY - 60, 12 + i * 24), FVector(70, 70, 22), Rubber);
 	for (int32 i = 0; i < 3; i++) Block(this, R, Blocks, EShape::Cylinder, FVector(600 - i * 90, -HalfY + 60, 45), FVector(56, 56, 90), FLinearColor(0.1f, 0.2f, 0.45f));
 }
