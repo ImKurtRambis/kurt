@@ -25,6 +25,8 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Misc/CommandLine.h"
+#include "UnrealClient.h"
 
 using namespace HUBuild;
 
@@ -34,6 +36,28 @@ static const float RX = 700.f, RY = 500.f, RH = 340.f;
 static const float PX = 1400.f, PY = 1000.f;
 // the squad's four desks (desk centres; each faces +X, its chair on the -X side)
 static const FVector2D DeskSpots[] = { FVector2D(-700, -380), FVector2D(-250, -380), FVector2D(-700, 380), FVector2D(-250, 380) };
+
+// roll call's benches: four rows facing the chalkboard, split by an aisle down the middle
+static const float BenchRows[] = { 430.f, 300.f, 170.f, 40.f };
+static const float BenchMidY = 235.f, BenchLen = 290.f, BenchSeatZ = 47.f;
+
+// words made while building the room (OnConstruction can't use CreateDefaultSubobject). Text faces local +X and
+// runs toward local -Y; EHTA_Left anchors its first letter, lines go down from Pos.
+static UTextRenderComponent* RoomText(AActor* Owner, USceneComponent* Root, TArray<UTextRenderComponent*>& Out, FVector Pos, float Yaw, float Size, FColor Col, const FString& Text, EHorizTextAligment H = EHTA_Center)
+{
+	UTextRenderComponent* T = NewObject<UTextRenderComponent>(Owner);
+	T->SetupAttachment(Root);
+	T->SetRelativeLocation(Pos);
+	T->SetRelativeRotation(FRotator(0, Yaw, 0));
+	T->SetHorizontalAlignment(H);
+	T->SetVerticalAlignment(EVRTA_TextTop);
+	T->SetWorldSize(Size);
+	T->SetTextRenderColor(Col);
+	T->SetText(FText::FromString(Text));
+	T->RegisterComponent();
+	Out.Add(T);
+	return T;
+}
 
 static UTextRenderComponent* MakeText(AActor* Owner, USceneComponent* Root, const TCHAR* Name, FVector Pos, float Yaw, float Size, FColor Col)
 {
@@ -55,8 +79,10 @@ AHUSquadRoom::AHUSquadRoom()
 	RootComponent = Root;
 	// text on the board faces into the room (-X)
 	BoardTitle = MakeText(this, Root, TEXT("BoardTitle"), FVector(RX - 8, 0, 270), 180, 24, FColor(235, 235, 225));
-	BoardCode = MakeText(this, Root, TEXT("BoardCode"), FVector(RX - 8, 0, 215), 180, 46, FColor(255, 225, 120));
-	BoardRoster = MakeText(this, Root, TEXT("BoardRoster"), FVector(RX - 8, 0, 125), 180, 15, FColor(225, 230, 235));
+	BoardCode = MakeText(this, Root, TEXT("BoardCode"), FVector(RX - 8, 0, 235), 180, 46, FColor(255, 225, 120));
+	// the roster hangs down from under the code, small enough that a full squad still fits on the slate
+	BoardRoster = MakeText(this, Root, TEXT("BoardRoster"), FVector(RX - 8, 0, 206), 180, 11, FColor(225, 230, 235));
+	BoardRoster->SetVerticalAlignment(EVRTA_TextTop);
 	DoorSign = MakeText(this, Root, TEXT("DoorSign"), FVector(-RX + 8, 0, 285), 0, 20, FColor(255, 181, 71));
 	BoardTitle->SetText(FText::FromString(TEXT("ROLL CALL")));
 	// the case-selection table by the door: a laptop for where, a folder for how hard
@@ -73,7 +99,9 @@ bool AHUSquadRoom::IsHost() const { return GetNetMode() != NM_Client; }
 void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); ChairParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset();
+	Clear(Blocks); BoardParts.Reset(); DoorParts.Reset(); LaptopParts.Reset(); FolderParts.Reset(); ComputerParts.Reset(); ChairParts.Reset(); CoffeeParts.Reset(); ClockParts.Reset(); CounterParts.Reset(); TrayParts.Reset(); ShiftParts.Reset(); BenchParts.Reset();
+	for (UTextRenderComponent* T : RoomTexts) if (T) T->DestroyComponent();
+	RoomTexts.Reset(); RosterNames = nullptr;
 	USceneComponent* R = RootComponent;
 	const FLinearColor Floor(0.16f, 0.12f, 0.08f), Wall(0.32f, 0.36f, 0.33f), Trim(0.12f, 0.08f, 0.05f), Desk(0.25f, 0.14f, 0.06f), Steel(0.3f, 0.32f, 0.34f);
 	const float W = bPrecinct ? PX : RX, D = bPrecinct ? PY : RY;
@@ -91,8 +119,9 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 	{
 		// ======== ROLL CALL: just where the squad clocks in for the shift ========
 		// the chalkboard: the squad code and who's punched in
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 4, 0, 200), FVector(4, 560, 190), FLinearColor(0.03f, 0.06f, 0.04f)));
-		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 5, 0, 200), FVector(6, 580, 210), Trim));
+		// (the frame sits behind the slate, and the chalk text 2 cm in front of it - a frame in front hid the board)
+		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 5, 0, 200), FVector(2, 560, 190), FLinearColor(0.03f, 0.06f, 0.04f)));
+		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 2, 0, 200), FVector(4, 580, 210), Trim));
 		BoardParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(RX - 12, 0, 96), FVector(14, 560, 4), Trim));
 		// the roll-call door to the briefing: double doors with a glass panel
 		for (float S : { -1.f, 1.f })
@@ -114,6 +143,94 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-440.1f, -360, 88), FVector(0.2f, 31, 19), FLinearColor(0.02f, 0.06f, 0.12f)));
 		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-405, -295, 75.8f), FVector(24, 32, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, 8, 0)));
 		FolderParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-398, -295, 84), FVector(1, 26, 14), FLinearColor(0.85f, 0.82f, 0.72f)));
+
+		// ---- the room a shift starts in: benches facing the board, lockers, the duty roster, the notice boards ----
+		const FLinearColor Bench(0.28f, 0.17f, 0.08f), LockerGreen(0.2f, 0.26f, 0.22f), Paper(0.86f, 0.84f, 0.76f), Cork(0.5f, 0.34f, 0.18f), Brass(0.75f, 0.6f, 0.2f);
+		const FColor Ink(30, 30, 35), Red(150, 25, 20);
+		// BENCHES: four rows, an aisle down the middle from the doors to the board (E sits, facing the board)
+		for (float BX : BenchRows)
+			for (float S : { -1.f, 1.f })
+			{
+				const float BY = S * BenchMidY;
+				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX, BY, BenchSeatZ - 2.5f), FVector(42, BenchLen, 5), Bench));
+				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY, 75), FVector(4, BenchLen, 26), Bench));
+				for (float DY : { -BenchLen / 2 + 15.f, 0.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX, BY + DY, 21), FVector(34, 5, 42), Steel * 0.6f);
+				for (float DY : { -BenchLen / 2 + 15.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY + DY, 58), FVector(4, 5, 30), Steel * 0.6f, FRotator::ZeroRotator, false);
+			}
+		// the sergeant's lectern, front corner beside the board, facing the benches
+		const FVector Lec(585, -390, 0);
+		Block(this, R, Blocks, EShape::Cube, Lec + FVector(0, 0, 52), FVector(40, 56, 104), Desk);
+		Block(this, R, Blocks, EShape::Cube, Lec + FVector(2, 0, 108), FVector(48, 62, 5), Desk * 1.2f, FRotator(-12, 0, 0));
+		Block(this, R, Blocks, EShape::Cube, Lec + FVector(-20.5f, 0, 72), FVector(1, 34, 34), Brass, FRotator::ZeroRotator, false);
+		Block(this, R, Blocks, EShape::Cylinder, Lec + FVector(-12, 14, 124), FVector(1.5f, 1.5f, 24), Steel * 0.4f, FRotator(0, 0, 0), false);
+		Block(this, R, Blocks, EShape::Sphere, Lec + FVector(-14, 14, 137), FVector(4, 4, 6), FLinearColor(0.04f, 0.04f, 0.04f), FRotator::ZeroRotator, false);
+		RoomText(this, R, RoomTexts, Lec + FVector(-21.2f, 0, 84), 180, 5.5f, FColor(40, 28, 8), TEXT("METRO PD<br>NIGHT WATCH"));
+
+		// LOCKERS: a bank of twelve along the +Y wall, one standing open
+		for (int32 i = 0; i < 12; i++)
+		{
+			const float LX = -575.f + i * 50.f;
+			const FLinearColor LC = LockerGreen * (i % 3 == 0 ? 0.9f : 1.f);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 5), FVector(50, 44, 10), Trim);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 100), FVector(50, 46, 180), LC);
+			if (i == 4)
+			{
+				// left open: the dark inside, a coat on the hook, the door swung out on its hinge
+				Block(this, R, Blocks, EShape::Cube, FVector(LX, 451.4f, 100), FVector(44, 1, 172), FLinearColor(0.02f, 0.02f, 0.02f), FRotator::ZeroRotator, false);
+				Block(this, R, Blocks, EShape::Cube, FVector(LX, 449, 120), FVector(30, 4, 70), FLinearColor(0.16f, 0.13f, 0.1f), FRotator::ZeroRotator, false);
+				const float A = FMath::DegreesToRadians(75.f), HX = LX - 23.f;
+				Block(this, R, Blocks, EShape::Cube, FVector(HX + 23.f * FMath::Cos(A), 451.f - 23.f * FMath::Sin(A), 100), FVector(46, 1.5f, 174), LC * 1.1f, FRotator(0, -75, 0));
+				continue;
+			}
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 451.5f, 100), FVector(46, 1, 174), LC * 1.1f, FRotator::ZeroRotator, false);
+			for (int32 k = 0; k < 3; k++) Block(this, R, Blocks, EShape::Cube, FVector(LX, 450.8f, 168 + k * 6), FVector(24, 0.6f, 2), FLinearColor(0.03f, 0.03f, 0.03f), FRotator::ZeroRotator, false);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX + 16, 450.5f, 105), FVector(3, 2, 14), Steel * 1.4f, FRotator::ZeroRotator, false);
+			Block(this, R, Blocks, EShape::Cube, FVector(LX, 450.8f, 150), FVector(22, 0.5f, 6), Paper, FRotator::ZeroRotator, false);
+		}
+
+		// DUTY ROSTER on the back wall, across the doors from the time clock: tonight's watch - and the squad
+		const FVector Ros(-700, -300, 0);
+		Block(this, R, Blocks, EShape::Cube, Ros + FVector(1.5f, 0, 190), FVector(3, 300, 160), Trim, FRotator::ZeroRotator, false);
+		Block(this, R, Blocks, EShape::Cube, Ros + FVector(3.5f, 0, 190), FVector(1, 288, 148), FLinearColor(0.85f, 0.86f, 0.82f), FRotator::ZeroRotator, false);
+		Block(this, R, Blocks, EShape::Cube, Ros + FVector(4.2f, 0, 254), FVector(0.4f, 288, 18), FLinearColor(0.06f, 0.1f, 0.22f), FRotator::ZeroRotator, false);
+		RoomText(this, R, RoomTexts, Ros + FVector(4.6f, 0, 260), 0, 8.f, FColor(235, 235, 225), TEXT("DUTY ROSTER  ·  NIGHT WATCH"));
+		RoomText(this, R, RoomTexts, Ros + FVector(4.6f, 132, 238), 0, 7.f, Ink,
+			TEXT("WATCH COMMANDER<br>DESK<br>CAR 7<br>CAR 12<br>FOOT BEAT 4<br>HOMICIDE"), EHTA_Left);
+		RosterNames = RoomText(this, R, RoomTexts, Ros + FVector(4.6f, 30, 238), 0, 7.f, Ink,
+			TEXT("LT. HARGROVE<br>SGT. KOWALSKI<br>OFC. DELGADO, OFC. PRUITT<br>OFC. MORROW, OFC. TATE<br>OFC. LINDSAY<br>-"), EHTA_Left);
+
+		// NOTICE BOARDS on the -Y wall: cork, papers pinned up crooked, a few worth reading
+		// BodyDrop: how far below the paper's top the small print starts (posters put it under the photo;
+		// TextRender drops blank lines, so <br> can't push it down)
+		struct FNote { float DX, Z, W, H; FLinearColor Col; const TCHAR* Head; FColor HeadCol; const TCHAR* Body; float Tilt; float BodyDrop = 0.f; };
+		auto NoticeBoard = [&](float CX, const TArray<FNote>& Notes)
+		{
+			Block(this, R, Blocks, EShape::Cube, FVector(CX, -497, 185), FVector(250, 4, 150), Trim, FRotator::ZeroRotator, false);
+			Block(this, R, Blocks, EShape::Cube, FVector(CX, -494.5f, 185), FVector(238, 1, 138), Cork, FRotator::ZeroRotator, false);
+			for (const FNote& N : Notes)
+			{
+				const float X = CX + N.DX, Top = N.Z + N.H / 2;
+				Block(this, R, Blocks, EShape::Cube, FVector(X, -493.8f, N.Z), FVector(N.W, 0.4f, N.H), N.Col, FRotator(N.Tilt, 0, 0), false);
+				Block(this, R, Blocks, EShape::Sphere, FVector(X, -493.2f, Top - 3), FVector(1.6f, 1.6f, 1.6f), FLinearColor(0.7f, 0.08f, 0.06f), FRotator::ZeroRotator, false);
+				if (N.Head) RoomText(this, R, RoomTexts, FVector(X, -493.4f, Top - 6), 90, FMath::Min(9.f, N.W / 7.f), N.HeadCol, N.Head);
+				if (N.Body) RoomText(this, R, RoomTexts, FVector(X, -493.4f, Top - (N.BodyDrop > 0.f ? N.BodyDrop : N.Head ? 17.f : 7.f)), 90, 3.4f, Ink, N.Body);
+			}
+		};
+		NoticeBoard(-170.f, {
+			{ -70, 195, 60, 80, Paper, TEXT("WANTED"), Red, TEXT("ARMED ROBBERY<br>REWARD $500"), 0, 40 },
+			{ 20, 215, 70, 62, FLinearColor(0.92f, 0.92f, 0.88f), TEXT("MEMO"), Ink, TEXT("ALL PERSONNEL<br>Overtime slips go to the<br>desk sergeant by Friday.<br>No exceptions.<br>- Lt. Hargrove"), 0 },
+			{ 85, 150, 50, 50, FLinearColor(0.92f, 0.8f, 0.35f), nullptr, Ink, TEXT("PBA BOWLING<br>THURSDAY 8 PM<br>STARLITE LANES<br>bring your<br>own shoes"), 0 },
+			{ -5, 148, 44, 28, Paper, nullptr, Ink, TEXT("COFFEE FUND<br>$2 A WEEK<br>- PAY UP -"), 0 },
+			{ 75, 232, 30, 20, FLinearColor(0.9f, 0.6f, 0.62f), nullptr, Ink, nullptr, 8 },
+			{ -95, 140, 34, 24, FLinearColor(0.6f, 0.72f, 0.88f), nullptr, Ink, nullptr, -6 } });
+		Block(this, R, Blocks, EShape::Cube, FVector(-240, -493.4f, 209), FVector(24, 0.3f, 20), FLinearColor(0.35f, 0.35f, 0.37f), FRotator::ZeroRotator, false); // the wanted man's photo
+		NoticeBoard(230.f, {
+			{ -70, 200, 60, 80, Paper, TEXT("MISSING"), FColor(20, 40, 110), TEXT("HAVE YOU SEEN HER?<br>CALL METRO PD"), 0, 38 },
+			{ 25, 210, 75, 68, FLinearColor(0.92f, 0.92f, 0.88f), TEXT("BOLO"), Red, TEXT("Dark green sedan,<br>partial plate 4K2.<br>Driver armed.<br>Do not approach alone."), 0 },
+			{ 90, 150, 46, 40, FLinearColor(0.85f, 0.9f, 0.82f), nullptr, Ink, TEXT("BAG IT.<br>TAG IT.<br>SIGN IT.<br>- Evidence Unit"), 3 },
+			{ -10, 142, 52, 34, Paper, nullptr, Ink, TEXT("SHIFT BIDS<br>DUE MONDAY<br>see Sgt. Kowalski"), 0 },
+			{ -100, 135, 28, 20, FLinearColor(0.92f, 0.8f, 0.35f), nullptr, Ink, nullptr, -9 } });
+		Block(this, R, Blocks, EShape::Cube, FVector(160, -493.4f, 214), FVector(22, 0.3f, 18), FLinearColor(0.42f, 0.38f, 0.34f), FRotator::ZeroRotator, false); // her photo
 		return;
 	}
 
@@ -283,6 +400,21 @@ void AHUSquadRoom::Tick(float DeltaSeconds)
 		Roster += FString::Printf(TEXT("<br>LAST CASE OPEN — %d IN HOLDING, %d TO BOOK. SUBMIT IT TO THE CAPTAIN."), CS3->Arrested.Num(), CS3->UnbookedCount());
 	Roster += Countdown >= 0 ? FString::Printf(TEXT("<br>EVERYONE'S IN — ROLL CALL IN %d"), Countdown) : FString::Printf(TEXT("<br>%d / 4  —  PUNCH IN AT THE TIME CLOCK (OR PRESS Y) WHEN READY"), N);
 	BoardRoster->SetText(FText::FromString(Roster));
+	RollCallShots(DeltaSeconds);
+	// the duty roster has the squad on it: homicide, tonight's detectives (two names a line)
+	if (RosterNames)
+	{
+		FString Dets;
+		int32 K = 0;
+		if (const AGameStateBase* GS = GetWorld()->GetGameState())
+			for (const APlayerState* P : GS->PlayerArray)
+				if (P)
+				{
+					Dets += FString::Printf(TEXT("%sDET. %s"), K == 0 ? TEXT("") : (K % 2 ? TEXT(", ") : TEXT("<br>")), *P->GetPlayerName().Replace(TEXT("_"), TEXT(" ")).ToUpper());
+					++K;
+				}
+		RosterNames->SetText(FText::FromString(TEXT("LT. HARGROVE<br>SGT. KOWALSKI<br>OFC. DELGADO, OFC. PRUITT<br>OFC. MORROW, OFC. TATE<br>OFC. LINDSAY<br>") + (K ? Dets : FString(TEXT("-")))));
+	}
 
 	LaptopScreen->SetText(FText::FromString(TEXT("LOCATION<br>") + PlaceLabel()));
 	FolderLabel->SetText(FText::FromString(FString(DifficultyName(DifficultyChoice)).ToUpper()));
@@ -332,6 +464,48 @@ void AHUSquadRoom::Tick(float DeltaSeconds)
 				}
 }
 
+// -HURollCallShots on L_Lobby: walk the camera round roll call, take a screenshot at each stop, sit on a bench,
+// then quit. The shots land in Saved/Screenshots.
+void AHUSquadRoom::RollCallShots(float DeltaSeconds)
+{
+	if (!FParse::Param(FCommandLine::Get(), TEXT("HURollCallShots"))) return;
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	APawn* P = PC ? PC->GetPawn() : nullptr;
+	if (!P) return;
+	struct FStop { FVector At; float Yaw, Pitch; const TCHAR* Name; };
+	static const FStop Stops[] = {
+		{ FVector(-640, 0, 110), 0, -6, TEXT("RollCall_FromDoors") },
+		{ FVector(600, 330, 110), 169, -8, TEXT("RollCall_Lockers") },
+		{ FVector(30, -120, 105), -90, 0, TEXT("RollCall_NoticeBoards") },
+		{ FVector(-520, -300, 110), 180, 0, TEXT("RollCall_DutyRoster") },
+		{ FVector(-170, -330, 120), -90, 0, TEXT("RollCall_NoticeA") },
+		{ FVector(230, -340, 120), -90, 0, TEXT("RollCall_NoticeB") },
+	};
+	const float Was = ShotClock;
+	ShotClock += DeltaSeconds;
+	auto Passed = [&](float T) { return Was < T && ShotClock >= T; };
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Stops); i++)
+	{
+		if (Passed(2.f + i * 2.f))
+		{
+			P->SetActorLocation(GetActorTransform().TransformPosition(Stops[i].At), false, nullptr, ETeleportType::TeleportPhysics);
+			PC->SetControlRotation(FRotator(Stops[i].Pitch, GetActorRotation().Yaw + Stops[i].Yaw, 0));
+		}
+		if (Passed(3.f + i * 2.f)) FScreenshotRequest::RequestScreenshot(Stops[i].Name, false, false);
+	}
+	const float SitAt = 2.f + UE_ARRAY_COUNT(Stops) * 2.f;
+	if (Passed(SitAt) && BenchParts.Num() > 2)
+		if (UHUInteractComponent* I = P->FindComponentByClass<UHUInteractComponent>())
+		{
+			P->SetActorLocation(GetActorTransform().TransformPosition(FVector(375, 200, 100)), false, nullptr, ETeleportType::TeleportPhysics);
+			I->FocusPart = BenchParts[3]; // the front row, +Y side
+			UE_LOG(LogTemp, Log, TEXT("HURollCallShots: prompt '%s'"), *IHUInteractable::Execute_GetPrompt(this, P).ToString());
+			IHUInteractable::Execute_Interact(this, P, false);
+		}
+	if (Passed(SitAt + 1.5f)) FScreenshotRequest::RequestScreenshot(TEXT("RollCall_Seated"), false, false);
+	if (Passed(SitAt + 3.f)) FPlatformMisc::RequestExit(false);
+}
+
 FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 {
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
@@ -359,7 +533,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 		}
 	}
 	if (CoffeeParts.Contains(I->FocusPart)) return FText::FromString(TEXT("[E] Pour a coffee  (faster work for a while)"));
-	if (ChairParts.Contains(I->FocusPart)) { const AHUCharacter* Ch = Cast<AHUCharacter>(User); return FText::FromString(Ch && Ch->bSeated ? TEXT("[E] Stand up") : TEXT("[E] Sit down")); }
+	if (ChairParts.Contains(I->FocusPart) || BenchParts.Contains(I->FocusPart)) { const AHUCharacter* Ch = Cast<AHUCharacter>(User); return FText::FromString(Ch && Ch->bSeated ? TEXT("[E] Stand up") : TEXT("[E] Sit down")); }
 	if (ShiftParts.Contains(I->FocusPart))
 	{
 		const UHUCaseSubsystem* SC = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
@@ -459,6 +633,23 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 		UWorld* W = GetWorld();
 		if (W->GetNetMode() == NM_ListenServer || W->GetNetMode() == NM_DedicatedServer) W->ServerTravel(TEXT("/Game/Maps/L_Lobby"));
 		else UGameplayStatics::OpenLevel(this, TEXT("L_Lobby"));
+		return;
+	}
+	if (BenchParts.Contains(I->FocusPart))
+	{
+		// a roll-call bench: sit where you're standing along it, facing the board (every machine seats them)
+		if (AHUCharacter* Ch = Cast<AHUCharacter>(User))
+		{
+			if (Ch->bSeated) Ch->StandUp();
+			else
+			{
+				const int32 k = BenchParts.IndexOfByKey(I->FocusPart) / 2; // seat + back per bench, two benches per row
+				const float BX = BenchRows[FMath::Clamp(k / 2, 0, 3)], BY = (k % 2 ? 1.f : -1.f) * BenchMidY;
+				const float Along = GetActorTransform().InverseTransformPosition(User->GetActorLocation()).Y;
+				const float Y = FMath::Clamp(Along, BY - BenchLen / 2 + 30.f, BY + BenchLen / 2 - 30.f);
+				Ch->SitDown(GetActorTransform().TransformPosition(FVector(BX + 4, Y, BenchSeatZ)), GetActorRotation().Yaw);
+			}
+		}
 		return;
 	}
 	if (ChairParts.Contains(I->FocusPart))

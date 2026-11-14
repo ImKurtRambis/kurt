@@ -1,8 +1,9 @@
 // Two places, one class:
-// ROLL CALL (L_Lobby, AHUSquadRoom): just where the squad clocks in. A chalkboard shows the squad's 6-digit code
-// (friends type it into their cell phone at the desk menu) and who's punched in; E on the board copies the code.
-// The host picks the case at the table; once everyone's punched in at the time clock (or pressed Y) the squad goes
-// to the Captain's briefing together.
+// ROLL CALL (L_Lobby, AHUSquadRoom): where the squad clocks in and a shift starts. Rows of benches (E sits) face a
+// chalkboard showing the squad's 6-digit code (friends type it into their cell phone at the desk menu) and who's
+// punched in; E on the board copies the code. A lectern, a bank of lockers, the duty roster (the squad's names on
+// it) and two notice boards. The host picks the case at the table; once everyone's punched in at the time clock
+// (or pressed Y) the squad goes to the Captain's briefing together.
 // THE PRECINCT (L_Precinct, AHUPrecinct): the squad's base, the same for every case - where it gets solved. Back
 // from a scene you land here: the desk computers (the case archive, the security tapes), the case board, holding
 // and the booking counter, the Captain's in-tray, the motor pool (back out to the scene), coffee - and the door to
@@ -64,6 +65,12 @@ private:
 	UPROPERTY() TArray<UPrimitiveComponent*> CounterParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> TrayParts;
 	UPROPERTY() TArray<UPrimitiveComponent*> ShiftParts; // the precinct's door to roll call
+	UPROPERTY() TArray<UPrimitiveComponent*> BenchParts; // roll call's benches (seat + back per bench)
+	// words on the room's walls (the duty roster, the notice boards), rebuilt with the room
+	UPROPERTY() TArray<class UTextRenderComponent*> RoomTexts;
+	UPROPERTY() class UTextRenderComponent* RosterNames = nullptr; // the duty roster's names column (the squad is on it)
+	float ShotClock = 0.f; // -HURollCallShots: a camera tour of roll call, saved as screenshots
+	void RollCallShots(float DeltaSeconds);
 	// the prisoners in holding (figures, by suspect id)
 	UPROPERTY() TMap<FString, USceneComponent*> Prisoners;
 	void UpdateHolding();
