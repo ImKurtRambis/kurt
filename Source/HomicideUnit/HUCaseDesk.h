@@ -47,7 +47,9 @@ public:
 	static const TCHAR* FolderName(int32 K);
 
 	// one page of what's on screen
-	struct FPage { FString Title; TArray<FString> Lines; };
+	// a button in a window, beside one of its lines (Line: which line; Job: an EHUDeskJob; Arg: the clue or suspect)
+	struct FBtn { int32 Line = 0; FString Label; uint8 Job = 0; FString Arg; FLinearColor Color = FLinearColor(0.2f, 0.45f, 0.9f); };
+	struct FPage { FString Title; TArray<FString> Lines; TArray<FBtn> Btns; };
 
 	// ---- what the reader shows (this player only) ----
 	bool bReading = false;
@@ -101,7 +103,8 @@ public:
 	void DevShowPhone(APawn* User, int32 Screen, int32 InSel); // development: seize every phone, plug in the culprit's, show a screen
 	void OpenPeek(APawn* User);
 	// THE MOUSE: the screen records where it drew each clickable thing (absolute screen coords) as it paints
-	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown, Share, Swallow, PhoneIcon, PhoneRow, PhoneBack, PhoneHome };
+	enum class EHit : uint8 { Icon, Close, Minimise, Task, Start, ScrollUp, ScrollDown, Share, Swallow, PhoneIcon, PhoneRow, PhoneBack, PhoneHome, Button, Menu };
+	bool bStartMenu = false;           // the green button's menu is open
 	struct FHit { FVector2D Min, Max; EHit Kind; int32 Arg; };
 	mutable TArray<FHit> Hits;
 	mutable FVector2D HitSpace = FVector2D(1, 1); // the screen's size in the units the hits are in (it fills the viewport)

@@ -23,6 +23,7 @@
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h"
 #include "HUCaseDesk.h"
+#include "HUDeskRecords.h"
 #include "HUPlayerState.h"
 
 // the beam: how far it reaches and how wide (half-angle, degrees)
@@ -931,6 +932,33 @@ void UHUInteractComponent::MulticastDeskShare_Implementation(int32 Desk, int32 A
 	for (TActorIterator<AHUCaseDesk> It(GetWorld()); It; ++It)
 		if (It->OwnerState() && (APlayerState*)It->OwnerState() == Me->GetPlayerState()) { It->ReceiveShare(App, Who, Phone); break; }
 	Mine->Notify(AHUCaseDesk::OSName, FString::Printf(TEXT("%s sent you %s - it's waiting on your desktop"), *Who, *AppName), FLinearColor(0.3f, 0.55f, 0.95f));
+}
+
+void UHUInteractComponent::SendDeskRecord(uint8 Job, const FString& Arg)
+{
+	if (GetWorld()->GetNetMode() == NM_Standalone) { MulticastDeskRecord_Implementation(Job, Arg); return; }
+	if (GetOwner()->HasAuthority()) MulticastDeskRecord(Job, Arg); else ServerDeskRecord(Job, Arg);
+}
+void UHUInteractComponent::ServerDeskRecord_Implementation(uint8 Job, const FString& Arg) { MulticastDeskRecord(Job, Arg.Left(64)); }
+void UHUInteractComponent::MulticastDeskRecord_Implementation(uint8 Job, const FString& Arg)
+{
+	UGameInstance* GI = GetWorld()->GetGameInstance();
+	UHUDeskRecords* R = GI ? GI->GetSubsystem<UHUDeskRecords>() : nullptr;
+	const UHUCaseSubsystem* C = GI ? GI->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	if (!R || !C || Job > (uint8)EHUDeskJob::SearchWarrant) return;
+	APawn* User = Cast<APawn>(GetOwner());
+	const FString Who = User && User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName().Replace(TEXT("_"), TEXT(" ")) : FString(TEXT("A partner"));
+	const EHUDeskJob J = (EHUDeskJob)Job;
+	R->Apply(C, J, Arg, Who);
+	FString Line = UHUDeskRecords::Summary(C, J, Arg);
+	if (J == EHUDeskJob::ArrestWarrant || J == EHUDeskJob::SearchWarrant)
+		if (const UHUDeskRecords::FWarrant* W = R->WarrantFor(Arg, J == EHUDeskJob::ArrestWarrant)) Line = FString::Printf(TEXT("filed a%s warrant: %s"), J == EHUDeskJob::ArrestWarrant ? TEXT("n arrest") : TEXT(" search"), *W->Reason);
+	APlayerController* Local = GetWorld()->GetFirstPlayerController();
+	APawn* Me = Local ? Local->GetPawn() : nullptr;
+	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!Mine) return;
+	if (User == Me) Mine->Say(TEXT("You ") + Line);
+	else Mine->Notify(AHUCaseDesk::OSName, Who + TEXT(" ") + Line, FLinearColor(0.3f, 0.55f, 0.95f));
 }
 
 void UHUInteractComponent::SendUseOn(AActor* Target, UPrimitiveComponent* Part, bool bSecondary)

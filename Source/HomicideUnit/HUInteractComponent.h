@@ -131,6 +131,10 @@ public:
 	UFUNCTION(Server, Reliable) void ServerDeskView(int32 Desk, bool bOn, int32 App);
 	UFUNCTION(NetMulticast, Reliable) void MulticastDeskView(int32 Desk, bool bOn, int32 App);
 	void SendDeskShare(int32 Desk, int32 App);
+	// work done on a desk computer (prints, plates, the lab, backgrounds, warrants: an EHUDeskJob): on file for the squad
+	void SendDeskRecord(uint8 Job, const FString& Arg);
+	UFUNCTION(Server, Reliable) void ServerDeskRecord(uint8 Job, const FString& Arg);
+	UFUNCTION(NetMulticast, Reliable) void MulticastDeskRecord(uint8 Job, const FString& Arg);
 	UFUNCTION(Server, Reliable) void ServerDeskShare(int32 Desk, int32 App);
 	UFUNCTION(NetMulticast, Reliable) void MulticastDeskShare(int32 Desk, int32 App);
 	// the desk folder or desk computer you're reading (the HUD shows it)

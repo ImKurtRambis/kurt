@@ -4,6 +4,7 @@
 #include "HUInteractComponent.h"
 #include "HUProfiles.h"
 #include "HUPlayerState.h"
+#include "HUDeskRecords.h"
 #include "HUPhoneData.h"
 #include "HUOffenderBrain.h"
 #include "HUSecurityDesk.h"
@@ -29,7 +30,8 @@ static const FLinearColor FolderColors[] = {
 };
 
 // ---- PRECINCTOS: the desktop shortcuts. Add, remove or reorder them here. ----
-// Tool = which case tool the window shows: 0 records, 1 alibi check, 2 offender profile, 3 tape flags, 4 case status.
+// Tool = which case tool the window shows: 0 records, 1 alibi check, 2 offender profile, 3 tape flags, 4 case status,
+// 5 suspect database, 11 footage, 12 crime plan, 13 the phone, 14 prints, 15 plates, 16 lab, 17 warrants.
 struct FDeskApp { const TCHAR* Name; const TCHAR* Glyph; FLinearColor Color; int32 Tool; };
 static const FDeskApp DeskApps[] = {
 	{ TEXT("Records Search"),   TEXT("R"), FLinearColor(0.93f, 0.68f, 0.18f), 0 },
@@ -40,6 +42,10 @@ static const FDeskApp DeskApps[] = {
 	{ TEXT("Suspect Database"), TEXT("D"), FLinearColor(0.2f, 0.6f, 0.62f),   5 },
 	{ TEXT("Suspect Phone"),    TEXT("Ph"), FLinearColor(0.12f, 0.12f, 0.14f), 13 }, // the phone plugged into this desk
 	{ TEXT("Security Footage"), TEXT("V"), FLinearColor(0.15f, 0.15f, 0.18f), 11 },
+	{ TEXT("Prints (AFIS)"),    TEXT("Fp"), FLinearColor(0.45f, 0.45f, 0.5f),  14 },
+	{ TEXT("Plates (DMV)"),     TEXT("Pl"), FLinearColor(0.95f, 0.8f, 0.2f),   15 },
+	{ TEXT("Lab Results"),      TEXT("L"), FLinearColor(0.35f, 0.75f, 0.85f),  16 },
+	{ TEXT("Warrants"),         TEXT("W"), FLinearColor(0.55f, 0.15f, 0.12f),  17 },
 #if !UE_BUILD_SHIPPING
 	{ TEXT("Crime Plan (debug)"), TEXT("!"), FLinearColor(0.7f, 0.1f, 0.1f), 12 }, // the offender brain's full plan: dev builds only
 #endif
@@ -388,8 +394,9 @@ void AHUCaseDesk::MouseClick()
 	const FHit* Hit = nullptr;
 	for (int32 i = Hits.Num() - 1; i >= 0; i--) // topmost drawn last
 		if (At.X >= Hits[i].Min.X && At.Y >= Hits[i].Min.Y && At.X <= Hits[i].Max.X && At.Y <= Hits[i].Max.Y) { Hit = &Hits[i]; break; }
-	if (!Hit) return;
+	if (!Hit) { bStartMenu = false; return; }
 	const FHit H = *Hit;
+	if (H.Kind != EHit::Start && H.Kind != EHit::Menu) bStartMenu = false;
 	if (bPeek) { if (H.Kind == EHit::ScrollUp) ScrollUp(); else if (H.Kind == EHit::ScrollDown) ScrollDown(); else if (H.Kind == EHit::Close || H.Kind == EHit::Start) Close(); return; }
 	const double Now = FPlatformTime::Seconds();
 	switch (H.Kind)
@@ -404,7 +411,7 @@ void AHUCaseDesk::MouseClick()
 		if (H.Arg == Active && !IsOnDesktop()) KeyM();
 		else { Active = H.Arg; Minimised.Remove(Active); Scroll = 0; Rebuild(); Broadcast(); }
 		return;
-	case EHit::Start: Close(); return;
+	case EHit::Start: bStartMenu = !bStartMenu; return;
 	case EHit::ScrollUp: ScrollUp(); return;
 	case EHit::ScrollDown: ScrollDown(); return;
 	case EHit::Share: KeyF(); return;
@@ -413,6 +420,15 @@ void AHUCaseDesk::MouseClick()
 	case EHit::PhoneRow: PhoneTap(1, H.Arg); return;
 	case EHit::PhoneBack: PhoneTap(2, 0); return;
 	case EHit::PhoneHome: PhoneTap(3, 0); return;
+	case EHit::Button:
+		if (Pages.Num() > 0 && Pages[0].Btns.IsValidIndex(H.Arg))
+			if (UHUInteractComponent* I = Viewer.IsValid() ? Viewer->FindComponentByClass<UHUInteractComponent>() : nullptr)
+				I->SendDeskRecord(Pages[0].Btns[H.Arg].Job, Pages[0].Btns[H.Arg].Arg);
+		return;
+	case EHit::Menu:
+		bStartMenu = false;
+		if (H.Arg < 0) Close(); else OpenApp(H.Arg);
+		return;
 	}
 }
 
@@ -528,6 +544,8 @@ void AHUCaseDesk::Tick(float DeltaSeconds)
 		else if (Active != OwnerApp) { Active = OwnerApp; OpenWins.Reset(); if (Active >= 0) OpenWins.Add(Active); Scroll = 0; Rebuild(); }
 		else Rebuild();
 	}
+	// your own screen stays live: lab results come in, partners' prints and warrants show up
+	else if (bReading && bTerminal && !IsOnDesktop()) Rebuild();
 }
 
 // ---------------- what's written in the file ----------------
@@ -638,6 +656,8 @@ void AHUCaseDesk::Rebuild()
 		return L;
 	};
 
+	UHUDeskRecords* Recs = GetGameInstance() ? GetGameInstance()->GetSubsystem<UHUDeskRecords>() : nullptr;
+	if (Recs) Recs->Sync(C);
 	if (bTerminal)
 	{
 		// RECORDS
@@ -646,10 +666,12 @@ void AHUCaseDesk::Rebuild()
 			for (const FHUSuspect& S : Case.Suspects)
 			{
 				P.Lines.Add(FString::Printf(TEXT("> QUERY %s"), *S.Name.ToUpper()));
+				if (!(Recs && Recs->Backgrounds.Contains(S.Id))) P.Btns.Add({ P.Lines.Num() - 1, TEXT("Run full background"), (uint8)EHUDeskJob::Background, S.Id });
 				P.Lines.Add(FString::Printf(TEXT("  %s"), *S.Role));
 				const FString Rec = C->SuspectRecord.FindRef(S.Id);
 				P.Lines.Add(TEXT("  RECORD: ") + (Rec.IsEmpty() ? FString(TEXT("clean - no priors on file")) : Rec));
 				P.Lines.Add(TEXT("  FITS: ") + ProfileOf(S.Id));
+				if (Recs && Recs->Backgrounds.Contains(S.Id)) for (const FString& Bg : UHUDeskRecords::Background(C, S.Id)) P.Lines.Add(TEXT("  ") + Bg);
 				P.Lines.Add(TEXT(""));
 			}
 			Pages.Add(P);
@@ -730,6 +752,69 @@ void AHUCaseDesk::Rebuild()
 			Ph.Lines.Add(TEXT("Then plug it into the cable beside the keyboard on your desk, and open this app again."));
 			Pages.Add(Ph);
 			BuildPhone();
+		}
+		// ---- 14 PRINTS, 15 PLATES, 16 LAB, 17 WARRANTS: work done here goes on file for the whole squad ----
+		auto Bagged = [&](bool (*Pick)(const UHUCaseSubsystem*, const FString&)) { TArray<FString> L; for (const FString& Id : C->Found) if (!Pick || Pick(C, Id)) L.Add(Id); return L; };
+		{
+			FPage P{ TEXT("AFIS - AUTOMATED FINGERPRINT SEARCH"), { TEXT("Latent prints from the evidence log, against everyone on file."), TEXT("") } };
+			const TArray<FString> L = Bagged(&UHUDeskRecords::IsPrint);
+			for (const FString& Id : L)
+			{
+				P.Lines.Add(TEXT("PRINT CARD: ") + ClueName(Id));
+				if (const FString* By = Recs ? Recs->Prints.Find(Id) : nullptr) P.Lines.Add(FString::Printf(TEXT("   %s   (run by %s)"), *UHUDeskRecords::PrintResult(C, Id), **By));
+				else { P.Lines.Add(TEXT("   not run yet")); P.Btns.Add({ P.Lines.Num() - 2, TEXT("Run prints"), (uint8)EHUDeskJob::Print, Id }); }
+				P.Lines.Add(TEXT(""));
+			}
+			if (L.Num() == 0) P.Lines.Add(TEXT("No print cards in the evidence log. Lift latent prints at the scene and bag them."));
+			Pages.Add(P);
+		}
+		{
+			FPage P{ TEXT("DMV - PLATES AND VEHICLES"), { TEXT("Plates and vehicles from the evidence log, against the state's registrations."), TEXT("") } };
+			const TArray<FString> L = Bagged(&UHUDeskRecords::IsPlate);
+			for (const FString& Id : L)
+			{
+				P.Lines.Add(TEXT("VEHICLE EVIDENCE: ") + ClueName(Id));
+				if (const FString* By = Recs ? Recs->Plates.Find(Id) : nullptr) P.Lines.Add(FString::Printf(TEXT("   %s   (run by %s)"), *UHUDeskRecords::PlateResult(C, Id), **By));
+				else { P.Lines.Add(TEXT("   not run yet")); P.Btns.Add({ P.Lines.Num() - 2, TEXT("Run plate"), (uint8)EHUDeskJob::Plate, Id }); }
+				P.Lines.Add(TEXT(""));
+			}
+			if (L.Num() == 0) P.Lines.Add(TEXT("No plates or vehicle evidence logged. Look for tyre marks, plates and parking stubs at the scene."));
+			Pages.Add(P);
+		}
+		{
+			FPage P{ TEXT("CRIME LAB - RESULTS"), { FString::Printf(TEXT("Send anything bagged to the lab. Results take about %d seconds."), (int32)UHUDeskRecords::LabSeconds), TEXT("") } };
+			for (const FString& Id : C->Found)
+			{
+				P.Lines.Add(ClueName(Id).ToUpper());
+				const double* In = Recs ? Recs->LabIn.Find(Id) : nullptr;
+				if (!In) { P.Lines.Add(TEXT("   not sent")); P.Btns.Add({ P.Lines.Num() - 2, TEXT("Send to lab"), (uint8)EHUDeskJob::Lab, Id, FLinearColor(0.2f, 0.6f, 0.7f) }); }
+				else
+				{
+					const double Left = UHUDeskRecords::LabSeconds - (FPlatformTime::Seconds() - *In);
+					P.Lines.Add(Left > 0 ? FString::Printf(TEXT("   IN THE LAB... about %d s   (sent by %s)"), FMath::CeilToInt(Left), *Recs->LabBy.FindRef(Id)) : TEXT("   RESULT: ") + UHUDeskRecords::LabResult(C, Id));
+				}
+				P.Lines.Add(TEXT(""));
+			}
+			if (C->Found.Num() == 0) P.Lines.Add(TEXT("Nothing in the evidence log to send. Bag evidence at the scene."));
+			Pages.Add(P);
+		}
+		{
+			FPage P{ TEXT("WARRANTS - FILE WITH THE DUTY JUDGE"), { TEXT("A search warrant needs probable cause; an arrest warrant needs enough lies on the record to charge."), TEXT("") } };
+			for (const FHUSuspect& S : Case.Suspects)
+			{
+				P.Lines.Add(FString::Printf(TEXT("%s  (%s)"), *S.Name.ToUpper(), *S.Role));
+				for (int32 Kind = 0; Kind < 2; Kind++)
+				{
+					const bool bArrest = Kind == 1;
+					const UHUDeskRecords::FWarrant* W = Recs ? Recs->WarrantFor(S.Id, bArrest) : nullptr;
+					P.Lines.Add(FString::Printf(TEXT("   %s warrant: %s"), bArrest ? TEXT("Arrest") : TEXT("Search"),
+						W ? *FString::Printf(TEXT("%s  (filed by %s)"), *W->Reason, *W->Who) : TEXT("not filed")));
+					// a denied one can be filed again once there's more on the record; a signed one is done
+					if (!W || !W->bApproved) P.Btns.Add({ P.Lines.Num() - 1, W ? TEXT("File again") : TEXT("File"), (uint8)(bArrest ? EHUDeskJob::ArrestWarrant : EHUDeskJob::SearchWarrant), S.Id, bArrest ? FLinearColor(0.7f, 0.2f, 0.15f) : FLinearColor(0.2f, 0.45f, 0.9f) });
+				}
+				P.Lines.Add(TEXT(""));
+			}
+			Pages.Add(P);
 		}
 		// the window in front shows its tool's page (Pages holds every tool, in Tool order, until here)
 		{

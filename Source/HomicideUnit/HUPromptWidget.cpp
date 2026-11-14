@@ -399,12 +399,43 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				const AHUCaseDesk::FPage& Pg = Desk->Pages[0];
 				const FSlateFontInfo WF = Font("Regular", 12);
 				Text(Out, Lw + 7, G, Pg.Title, Font("Bold", 13), WP + FVector2D(16, 40), FLinearColor(0.05f, 0.2f, 0.55f));
-				TArray<FString> Rows;
-				for (const FString& Line : Pg.Lines) { TArray<FString> Wr = Wrap(Line, WF, WS.X - 40); if (Wr.Num() == 0) Rows.Add(FString()); else Rows.Append(Wr); }
+				// the lines, wrapped; a line with buttons keeps room for them on its right
+				const FSlateFontInfo BF = Font("Bold", 10);
+				TArray<float> BtnW; BtnW.Init(0.f, Pg.Lines.Num());
+				for (const AHUCaseDesk::FBtn& Bt : Pg.Btns) if (BtnW.IsValidIndex(Bt.Line)) BtnW[Bt.Line] += Measure(Bt.Label, BF).X + 22.f;
+				TArray<FString> Rows; TArray<int32> RowLine; TArray<bool> RowFirst;
+				for (int32 li = 0; li < Pg.Lines.Num(); li++)
+				{
+					TArray<FString> Wr = Wrap(Pg.Lines[li], WF, WS.X - 40 - BtnW[li]);
+					if (Wr.Num() == 0) Wr.Add(FString());
+					for (int32 k = 0; k < Wr.Num(); k++) { Rows.Add(Wr[k]); RowLine.Add(li); RowFirst.Add(k == 0); }
+				}
 				const float RowH = 18.f;
 				const int32 Fit = FMath::Max(1, FMath::FloorToInt((WS.Y - 84.f) / RowH));
 				const int32 First = FMath::Clamp(Desk->Scroll, 0, FMath::Max(0, Rows.Num() - Fit));
-				for (int32 r = 0; r < Fit && First + r < Rows.Num(); r++) Text(Out, Lw + 7, G, Rows[First + r], WF, WP + FVector2D(16, 66 + r * RowH), FLinearColor(0.1f, 0.1f, 0.12f));
+				// where the cursor is, for the buttons' hover
+				const FVector2D Mouse = Owner->GetWorld() ? UWidgetLayoutLibrary::GetMousePositionOnViewport(Owner->GetWorld()) : FVector2D(-1, -1);
+				for (int32 r = 0; r < Fit && First + r < Rows.Num(); r++)
+				{
+					const FVector2D RP = WP + FVector2D(16, 66 + r * RowH);
+					Text(Out, Lw + 7, G, Rows[First + r], WF, RP, FLinearColor(0.1f, 0.1f, 0.12f));
+					if (!RowFirst[First + r] || bPeekNow) continue;
+					// this line's buttons, right-aligned
+					float BXr = WP.X + WS.X - 30.f;
+					for (int32 b = Pg.Btns.Num() - 1; b >= 0; b--)
+					{
+						const AHUCaseDesk::FBtn& Bt = Pg.Btns[b];
+						if (Bt.Line != RowLine[First + r]) continue;
+						const float BW = Measure(Bt.Label, BF).X + 16.f;
+						const FVector2D BP(BXr - BW, RP.Y - 1), BS(BW, RowH);
+						const bool bHover = Mouse.X >= BP.X && Mouse.Y >= BP.Y && Mouse.X <= BP.X + BS.X && Mouse.Y <= BP.Y + BS.Y;
+						Box(Out, Lw + 8, G, BP, BS, bHover ? Bt.Color * 1.3f : Bt.Color, 4.f);
+						Box(Out, Lw + 9, G, BP + FVector2D(2, 1), FVector2D(BW - 4, 6), FLinearColor(1, 1, 1, 0.2f), 3.f);
+						TextCentered(Out, Lw + 9, G, Bt.Label, BF, BP + BS * 0.5f, FLinearColor::White);
+						Hit(BP, BS, AHUCaseDesk::EHit::Button, b);
+						BXr -= BW + 6.f;
+					}
+				}
 				// the scroll bar
 				if (Rows.Num() > Fit)
 				{
@@ -434,12 +465,38 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 				Text(Out, Lw + 12, G, AHUCaseDesk::AppName(w), Font("Regular", 10), TBP + FVector2D(BX + 24, 9), FLinearColor::White);
 				BX += 156.f;
 			}
+			if (Desk->bStartMenu && !bPeekNow)
+			{
+				const float IH = 30.f, MenuW = 250.f;
+				const int32 N = AHUCaseDesk::AppCount();
+				const float MenuH = 46.f + N * IH + 40.f;
+				const FVector2D MP(TBP.X, TBP.Y - MenuH);
+				const FVector2D Mouse2 = Owner->GetWorld() ? UWidgetLayoutLibrary::GetMousePositionOnViewport(Owner->GetWorld()) : FVector2D(-1, -1);
+				Hit(MP, FVector2D(MenuW, MenuH), AHUCaseDesk::EHit::Swallow);
+				Box(Out, Lw + 15, G, MP + FVector2D(3, 4), FVector2D(MenuW, MenuH), FLinearColor(0, 0, 0, 0.3f), 8.f);
+				Box(Out, Lw + 16, G, MP, FVector2D(MenuW, MenuH), FLinearColor(0.97f, 0.97f, 0.95f), 8.f);
+				Box(Out, Lw + 17, G, MP, FVector2D(MenuW, 40), FLinearColor(0.08f, 0.36f, 0.9f), 8.f);
+				Text(Out, Lw + 18, G, FString::Printf(TEXT("Det. %s"), *Desk->OwnerName()), Font("Bold", 12), MP + FVector2D(14, 11), FLinearColor::White);
+				for (int32 i = 0; i < N; i++)
+				{
+					const FVector2D IP = MP + FVector2D(6, 46 + i * IH);
+					const bool bHover = Mouse2.X >= IP.X && Mouse2.Y >= IP.Y && Mouse2.X <= IP.X + MenuW - 12 && Mouse2.Y <= IP.Y + IH;
+					if (bHover) Box(Out, Lw + 17, G, IP, FVector2D(MenuW - 12, IH), FLinearColor(0.2f, 0.45f, 0.95f), 4.f);
+					Box(Out, Lw + 18, G, IP + FVector2D(6, 6), FVector2D(18, 18), AHUCaseDesk::AppColor(i), 5.f);
+					Text(Out, Lw + 18, G, AHUCaseDesk::AppName(i), Font("Regular", 11), IP + FVector2D(32, 6), bHover ? FLinearColor::White : FLinearColor(0.1f, 0.1f, 0.12f));
+					Hit(IP, FVector2D(MenuW - 12, IH), AHUCaseDesk::EHit::Menu, i);
+				}
+				const FVector2D LP = MP + FVector2D(MenuW - 112, MenuH - 34);
+				Box(Out, Lw + 17, G, LP, FVector2D(100, 26), FLinearColor(0.85f, 0.35f, 0.2f), 5.f);
+				TextCentered(Out, Lw + 18, G, TEXT("Log off"), Font("Bold", 11), LP + FVector2D(50, 13), FLinearColor::White);
+				Hit(LP, FVector2D(100, 26), AHUCaseDesk::EHit::Menu, -1);
+			}
 			Box(Out, Lw + 11, G, TBP + FVector2D(MW - 112, 0), FVector2D(112, TB), FLinearColor(0.07f, 0.55f, 0.93f), 0.f);
 			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 104, 12), FVector2D(10, 10), FLinearColor(0.95f, 0.8f, 0.3f), 5.f);
 			Box(Out, Lw + 12, G, TBP + FVector2D(MW - 90, 12), FVector2D(10, 10), FLinearColor(0.4f, 0.9f, 0.45f), 2.f);
 			TextCentered(Out, Lw + 12, G, FDateTime::Now().ToString(TEXT("%I:%M %p")), Font("Regular", 11), TBP + FVector2D(MW - 42, TB * 0.5f), FLinearColor::White);
 			const FString Keys = bPeekNow ? FString::Printf(TEXT("Looking over Det. %s's shoulder     wheel: scroll     x / start button: step back"), *Desk->OwnerName())
-				: Desk->IsOnDesktop() ? FString(TEXT("Double-click an icon to open it     green start button: log off"))
+				: Desk->IsOnDesktop() ? FString(TEXT("Double-click an icon to open it     green button: every app, and log off"))
 				: FString(TEXT("Wheel scrolls     _ minimise     x close     taskbar switches windows     Send to squad shares it"));
 			const float KW = Prompt(Out, Ly, G, Keys, Font("Regular", 12), FVector2D(0, 0), Dim, 1.f, false);
 			Prompt(Out, Lw + 13, G, Keys, Font("Regular", 12), FVector2D((L.X - KW) * 0.5f, L.Y - 40), Dim, 1.f, true);
