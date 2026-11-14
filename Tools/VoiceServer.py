@@ -18,14 +18,25 @@ snac_model = None
 csm_model = csm_proc = None
 csm_seeds = {}  # voice number -> (text, audio): the first line in that voice, fed back so the voice stays the same
 
+import shutil
+# Visual Studio's C++ compiler: on the developer's PC (VoiceServer.bat loads it), almost never on a player's
+HAS_CL = shutil.which("cl") is not None
 try:
     import triton  # noqa: F401  (lets torch compile CSM: much faster)
     HAS_TRITON = True
     import torch._inductor.config as _ind
     _ind.triton.descriptive_names = False  # short kernel file names: Windows' 260-character path limit
     _ind.use_static_cuda_launcher = False  # its launcher overflows a Windows 32-bit long
+    if not HAS_CL:
+        # Without cl, two torch steps that build C++ on the CPU throw ("Compiler: cl is not found") and take every
+        # CSM line down with them: the probe for CPU vector instructions, and the shape guards (which also come in
+        # pure Python). CSM itself runs on the GPU, where Triton compiles with its own bundled tcc.
+        import torch._dynamo.config as _dyn
+        _ind.cpp.vec_isa_ok = False
+        _dyn.enable_cpp_symbolic_shape_guards = False
 except Exception:
     HAS_TRITON = False
+csm_compiled = HAS_TRITON  # switched off for good if compiling ever fails (see csm_generate)
 
 def log(*a):
     print("[voice]", *a, flush=True)
@@ -107,10 +118,23 @@ def load_csm():
         log("CSM failed:", e)
 
 def csm_generate(conversation, text_len):
+    global csm_compiled
     import torch
     inputs = csm_proc.apply_chat_template(conversation, tokenize=True, return_dict=True).to("cuda", dtype=torch.bfloat16)
-    with torch.inference_mode():
-        audio = csm_model.generate(**inputs, output_audio=True, max_new_tokens=int(min(400, 40 + text_len * 1.4)))
+    def run():
+        with torch.inference_mode():
+            return csm_model.generate(**inputs, output_audio=True, max_new_tokens=int(min(400, 40 + text_len * 1.4)))
+    try:
+        audio = run()
+    except Exception as e:
+        if not csm_compiled: raise
+        # the compiled path failed on this PC (no compiler, an odd GPU...): run CSM uncompiled from now on - slower, but it talks
+        log("compiling CSM failed - running it uncompiled from now on:", str(e).splitlines()[-1][:200] if str(e) else type(e).__name__)
+        csm_compiled = False
+        csm_model.generation_config.disable_compile = True
+        csm_model.depth_decoder.generation_config.disable_compile = True
+        torch._dynamo.reset()
+        audio = run()
     return audio[0].float().cpu().numpy()
 
 def csm(text, voice):

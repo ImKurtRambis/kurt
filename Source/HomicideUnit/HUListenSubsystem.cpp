@@ -13,6 +13,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 #include "WebSocketsModule.h"
+#include "HUProcess.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -110,7 +111,7 @@ void UHUListenSubsystem::WarmUp()
 	{
 		if (Server.IsValid()) FPlatformProcess::CloseProc(Server);
 		const FString Args = ModelArgs() + FString::Printf(TEXT(" --port=%d --num-work-threads=1 --num-threads=2"), ServerPort);
-		Server = FPlatformProcess::CreateProc(*Exe, *Args, false, true, true, nullptr, 0, *FPaths::GetPath(Exe), nullptr);
+		Server = HUProcess::Launch(Exe, Args, FPaths::GetPath(Exe)); // ends with the game, even after a crash
 		UE_LOG(LogTemp, Log, TEXT("HomicideUnit listen: loading %s (%s)"), *ModelName(), Server.IsValid() ? TEXT("ok") : TEXT("failed to start"));
 	}
 	ServerStartedAt = FPlatformTime::Seconds();

@@ -16,6 +16,7 @@
 #include "Async/Async.h"
 #include "TimerManager.h"
 #include "Misc/App.h"
+#include "HUProcess.h"
 
 static const int32 Rate = 24000;
 // OpenAI voices, and ElevenLabs premade voices (Rachel, Adam, Antoni, Bella, Arnold, Josh, Elli, Sam)
@@ -238,9 +239,11 @@ void UHUVoiceSubsystem::Ping(bool bFirst)
 		else if (bFirst && !Self->ServerProc.IsValid())
 		{
 			const FString Bat = ProjectFile(TEXT("Tools/VoiceServer.bat"));
-			// the server quits when this process ends, even after a crash
+			// the server quits when this process ends, even after a crash (it watches HU_PARENT_PID, and the job ends it too)
 			FPlatformMisc::SetEnvironmentVar(TEXT("HU_PARENT_PID"), *FString::Printf(TEXT("%u"), FPlatformProcess::GetCurrentProcessId()));
-			Self->ServerProc = FPlatformProcess::CreateProc(TEXT("cmd.exe"), *FString::Printf(TEXT("/c \"\"%s\"\""), *Bat), false, true, true, nullptr, 0, *FPaths::GetPath(Bat), nullptr);
+			FString Shell = FPlatformMisc::GetEnvironmentVariable(TEXT("ComSpec"));
+			if (Shell.IsEmpty()) Shell = TEXT("cmd.exe");
+			Self->ServerProc = HUProcess::Launch(Shell, FString::Printf(TEXT("/c \"\"%s\"\""), *Bat), FPaths::GetPath(Bat));
 			UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: starting the local voices (%s)"), Self->ServerProc.IsValid() ? TEXT("ok") : TEXT("failed"));
 		}
 		FTimerHandle H;

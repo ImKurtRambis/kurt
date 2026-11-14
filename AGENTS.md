@@ -58,6 +58,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
    **Assets loaded by path** (`LoadObject`, `LoadClass`, soft paths) aren't found by the cooker: add their folder to `+DirectoriesToAlwaysCook` in `Config/DefaultGame.ini`, or the packaged game silently runs without them. Shipping ignores a map on the command line, so test packaged-only problems with `Package.ps1 -Config Development`.
 6. **No hover glow/spotlight in the game** (only the dark desk menu has that). In-game feedback is the crosshair ticks + the prompt.
 7. **Working alongside another AI:** pull before you start (git pull), commit small focused changes, push when a change builds. Don't reformat files you aren't changing.
+   **Helper programs** (AI servers, tools in `AI\`) start with `HUProcess::Launch`, never `FPlatformProcess::CreateProc`: it ties them to the game so they die with it, even on a crash. Players have no Visual Studio, Python or CUDA toolkit: anything in `AI\` must run with only what `Package.ps1` ships.
 8. Keep the style of the existing code: short functions, comments that say *why*, `HU` prefix, UPROPERTYs for anything Blueprint-tweakable.
 
 ## Not done yet (good next tasks)

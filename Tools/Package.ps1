@@ -1,8 +1,10 @@
-# Packages a standalone Windows build into Packaged\Windows (HomicideUnit.exe runs on a PC without Unreal installed;
-# a PC that has never installed a game may first need Redist\vc_redist.x64.exe, Microsoft's Visual C++ runtime).
+# Packages a standalone Windows build into Packaged\Windows. HomicideUnit.exe runs on a PC with nothing installed but
+# Windows 10/11 and a graphics driver: no Unreal, no Python, no Visual C++ runtime (its DLLs are copied beside every
+# program that needs them; Redist\vc_redist.x64.exe is there too, for Steam's installer settings).
 #
-# The local AI (AI\ + Tools\VoiceServer.*) is copied beside the game so suspects think and speak as they do in the
-# editor. Without it the game still plays: suspects answer with written lines. -NoAI makes that small build.
+# The local AI (AI\ + Tools\VoiceServer.*) is copied beside the game; the game starts it and ends it (HUProcess), so
+# suspects think, listen and speak with nothing for the player to set up. The voices need an NVIDIA card. Without
+# the AI the game still plays: suspects answer with written lines. -NoAI makes that small build.
 #
 # Usage: powershell -ExecutionPolicy Bypass -File Tools\Package.ps1 [-Config Development] [-NoAI]
 #   Shipping (default) has no console and writes no log; Development keeps both, for chasing a packaged-only bug.
@@ -37,7 +39,21 @@ if ($NoAI) {
     Write-Warning "AI\llama isn't installed here, so the build has no local AI (suspects use written lines)."
 }
 
-# UE 5.8 no longer stages its prerequisites installer, so ship Microsoft's Visual C++ runtime installer beside the game
+# Microsoft's Visual C++ runtime, app-local (Visual Studio's redistribution terms allow it): the game, llama-server and
+# Python's packages (torch, numpy...) all load it, and a PC that has never installed a game may not have it.
+# Windows looks in a program's own folder first, so these copies are what they use.
+$Vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath 2>$null
+$Crt = if ($Vs) { Get-ChildItem "$Vs\VC\Redist\MSVC" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d+(\.\d+)+$' } | Sort-Object { [version]$_.Name } | Select-Object -Last 1 }
+if ($Crt) {
+    $Dlls = @(Get-ChildItem "$($Crt.FullName)\x64\Microsoft.VC*.CRT\*.dll") + @(Get-ChildItem "$($Crt.FullName)\x64\Microsoft.VC*.OpenMP\vcomp140.dll" -ErrorAction SilentlyContinue)
+    $Dirs = @("$Proj\Binaries\Win64") + @(if (-not $NoAI) { "$Proj\AI\llama", "$Proj\AI\python" })
+    foreach ($d in $Dirs) { if (Test-Path $d) { Copy-Item $Dlls.FullName $d -Force } }
+    "Visual C++ runtime $($Crt.Name): $($Dlls.Count) DLLs beside the game$(if (-not $NoAI) { ', llama-server and Python' })"
+} else {
+    Write-Warning "Visual Studio's redistributable folder wasn't found: a PC without the Visual C++ runtime will need Redist\vc_redist.x64.exe first."
+}
+
+# UE 5.8 no longer stages its prerequisites installer; Microsoft's Visual C++ runtime installer goes beside the game too
 New-Item -ItemType Directory -Force "$Game\Redist" | Out-Null
 Copy-Item "$Engine\Engine\Extras\Redist\en-us\vc_redist.x64.exe" "$Game\Redist" -Force
 

@@ -11,6 +11,7 @@
 #include "HAL/PlatformFileManager.h"
 #include "Engine/GameInstance.h"
 #include "TimerManager.h"
+#include "HUProcess.h"
 
 FString UHUBrainSubsystem::Root() const { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI")); }
 
@@ -35,7 +36,7 @@ void UHUBrainSubsystem::WarmUp()
 	StartedAt = FPlatformTime::Seconds();
 	const FString Exe = Root() / TEXT("llama/llama-server.exe");
 	const FString Args = FString::Printf(TEXT("-m \"%s\" --host 127.0.0.1 --port %d -c 4096 -ngl 99"), *(Root() / TEXT("models/suspect.gguf")), Port);
-	Server = FPlatformProcess::CreateProc(*Exe, *Args, false, true, true, nullptr, 0, *(Root() / TEXT("llama")), nullptr);
+	Server = HUProcess::Launch(Exe, Args, Root() / TEXT("llama")); // ends with the game, even after a crash
 	UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: starting local model server (%s)"), Server.IsValid() ? TEXT("ok") : TEXT("failed"));
 	Ping();
 }
