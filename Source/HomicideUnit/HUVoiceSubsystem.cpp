@@ -183,7 +183,8 @@ static bool WavToPcm16(const TArray<uint8>& Wav, TArray<uint8>& Out)
 }
 
 // ---------- the local voices (free, offline, no keys): Tools\VoiceServer.py on port 8005 ----------
-//   Orpheus 3B - the 911 call and tape audio (phone lines); Sesame CSM-1B - suspects and everyone else.
+//   On an NVIDIA card with 12 GB: Orpheus 3B - the 911 call and tape audio (phone lines); Sesame CSM-1B - suspects
+//   and everyone else. On any other PC: Supertonic, on the processor, for both. The server picks (see its top).
 static FString ProjectFile(const TCHAR* Rel) { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / Rel); }
 
 bool UHUVoiceSubsystem::HasLocalVoice() const
@@ -191,7 +192,8 @@ bool UHUVoiceSubsystem::HasLocalVoice() const
 	if (FParse::Param(FCommandLine::Get(), TEXT("HUNoVoice"))) return false; // measuring the game without the voices
 	IPlatformFile& F = FPlatformFileManager::Get().GetPlatformFile();
 	return F.FileExists(*ProjectFile(TEXT("AI/python/python.exe"))) && F.FileExists(*ProjectFile(TEXT("Tools/VoiceServer.bat")))
-		&& (F.FileExists(*ProjectFile(TEXT("AI/orpheus/orpheus-3b-q4_k_m.gguf"))) || F.FileExists(*ProjectFile(TEXT("AI/csm/model/model.safetensors"))));
+		&& (F.FileExists(*ProjectFile(TEXT("AI/orpheus/orpheus-3b-q4_k_m.gguf"))) || F.FileExists(*ProjectFile(TEXT("AI/csm/model/model.safetensors")))
+			|| F.FileExists(*ProjectFile(TEXT("AI/voice/supertonic/tts.json"))));
 }
 
 void UHUVoiceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -199,6 +201,51 @@ void UHUVoiceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	// load the voices as the game starts, so they're warm by the first 911 call
 	if (!IsRunningCommandlet() && !FApp::IsUnattended()) WarmUp();
+#if !UE_BUILD_SHIPPING
+	// -HUVoiceTest: load the local voices, say a 911 call and a few suspect lines the way the game does - twice over,
+	// as the first pass pays any one-off costs - log what each line took, and quit. Add -HUVoices=cpu for the small voice.
+	if (FParse::Param(FCommandLine::Get(), TEXT("HUVoiceTest")))
+	{
+		WarmUp();
+		struct FLine { const TCHAR* Text; int32 Voice; bool bPhone; };
+		static const FLine Lines[] = {
+			{ TEXT("Nine one one, what is the address of your emergency?"), 0, true },
+			{ TEXT("There's a man on the floor, he's not moving, please, you have to send someone right now!"), 3, true },
+			{ TEXT("I was by the coat check most of the night."), 1, false },
+			{ TEXT("Fine. Yes. But that's got nothing to do with this."), 2, false },
+			{ TEXT("Look, I've told you everything I know. I never went near the office."), 3, false },
+			{ TEXT("I don't know what you want me to say. I heard a door slam around ten, and that's all I heard."), 5, false },
+		};
+		TSharedRef<int32> At = MakeShared<int32>(0);
+		TSharedRef<bool> bBusy = MakeShared<bool>(false);
+		TSharedRef<FTimerHandle> Tick = MakeShared<FTimerHandle>();
+		TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
+		GetGameInstance()->GetTimerManager().SetTimer(*Tick, FTimerDelegate::CreateLambda([Self, At, bBusy, Tick]()
+		{
+			if (!Self.IsValid() || *bBusy) return;
+			const bool bGaveUp = !Self->bLoaded && !Self->bStarting, bDone = *At >= 2 * (int32)UE_ARRAY_COUNT(Lines);
+			if (!Self->bLoaded && !bGaveUp) return; // still loading
+			if (bGaveUp || bDone || !Self->IsLocalVoiceReady())
+			{
+				if (!bDone) UE_LOG(LogTemp, Error, TEXT("HUVoiceTest: no local voice came up on this PC"));
+				Self->GetGameInstance()->GetTimerManager().ClearTimer(*Tick);
+				FPlatformMisc::RequestExit(false);
+				return;
+			}
+			const FLine& L = Lines[*At % UE_ARRAY_COUNT(Lines)];
+			const int32 Pass = *At / UE_ARRAY_COUNT(Lines) + 1;
+			(*At)++;
+			*bBusy = true;
+			const double Asked = FPlatformTime::Seconds();
+			Self->Synthesize(L.Text, L.Voice, FString(), L.bPhone, FHUVoiceReady::CreateLambda([bBusy, Asked, Pass, &L](USoundWave* S, float Seconds)
+			{
+				UE_LOG(LogTemp, Log, TEXT("HUVoiceTest: pass %d, %s line, voice %d: %.1f s of speech in %.2f s%s"), Pass, L.bPhone ? TEXT("phone") : TEXT("suspect"), L.Voice,
+					Seconds, FPlatformTime::Seconds() - Asked, S ? TEXT("") : TEXT("  - FAILED"));
+				*bBusy = false;
+			}));
+		}), 0.25f, true);
+	}
+#endif
 }
 
 void UHUVoiceSubsystem::Deinitialize()
@@ -209,7 +256,7 @@ void UHUVoiceSubsystem::Deinitialize()
 
 void UHUVoiceSubsystem::WarmUp()
 {
-	if (bStarting || (bOrpheusReady && bCsmReady) || !HasLocalVoice()) return;
+	if (bStarting || bLoaded || !HasLocalVoice()) return;
 	bStarting = true; StartedAt = FPlatformTime::Seconds();
 	Ping(true);
 }
@@ -229,16 +276,30 @@ void UHUVoiceSubsystem::Ping(bool bFirst)
 		TSharedPtr<FJsonObject> J;
 		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Resp->GetContentAsString()), J) && J.IsValid())
 		{
+			// "orpheus": phone lines can be spoken; "csm": everyone else can. Which voice does it is the server's
+			// choice ("names"): the big ones on an NVIDIA card, the small one on the processor anywhere else.
 			const bool bWasO = Self->bOrpheusReady, bWasC = Self->bCsmReady;
 			Self->bOrpheusReady = J->GetBoolField(TEXT("orpheus"));
 			Self->bCsmReady = J->GetBoolField(TEXT("csm"));
-			if (Self->bOrpheusReady && !bWasO) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: Orpheus ready"));
-			if (Self->bCsmReady && !bWasC) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: CSM ready"));
-			if (Self->bOrpheusReady && Self->bCsmReady) { Self->bStarting = false; return; }
+			FString Phone = TEXT("Orpheus"), People = TEXT("CSM");
+			if (const TSharedPtr<FJsonObject>* N; J->TryGetObjectField(TEXT("names"), N)) { (*N)->TryGetStringField(TEXT("orpheus"), Phone); (*N)->TryGetStringField(TEXT("csm"), People); }
+			if (Self->bOrpheusReady && !bWasO) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: phone lines ready (%s)"), *Phone);
+			if (Self->bCsmReady && !bWasC) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: suspects' voices ready (%s)"), *People);
+			bool bLoading = !(Self->bOrpheusReady && Self->bCsmReady); // (a server from before it said so itself)
+			J->TryGetBoolField(TEXT("loading"), bLoading);
+			if (!bLoading)
+			{
+				Self->bStarting = false; Self->bLoaded = true;
+				if (!Self->bOrpheusReady && !Self->bCsmReady) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: no local voice runs on this PC - lines show as captions"));
+				return;
+			}
 		}
 		else if (bFirst && !Self->ServerProc.IsValid())
 		{
 			const FString Bat = ProjectFile(TEXT("Tools/VoiceServer.bat"));
+			// -HUVoices=cuda|cpu picks the voices instead of the server (testing, or a launch option for a player in trouble)
+			FString Force;
+			if (FParse::Value(FCommandLine::Get(), TEXT("HUVoices="), Force)) FPlatformMisc::SetEnvironmentVar(TEXT("HU_VOICES"), *Force);
 			// the server quits when this process ends, even after a crash (it watches HU_PARENT_PID, and the job ends it too)
 			FPlatformMisc::SetEnvironmentVar(TEXT("HU_PARENT_PID"), *FString::Printf(TEXT("%u"), FPlatformProcess::GetCurrentProcessId()));
 			FString Shell = FPlatformMisc::GetEnvironmentVariable(TEXT("ComSpec"));
@@ -286,6 +347,9 @@ void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool b
 	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Req->SetContentAsString(Json);
 	Req->SetTimeout(bBackground ? 600.f : 120.f);
+	// the sound arrives all at once at the end; Unreal otherwise gives up after 30 s without a byte, which lost the
+	// first CSM line of every session (it compiles for longer than that)
+	Req->SetActivityTimeout(bBackground ? 600.f : 120.f);
 	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
 	Req->OnProcessRequestComplete().BindLambda([Self, Done, bPhone](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{

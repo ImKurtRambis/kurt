@@ -2,8 +2,11 @@
 //   OpenAI      - gpt-4o-mini-tts, which takes an acting direction ("panicked, breathless...")
 //   ElevenLabs  - eleven_v3, the most expressive model available: emotion tags, a voice per speaker  (recommended)
 // LOCAL (free, offline, no keys - preferred when installed): Tools\VoiceServer.py on port 8005, started as the game starts.
-//   Orpheus 3B speaks phone lines (the 911 call, tape audio); Sesame CSM-1B speaks suspects and everyone else.
-//   Models in AI\orpheus, AI\snac, AI\csm; its Python in AI\python (see AI\README.txt). Needs a strong GPU.
+//   On an NVIDIA card with 12 GB or more: Orpheus 3B speaks phone lines (the 911 call, tape audio), Sesame CSM-1B
+//   speaks suspects and everyone else (models in AI\orpheus, AI\snac, AI\csm).
+//   On any other PC (AMD, Intel, a smaller NVIDIA card): Supertonic speaks them all, on the processor
+//   (AI\voice\supertonic, run by sherpa-onnx). The server picks by itself; -HUVoices=cuda|cpu forces one.
+//   Its Python is in AI\python (see AI\README.txt).
 // Without a local voice or a key (or if a request fails) the line shows as a caption only - no robotic voice.
 // Audio comes back as raw 24 kHz PCM and plays as a procedural sound; "phone" lines go through a telephone
 // band-pass so a 911 call sounds like a recording.
@@ -49,5 +52,6 @@ private:
 	class USoundWave* MakeSound(TArray<uint8>& Pcm16, bool bPhone, float& OutSeconds);
 	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries);
 	FProcHandle ServerProc; bool bStarting = false, bOrpheusReady = false, bCsmReady = false; double StartedAt = 0.0;
+	bool bLoaded = false; // the server has finished loading whatever this PC can run
 	void Ping(bool bFirst);
 };
