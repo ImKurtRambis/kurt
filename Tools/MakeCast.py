@@ -1,4 +1,4 @@
-# Builds the cast (the suspects, and the detective every player is, the uniforms, the Captain and the victims): each MetaHuman starts from one of Epic's preset people (face, body, skin), gets hair and
+# Builds the cast (the suspects, and the uniforms, the Captain and the victims): each MetaHuman starts from one of Epic's preset people (face, body, skin), gets hair and
 # clothing in noir colours, is rigged and textured by Epic's cloud, then built to /Game/MetaHumans/MH_<Name>.
 # Must run in the FULL editor (texture baking needs rendered frames):
 #   UnrealEditor.exe HomicideUnit.uproject -ExecutePythonScript="Tools/MakeCast.py" -unattended
@@ -26,8 +26,6 @@ EXTRAS = [
     ("Mateo",   "WI_Hair_S_BuzzCut",        (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
     ("Kelvin",  "WI_Hair_S_CoilBuzzCut",    (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
     ("Zuri",    "WI_Hair_S_PulledBack",     (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
-    # the detective every player is (HUPeople::DetectiveFace): tan shirt, charcoal trousers
-    ("Mikel",   "WI_Hair_S_SideSweptFringe", (0.55, 0.45, 0.30), (0.07, 0.07, 0.08)),
     # the Captain: white shirt
     ("Orlando", "WI_Hair_S_SlickBack",      (0.80, 0.80, 0.77), (0.03, 0.03, 0.04)),
     # the victims

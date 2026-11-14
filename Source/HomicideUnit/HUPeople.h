@@ -27,7 +27,7 @@ namespace HUPeople
 	// MH_<Who> lying face up along Parent's +X (head that way), feet at RelFeet: it falls limp, settles, and stays put.
 	HOMICIDEUNIT_API AActor* Lie(AActor* Owner, USceneComponent* Parent, const FString& Who, FVector RelFeet, float Scale = 1.f);
 	// THE DETECTIVE: one model, the same for every player on every PC - nothing about it comes from a save.
-	// Its own face (one nobody else at a case wears) when Tools/MakeCast.py has built it, otherwise Bruce from the cast.
+	// Bruce, from the cast, until the detective is given a face of his own (see DetectiveFace in HUPeople.cpp).
 	HOMICIDEUNIT_API FString DetectiveFace();
 	// Stands the detective up on Parent (Previous: the one already there, kept). The desk's figurine is the same model
 	// at Scale 0.15.

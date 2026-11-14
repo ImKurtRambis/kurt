@@ -4,7 +4,7 @@
 
 namespace
 {
-	// the one detective's arm: the tan sleeve and the skin of the detective model (Tools/MakeCast.py), 12 cm through
+	// the one detective's arm in blocks: a tan sleeve and his skin, 12 cm through
 	const FLinearColor DetectiveSkin(0.72f, 0.52f, 0.38f), DetectiveSleeve(0.55f, 0.45f, 0.3f);
 	const float SleeveCm = 12.f;
 }

@@ -162,9 +162,10 @@ AActor* HUPeople::Lie(AActor* Owner, USceneComponent* Parent, const FString& Who
 	return Look;
 }
 
-// Mikel: one of Epic's preset people that no suspect, officer, Captain or victim is cast from (Tools/MakeCast.py builds
-// him in the detective's tan shirt). Where he isn't built, Bruce - the cast's face the detective had before.
-FString HUPeople::DetectiveFace() { return AvailableFace(TEXT("Mikel"), CastFace(1)); }
+// Bruce, from the cast, on every PC (a squad must agree on the face, so it never depends on what one PC has built).
+// He is also one of the four men a suspect can be cast as. To give the detective a face nobody else at a case wears:
+// add an unused Epic preset to EXTRAS in Tools/MakeCast.py, build the cast, and name that preset here.
+FString HUPeople::DetectiveFace() { return CastFace(1); }
 
 // Every player is this one model at its own size: no face, build or height of anyone's own.
 AActor* HUPeople::Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, bool bOwnerNoSee, float Scale)
