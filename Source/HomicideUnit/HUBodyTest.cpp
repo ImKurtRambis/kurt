@@ -55,6 +55,10 @@ namespace
 			GTest.Walker = HUPeople::Stand(Room, Room->GetRootComponent(), HUPeople::DetectiveFace(), FVector(1100, 0, 0), 180.f);
 			GTest.Sitter = HUPeople::Stand(Room, Room->GetRootComponent(), HUPeople::CastFace(5), FVector(1725, 451, 0), -90.f);
 			if (UHUPersonAnimation* A = HUPeople::AnimOf(GTest.Sitter.Get())) { A->bSeated = true; A->bTable = true; A->SeatHeight = 47.f; }
+			// the camera goes only where the test puts it: the window takes the keyboard and mouse while it's up, and
+			// someone typing or moving the mouse at the PC would walk and turn the view between shots
+			PC->SetIgnoreMoveInput(true);
+			PC->SetIgnoreLookInput(true);
 			GTest.Clock = 0.f;
 			UE_LOG(LogTemp, Display, TEXT("HUBodyTest: walker %s, sitter %s"), GTest.Walker.IsValid() ? TEXT("up") : TEXT("MISSING"), GTest.Sitter.IsValid() ? TEXT("up") : TEXT("MISSING"));
 			return true;
