@@ -25,6 +25,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 - **Close the game/editor before building** (a running `UnrealEditor.exe` locks the DLL). `Build.ps1` does this for you.
 - A build is done when it prints `Result: Succeeded`. Fix every `error C####` it prints.
 - After C++ changes, always build, then `TestLevel.ps1` the levels you touched.
+- **Version:** every build is stamped from git before it compiles (`Tools\StampVersion.ps1`, a pre-build step in `Source\*.Target.cs`, writes the git-ignored `HUBuildInfo.h`): "build N (hash)", N = commits on the branch, "+local" if uncommitted changes went in. It's in the menu's corner, the log's first lines, crash reports (game data `HUBuild`) and `Packaged\Windows\Version.txt` (`HUVersion`).
 - After any change to the suspects' model, prompt (`UHUBrainSubsystem`) or interrogation rules, run `Tools\InterviewBench.ps1` and compare with the baseline; don't ship a drop in a score you can't explain.
 
 ## The game loop and the levels (`Content/Maps`)

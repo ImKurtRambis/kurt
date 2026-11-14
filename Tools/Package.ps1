@@ -15,6 +15,8 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path $PSScriptRoot -Parent
 $Engine = "C:\Program Files\Epic Games\UE_5.8"
 $Out = Join-Path $Root "Packaged"
+# which build this is (the build stamps it too; this is for the folder and the summary)
+$Version = & "$PSScriptRoot\StampVersion.ps1"
 
 & "$Engine\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun "-project=$Root\HomicideUnit.uproject" -platform=Win64 `
     "-clientconfig=$Config" -build -cook -stage -pak -iostore -compressed -prereqs -package -archive `
@@ -69,5 +71,8 @@ Copy-Item "$Engine\Engine\Extras\Redist\en-us\vc_redist.x64.exe" "$Game\Redist" 
 # never ship anyone's paid-voice key
 if (Test-Path "$Proj\ElevenLabsKey.txt") { Remove-Item "$Proj\ElevenLabsKey.txt" -Force }
 
+# testers quote this; it's also in the corner of the menu and in crash reports
+"Homicide Unit $Version, $Config, packaged $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Set-Content -Encoding UTF8 "$Game\Version.txt"
+
 $GB = (Get-ChildItem $Game -Recurse -File | Measure-Object Length -Sum).Sum / 1GB
-"Packaged $Config build: $Game\HomicideUnit.exe ({0:N1} GB)" -f $GB
+"Packaged $Config $Version`: $Game\HomicideUnit.exe ({0:N1} GB)" -f $GB

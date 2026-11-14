@@ -33,3 +33,6 @@ AI/voices/
 Content/MetaHumans/
 Content/Characters/MetaHumans/
 Tools/Sounds/
+
+# the build's version, written by Tools/StampVersion.ps1 before every build
+Source/HomicideUnit/HUBuildInfo.h

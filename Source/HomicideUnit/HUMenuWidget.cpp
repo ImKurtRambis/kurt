@@ -1,6 +1,7 @@
 #include "HUMenuWidget.h"
 #include "HUDeskMenu.h"
 #include "HUDraw.h"
+#include "HUVersion.h"
 #include "Engine/World.h"
 
 using namespace HUDraw;
@@ -21,6 +22,12 @@ int32 UHUMenuWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, con
 	Text(Out, Ly + 1, G, TEXT("HOMICIDE UNIT"), Heading(30), FVector2D(44, 34), Ink);
 	Box(Out, Ly + 1, G, FVector2D(46, 84), FVector2D(60, 3), Gold, 1.5f);
 	Text(Out, Ly + 1, G, TEXT("METRO PD  ·  NIGHT SHIFT"), Font("Bold", 10, 220), FVector2D(118, 78), Gold);
+	// which build this is, small in the corner: what a tester quotes in a bug report (HUVersion)
+	{
+		const FString Build = HUVersion::Text(); // as written in the log and crash reports (the hash stays lower-case)
+		const FSlateFontInfo VF = Font("Regular", 10, 60);
+		Text(Out, Ly + 1, G, Build, VF, FVector2D(L.X - Measure(Build, VF).X - 22.f, L.Y - 26.f), Dim);
+	}
 
 	if (Owner->Panel == EHUMenuPanel::None)
 	{
