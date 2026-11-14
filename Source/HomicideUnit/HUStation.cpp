@@ -19,6 +19,7 @@
 #include "HUSquadRoom.h"
 #include "HUBuild.h"
 #include "HUProps.h"
+#include "HUUsables.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
@@ -233,7 +234,7 @@ void AHUSquadRoom::BuildStation()
 	// ======== THE LOBBY: the public's side of the front desk ========
 	{
 		// the front desk, an L along the north side, a glass screen over it
-		B(FVector(-2000, 420, 55), FVector(500, 70, 110), Wood, true, SF::Walnut);
+		HUUsables::Mark(B(FVector(-2000, 420, 55), FVector(500, 70, 110), Wood, true, SF::Walnut), EHUUse::Drawer, FString(), 90.f, 0.3f); // drawers on the sergeant's side
 		B(FVector(-1785, 520, 55), FVector(70, 130, 110), Wood, true, SF::Walnut);
 		B(FVector(-2000, 420, 112), FVector(520, 80, 5), Wood * 1.3f, true, SF::Walnut);
 		B(FVector(-2000, 400, 170), FVector(500, 2, 110), Glass * FLinearColor(1, 1, 1, 0.3f), false, SF::Glass);
@@ -276,7 +277,8 @@ void AHUSquadRoom::BuildStation()
 		Table(FVector(-500, 500, 0), FVector(160, 100, 76), FLinearColor(0.7f, 0.68f, 0.62f), SF::PaintedMetal); // a laminate break-room table
 		Chair(FVector(-560, 420, 0), 0, -22); Chair(FVector(-440, 420, 0), 0, -22); Chair(FVector(-560, 580, 0), 0, 22); Chair(FVector(-440, 580, 0), 0, 22);
 		// the counter along the north wall: the coffee, a microwave, the sink
-		B(FVector(-500, 860, 45), FVector(600, 60, 90), FLinearColor(0.55f, 0.5f, 0.42f), true, SF::Walnut);
+		HUUsables::Mark(B(FVector(-500, 860, 45), FVector(600, 60, 90), FLinearColor(0.55f, 0.5f, 0.42f), true, SF::Walnut), EHUUse::Drawer,
+			TEXT("Sugar packets, plastic spoons, a takeout menu with three orders circled, and somebody's emergency cigarettes."), -90.f, -0.3f);
 		B(FVector(-500, 860, 92), FVector(610, 66, 4), FLinearColor(0.75f, 0.72f, 0.65f), true, SF::Tile);
 		CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-650, 855, 108), FVector(16, 16, 26), Dark));
 		CoffeeParts.Add(Block(this, R, Blocks, EShape::Cylinder, FVector(-615, 855, 99), FVector(9, 9, 10), FLinearColor(0.85f, 0.85f, 0.8f)));
@@ -307,11 +309,16 @@ void AHUSquadRoom::BuildStation()
 			Cyl(FVector(-200, Y, 110), FVector(3, 3, 220), FLinearColor(0.75f, 0.6f, 0.2f), false);
 			B(FVector(-200, Y + 0, 170), FVector(2, 30, 50), Y < 1540.f ? FLinearColor(0.1f, 0.15f, 0.45f) : FLinearColor(0.6f, 0.1f, 0.1f), false);
 		}
-		B(FVector(-830, 1250, 110), FVector(30, 300, 220), Wood, true, SF::Walnut);
+		HUUsables::Mark(B(FVector(-830, 1250, 110), FVector(30, 300, 220), Wood, true, SF::Walnut), EHUUse::Read,
+			TEXT("Procedure manuals, a city directory from '97, the penal code - and behind it, a bottle of rye with two fingers left."));
 		for (int32 L = 0; L < 4; L++) B(FVector(-812, 1250, 40 + L * 50), FVector(8, 280, 30), FLinearColor(0.4f, 0.1f, 0.08f) * (0.7f + 0.1f * L), false);
-		B(FVector(-500, 960, 40), FVector(200, 70, 40), FLinearColor(0.3f, 0.18f, 0.1f), true, SF::Leather);  // a leather couch
+		HUUsables::Mark(B(FVector(-500, 960, 40), FVector(200, 70, 40), FLinearColor(0.3f, 0.18f, 0.1f), true, SF::Leather), EHUUse::Bench, FString(), 999.f, 1.f);  // a leather couch
 		B(FVector(-500, 925, 70), FVector(200, 12, 50), FLinearColor(0.3f, 0.18f, 0.1f), true, SF::Leather);
-		for (int32 i = 0; i < 3; i++) B(FVector(-250 - i * 120, 1592, 180), FVector(80, 2, 60), FLinearColor(0.72f, 0.6f, 0.25f), false); // the plaques
+		for (int32 i = 0; i < 3; i++) // the plaques
+			HUUsables::Mark(B(FVector(-250 - i * 120, 1592, 180), FVector(80, 2, 60), FLinearColor(0.72f, 0.6f, 0.25f), false), EHUUse::Read,
+				i == 0 ? TEXT("TWENTY YEARS OF SERVICE - the Captain's name, engraved. Somebody polished it once.")
+				: i == 1 ? TEXT("DEPARTMENT COMMENDATION - VALOR. The date's from before you joined.")
+				: TEXT("MOST CASES CLEARED, 1994. Somebody's taped a sticky note to it: 'and since?'"), -90.f);
 	}
 
 	// ======== EVIDENCE: the cage counter, the shelving ========
@@ -412,6 +419,25 @@ void AHUSquadRoom::BuildStation()
 	for (int32 i = 0; i < 6; i++) B(FVector(-1070 + i * 28, 140, 130 + (i % 2) * 40), FVector(22, 1, 28), Paper, false);
 	Cyl(FVector(1400, -138, 60), FVector(16, 16, 50), FLinearColor(0.75f, 0.08f, 0.05f), false);  // a fire extinguisher
 	Cyl(FVector(130, 1400, 60), FVector(16, 16, 50), FLinearColor(0.75f, 0.08f, 0.05f), false);
+
+	// ---- light switches: one inside each room by its door (HUUsables: that room's lights off / on) ----
+	{
+		const float In = T / 2 + 1.7f, Z = 120.f;
+		auto Switch = [&](FVector P, float Yaw, float X0, float X1, float Y0, float Y1) { HUUsables::AddSwitch(this, R, Blocks, P, Yaw, FBox2D(FVector2D(X0, Y0), FVector2D(X1, Y1))); };
+		Switch(FVector(-1680, 700 - In, Z), -90, -2400, -1600, -700, 700);         // the lobby
+		Switch(FVector(-1225 + 85, 150 + In, Z), 90, -1600, -850, 150, 1600);     // the locker room
+		Switch(FVector(-500 + 85, 150 + In, Z), 90, -850, -150, 150, 900);        // the break room
+		Switch(FVector(-150 - In, 1250 - 85, Z), 180, -850, -150, 900, 1600);     // the Captain's office
+		Switch(FVector(1125 + 85, 150 + In, Z), 90, 750, 1500, 150, 900);         // evidence
+		Switch(FVector(1725 + 85, 150 + In, Z), 90, 1500, 1950, 150, 600);        // interview 1
+		Switch(FVector(2175 + 85, 150 + In, Z), 90, 1950, 2400, 150, 600);        // interview 2
+		Switch(FVector(-1100 + 150, -150 - In, Z), -90, -1600, 0, -1600, -150);   // the bullpen
+		Switch(FVector(450 + 115, -150 - In, Z), -90, 0, 900, -900, -150);        // booking
+		Switch(FVector(450 + 100, -900 + In, Z), 90, 0, 900, -1600, -900);        // holding, from booking's side
+		Switch(FVector(1650 + 100, -150 - In, Z), -90, 900, 2400, -1600, -150);   // records
+		for (int32 Off = 0; Off < 4; Off++)                                       // the personal offices
+			Switch(FVector(OfficeX0 + In, OfficeY0 + 90.f + OfficeW * Off + 80.f, Z), 0, OfficeX0, OfficeX1, OfficeY0 + OfficeW * Off, OfficeY0 + OfficeW * (Off + 1));
+	}
 
 	// ---- the doors you use ----
 	// back to ROLL CALL for the next shift: double doors at the end of the main corridor

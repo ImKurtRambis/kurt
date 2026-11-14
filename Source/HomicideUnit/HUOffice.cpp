@@ -2,6 +2,7 @@
 #include "HUBuild.h"
 #include "HUPlayerState.h"
 #include "HUInteractComponent.h"
+#include "HUUsables.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/GameStateBase.h"
@@ -229,7 +230,7 @@ void AHUOffice::Dress(const FHUOfficeLook& L)
 	}
 	auto Has = [&](int32 Bit) { return (L.Items & (1 << Bit)) != 0; };
 	if (Has(0)) { Cyl(FVector(35, OD - 30, 22), FVector(34, 34, 44), FLinearColor(0.35f, 0.22f, 0.14f)); Ball(FVector(35, OD - 30, 85), FVector(60, 60, 80), FLinearColor(0.12f, 0.32f, 0.12f)); }
-	if (Has(1)) { Cyl(FVector(OW - 40, 35, 80), FVector(4, 4, 160), Brass, false); Cyl(FVector(OW - 40, 35, 165), FVector(36, 36, 26), FLinearColor(0.9f, 0.85f, 0.7f), false); Cyl(FVector(OW - 40, 35, 2), FVector(30, 30, 4), Brass); }
+	if (Has(1)) { Cyl(FVector(OW - 40, 35, 80), FVector(4, 4, 160), Brass, false); HUUsables::Mark(Cyl(FVector(OW - 40, 35, 165), FVector(36, 36, 26), FLinearColor(0.9f, 0.85f, 0.7f), false), EHUUse::Lamp, FString(), 180.f); Cyl(FVector(OW - 40, 35, 2), FVector(30, 30, 4), Brass); }
 	if (Has(2)) // a bookshelf on the back wall
 	{
 		B(FVector(OW - 30, 300, 100), FVector(40, 100, 200), Wood);
@@ -238,7 +239,7 @@ void AHUOffice::Dress(const FHUOfficeLook& L)
 	}
 	if (Has(3)) // a couch along the north wall, by the door
 	{
-		B(FVector(160, OD - 45, 25), FVector(180, 70, 40), FLinearColor(0.3f, 0.16f, 0.1f));
+		HUUsables::Mark(B(FVector(160, OD - 45, 25), FVector(180, 70, 40), FLinearColor(0.3f, 0.16f, 0.1f)), EHUUse::Bench, FString(), 999.f, 1.f); // sit (facing the way you look)
 		B(FVector(160, OD - 75, 60), FVector(180, 14, 50), FLinearColor(0.3f, 0.16f, 0.1f));
 		for (float S : { -1.f, 1.f }) B(FVector(160 + S * 92, OD - 45, 40), FVector(16, 70, 40), FLinearColor(0.26f, 0.14f, 0.08f));
 	}
@@ -252,10 +253,10 @@ void AHUOffice::Dress(const FHUOfficeLook& L)
 	{
 		Cyl(FVector(330, 245, 79), FVector(14, 14, 3), Brass, false);
 		Cyl(FVector(330, 245, 90), FVector(2, 2, 22), Brass, false);
-		Block(this, Root, Decor, EShape::Cylinder, FVector(330, 245, 101), FVector(10, 26, 8), FLinearColor(0.05f, 0.35f, 0.15f), FRotator(0, 90, 90), false);
+		HUUsables::Mark(Block(this, Root, Decor, EShape::Cylinder, FVector(330, 245, 101), FVector(10, 26, 8), FLinearColor(0.05f, 0.35f, 0.15f), FRotator(0, 90, 90), false), EHUUse::Lamp, FString(), 90.f); // (its front: the chair's side)
 	}
 	if (Has(7)) { Cyl(FVector(40, 30, 90), FVector(4, 4, 180), Wood); for (float A : { 0.f, 120.f, 240.f }) B(FVector(40, 30, 175) + FRotator(0, A, 0).Vector() * 12, FVector(16, 3, 3), Wood, false); }
-	if (Has(8)) { B(FVector(OW - 35, 60, 66), FVector(50, 60, 132), Steel); for (int32 d = 0; d < 4; d++) B(FVector(OW - 61, 60, 20 + d * 32), FVector(1, 24, 3), FLinearColor(0.08f, 0.08f, 0.09f), false); }
+	if (Has(8)) { HUUsables::Mark(B(FVector(OW - 35, 60, 66), FVector(50, 60, 132), Steel), EHUUse::Files, FString(), 180.f); /* drawers on the room side */ for (int32 d = 0; d < 4; d++) B(FVector(OW - 61, 60, 20 + d * 32), FVector(1, 24, 3), FLinearColor(0.08f, 0.08f, 0.09f), false); }
 	if (Has(9)) // a fish tank on a stand by the couch
 	{
 		B(FVector(290, OD - 40, 40), FVector(90, 45, 80), Wood);

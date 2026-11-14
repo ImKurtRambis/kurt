@@ -1,4 +1,5 @@
 #include "HUProps.h"
+#include "HUUsables.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Misc/CommandLine.h"
@@ -47,6 +48,7 @@ namespace HUBuild
 		if (!bCollide) C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		C->RegisterComponent();
 		Out.Add(C);
+		HUUsables::MarkProp(C, Name); // a desk has drawers, a phone a dial tone (HUUsables.h)
 		return C;
 	}
 }

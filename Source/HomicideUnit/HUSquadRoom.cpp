@@ -3,6 +3,7 @@
 #include "HUProgress.h"
 #include "HUBuild.h"
 #include "HUProps.h"
+#include "HUUsables.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
 #include "HUPlayerState.h"
@@ -141,7 +142,10 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 24, 260, 126), FVector(2, 14, 3), FLinearColor(0.05f, 0.05f, 0.05f)));
 		ClockParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-RX + 8, 305, 140), FVector(6, 30, 60), FLinearColor(0.35f, 0.25f, 0.12f))); // the card rack
 		// the case-selection table: a laptop (where) and a case folder (how hard) - the host's picks for the shift
-		Block(this, R, Blocks, EShape::Cube, FVector(-420, -330, 72), FVector(90, 150, 6), Desk, Z0, true, EHUSurface::Walnut);
+		HUUsables::Mark(Block(this, R, Blocks, EShape::Cube, FVector(-420, -330, 72), FVector(90, 150, 6), Desk, Z0, true, EHUSurface::Walnut), EHUUse::Drawer,
+			TEXT("Blank roll-call sheets, a box of chalk and a rubber stamp that says VOID.")); // a shallow drawer under the top
+		// a light switch by the doors: the whole room (HUUsables)
+		HUUsables::AddSwitch(this, R, Blocks, FVector(-RX + 1.2f, 140, 120), 0, FBox2D(FVector2D(-RX, -RY), FVector2D(RX, RY)));
 		for (float DX : { -40.f, 40.f }) for (float DY : { -68.f, 68.f }) Block(this, R, Blocks, EShape::Cube, FVector(-420 + DX, -330 + DY, 35), FVector(5, 5, 70), Desk * 0.7f);
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-428, -360, 76), FVector(24, 34, 2), FLinearColor(0.12f, 0.12f, 0.13f)));
 		LaptopParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(-441, -360, 88), FVector(1.5f, 34, 22), FLinearColor(0.12f, 0.12f, 0.13f)));
@@ -170,7 +174,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			}
 		// the sergeant's lectern, front corner beside the board, facing the benches
 		const FVector Lec(585, -390, 0);
-		Block(this, R, Blocks, EShape::Cube, Lec + FVector(0, 0, 52), FVector(40, 56, 104), Desk, Z0, true, EHUSurface::Walnut);
+		HUUsables::Mark(Block(this, R, Blocks, EShape::Cube, Lec + FVector(0, 0, 52), FVector(40, 56, 104), Desk, Z0, true, EHUSurface::Walnut), EHUUse::Read,
+			TEXT("You tap the microphone. Thump, thump - it's on. The sergeant's notes are taped to the lectern: \"Coffee fund. Overtime slips. Don't touch the evidence fridge.\""), 180.f); // its front faces the benches
 		Block(this, R, Blocks, EShape::Cube, Lec + FVector(2, 0, 108), FVector(48, 62, 5), Desk * 1.2f, FRotator(-12, 0, 0), true, EHUSurface::Walnut);
 		Block(this, R, Blocks, EShape::Cube, Lec + FVector(-20.5f, 0, 72), FVector(1, 34, 34), Brass, FRotator::ZeroRotator, false);
 		Block(this, R, Blocks, EShape::Cylinder, Lec + FVector(-12, 14, 124), FVector(1.5f, 1.5f, 24), Steel * 0.4f, FRotator(0, 0, 0), false);
@@ -206,7 +211,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 
 		// DUTY ROSTER on the back wall, across the doors from the time clock: tonight's watch - and the squad
 		const FVector Ros(-700, -300, 0);
-		Block(this, R, Blocks, EShape::Cube, Ros + FVector(1.5f, 0, 190), FVector(3, 300, 160), Trim, FRotator::ZeroRotator, false, EHUSurface::Walnut);
+		HUUsables::Mark(Block(this, R, Blocks, EShape::Cube, Ros + FVector(1.5f, 0, 190), FVector(3, 300, 160), Trim, FRotator::ZeroRotator, true, EHUSurface::Walnut), EHUUse::Read,
+			TEXT("Tonight's watch: Lt. Hargrove commanding, Sgt. Kowalski on the desk, cars 7 and 12 out, Lindsay walking beat 4 - and homicide. That's you."));
 		Block(this, R, Blocks, EShape::Cube, Ros + FVector(3.5f, 0, 190), FVector(1, 288, 148), FLinearColor(0.85f, 0.86f, 0.82f), FRotator::ZeroRotator, false);
 		Block(this, R, Blocks, EShape::Cube, Ros + FVector(4.2f, 0, 254), FVector(0.4f, 288, 18), FLinearColor(0.06f, 0.1f, 0.22f), FRotator::ZeroRotator, false);
 		RoomText(this, R, RoomTexts, Ros + FVector(4.6f, 0, 260), 0, 8.f, FColor(235, 235, 225), TEXT("DUTY ROSTER  ·  NIGHT WATCH"));

@@ -1,4 +1,5 @@
 #include "HUInteractComponent.h"
+#include "HUUsables.h"
 #include "HUProgress.h"
 #include "HUInteractable.h"
 #include "HUPromptWidget.h"
@@ -359,6 +360,13 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 			FocusPart = Hit.GetComponent();
 			Prompt = IHUInteractable::Execute_GetPrompt(A, Pawn);
 			// only things with something to do light up
+		}
+		// a usable prop (a drawer, a phone, a chair... HUUsables.h) the actor itself has nothing to say about
+		if (Prompt.IsEmpty() && A && HUUsables::IsMarked(Hit.GetComponent()))
+		{
+			Focus = A;
+			FocusPart = Hit.GetComponent();
+			Prompt = HUUsables::Prompt(Hit.GetComponent(), Pawn);
 		}
 	}
 	// no glow or spotlight in the game (that's only for the dark desk menu): the crosshair and the prompt do the job.
@@ -881,7 +889,12 @@ void UHUInteractComponent::Use(bool bSecondary)
 {
 	if (!Focus) return;
 	const ENetMode Mode = GetWorld()->GetNetMode();
-	if (Mode == NM_Standalone) { IHUInteractable::Execute_Interact(Focus, Cast<APawn>(GetOwner()), bSecondary); return; }
+	if (Mode == NM_Standalone)
+	{
+		if (HUUsables::Handles(Focus, FocusPart, Cast<APawn>(GetOwner()))) HUUsables::Use(FocusPart, Cast<APawn>(GetOwner()), bSecondary);
+		else if (Focus->GetClass()->ImplementsInterface(UHUInteractable::StaticClass())) IHUInteractable::Execute_Interact(Focus, Cast<APawn>(GetOwner()), bSecondary);
+		return;
+	}
 	const FString Path = Focus->GetPathName();
 	const FName Part = FocusPart ? FocusPart->GetFName() : NAME_None;
 	if (GetOwner()->HasAuthority()) MulticastUse(Path, Part, bSecondary, Held); // the host: straight out to everyone
@@ -973,13 +986,16 @@ void UHUInteractComponent::MulticastUse_Implementation(const FString& TargetPath
 {
 	// find this machine's copy of the thing, and the part of it that was used
 	AActor* Target = FindObject<AActor>(nullptr, *TargetPath);
-	if (!Target || !Target->GetClass()->ImplementsInterface(UHUInteractable::StaticClass())) return;
+	if (!Target) return;
 	UPrimitiveComponent* P = nullptr;
 	if (Part != NAME_None) { TArray<UPrimitiveComponent*> Comps; Target->GetComponents<UPrimitiveComponent>(Comps); for (UPrimitiveComponent* C : Comps) if (C && C->GetFName() == Part) { P = C; break; } }
+	const bool bUsable = HUUsables::IsMarked(P); // a drawer, a phone, a chair... (HUUsables.h)
+	if (!bUsable && !Target->GetClass()->ImplementsInterface(UHUInteractable::StaticClass())) return;
 	// act as that player: what they were looking at and what was in their hand
 	AActor* SavedFocus = Focus; UPrimitiveComponent* SavedPart = FocusPart; const int32 SavedHeld = Held;
 	Focus = Target; FocusPart = P; Held = HeldSlot;
-	IHUInteractable::Execute_Interact(Target, Cast<APawn>(GetOwner()), bSecondary);
+	if (bUsable && HUUsables::Handles(Target, P, Cast<APawn>(GetOwner()))) HUUsables::Use(P, Cast<APawn>(GetOwner()), bSecondary);
+	else if (Target->GetClass()->ImplementsInterface(UHUInteractable::StaticClass())) IHUInteractable::Execute_Interact(Target, Cast<APawn>(GetOwner()), bSecondary);
 	Focus = SavedFocus; FocusPart = SavedPart;
 	if (!Cast<APawn>(GetOwner()) || !Cast<APawn>(GetOwner())->IsLocallyControlled()) Held = SavedHeld; // (your own hand stays as you set it)
 }
