@@ -201,8 +201,8 @@ void UHUInteractComponent::HeldItemParts(TFunctionRef<UStaticMeshComponent*(uint
 		P((uint8)EShape::Cylinder, FVector(12, 3, 5), FVector(1.6f, 1.6f, 11), FLinearColor(0.45f, 0.28f, 0.12f), AlongX);
 		P((uint8)EShape::Cylinder, FVector(18, 3, 5), FVector(3, 3, 3), FLinearColor(0.1f, 0.1f, 0.1f), AlongX);
 		break;
-	case 4: // crowbar, angled up
-		P((uint8)EShape::Cylinder, FVector(12, 0, 10), FVector(2.2f, 2.2f, 42), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(60, 0, 0));
+	case 4: // crowbar, angled up: the bar along (0.5, 0, 0.87), up to the claw (a cylinder runs along its Z: pitched -30)
+		P((uint8)EShape::Cylinder, FVector(12, 0, 10), FVector(2.2f, 2.2f, 42), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(-30, 0, 0));
 		P((uint8)EShape::Cube, FVector(23, 0, 28), FVector(6, 2, 2), FLinearColor(0.55f, 0.05f, 0.04f), FRotator(-30, 0, 0));
 		break;
 	case 5: // scanner, screen up
@@ -244,10 +244,10 @@ void UHUInteractComponent::BuildHand()
 		if (M) { M->SetCastShadow(false); M->bOnlyOwnerSee = true; }
 		return M;
 	};
-	// your arms: your body's own arms - coat sleeve, shirt cuff, skin, build (HULook) - holding what's in your hands
-	// (both palms flat on furniture you're dragging)
+	// your arms: your own body's (your MetaHuman's; blocks in your look's colours without one) holding what's in your
+	// hands (both palms flat on furniture you're dragging)
 	if (const AHUCharacter* Ch = Cast<AHUCharacter>(O)) HandLook = Ch->Look;
-	HUArms::FirstPerson(O, Hand, HandParts, HandLook, Held, Grabbed.IsValid());
+	if (!HUArms::RealArms(O, Hand, Held, Grabbed.IsValid())) HUArms::FirstPerson(O, Hand, HandParts, HandLook, Held, Grabbed.IsValid());
 	if (Grabbed.IsValid()) return;
 	HeldItemParts([&](uint8 S, FVector Pos, FVector Size, FLinearColor Col, FRotator Rot) { return P((EShape)S, Pos, Size, Col, Rot); }, Held, Lens);
 }
@@ -325,7 +325,8 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	SendGear();
 
 	// your arms are your body's: rebuild them when your look changes (the name plate, or it arriving from your save)
-	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && !(Ch->Look == HandLook)) BuildHand();
+	// or your body does
+	if (const AHUCharacter* Ch = Cast<AHUCharacter>(Pawn); Ch && Hand && (!(Ch->Look == HandLook) || HUArms::Stale(Ch))) BuildHand();
 	HandShots(DeltaTime);
 	// the hand sways a little as you walk
 	if (Hand)
@@ -333,8 +334,8 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		const float Speed = Pawn->GetVelocity().Size2D();
 		Bob += DeltaTime * (2.f + Speed * 0.025f);
 		const float Amt = FMath::Clamp(Speed / 400.f, 0.f, 1.f);
-		// (a little further out and lower than a lone hand sat: the arms behind it are full-size now)
-		FVector Pos(36, 16 + FMath::Cos(Bob * 0.5f) * 0.6f * Amt, -18 + FMath::Sin(Bob) * (0.25f + 0.8f * Amt));
+		// (where you hold what's in your hands: HUArms - in to the middle for the two-handed crowbar)
+		FVector Pos = HUArms::HandAt(Pawn, Held) + FVector(0, FMath::Cos(Bob * 0.5f) * 0.6f * Amt, FMath::Sin(Bob) * (0.25f + 0.8f * Amt));
 		// dragging: hands centred and pushed out, shoving in rhythm with your steps (leaning in to push, back to pull)
 		GrabBlend = FMath::FInterpTo(GrabBlend, Grabbed.IsValid() ? 1.f : 0.f, DeltaTime, 10.f);
 		if (GrabBlend > 0.01f)
