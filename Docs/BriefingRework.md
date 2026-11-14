@@ -12,7 +12,7 @@
 
 `HUBriefingRoom` builds the room, corridor, projection and dust. `HUMotorPool` builds the garage and implements shutter interactions through the normal squad replay interface. `HUCruiser` uses the fleet mesh with the original block fallback.
 
-These actors refresh their construction geometry in `BeginPlay`: existing maps and saved child-actor templates otherwise retain the old solid garage wall and cars even after the C++ changes. The back-wall cap rail is split around the exit rather than bridging the doorway.
+Untagged legacy actors refresh their construction geometry in `BeginPlay`. Canonical station maps saved by `Tools/RefreshStationMaps.py` carry `HU_SavedStationLayout` and retain their authored geometry instead. See `Docs/PrecinctLife.md` for permanent maps and editable staffing. The back-wall cap rail is split around the exit rather than bridging the doorway.
 
 The art uses the existing precinct mesh kit; no external downloads:
 

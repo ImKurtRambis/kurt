@@ -1,0 +1,23 @@
+{
+  "revision": "station-2026-11-14-staffed",
+  "maps": [
+    {
+      "map": "/Game/Maps/L_Precinct",
+      "builder": "HUPrecinct",
+      "sha256": "4fc58150c1ac59cc3362f6c806a244e0f95d8b60db9c756057565c844c1a8365",
+      "bytes": 1222395
+    },
+    {
+      "map": "/Game/Maps/L_Briefing",
+      "builder": "HUBriefingRoom",
+      "sha256": "05183342f5b9c17bfc86c83acd470805420e82905ccf44d7e641145d2785876d",
+      "bytes": 615192
+    },
+    {
+      "map": "/Game/Maps/L_Lobby",
+      "builder": "HUSquadRoom",
+      "sha256": "c333d7685d96714c1d97c2ac9bbd77aa76d3412699e2bd4ebdb42b55ed27d92b",
+      "bytes": 173487
+    }
+  ]
+}

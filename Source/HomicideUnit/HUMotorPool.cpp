@@ -209,7 +209,7 @@ void AHUMotorPool::BeginPlay()
 {
 	Super::BeginPlay();
 	// Saved child-actor templates contain the old construction geometry. Rebuild for this code version.
-	OnConstruction(GetActorTransform());
+	if (!ActorHasTag(TEXT("HU_SavedStationLayout"))) OnConstruction(GetActorTransform());
 	if (FParse::Param(FCommandLine::Get(),TEXT("HUGarageOpen"))) Open[1]=true;
 	for (int32 i=0;i<Cars.Num();i++) if (AHUCruiser* C=Cast<AHUCruiser>(Cars[i]->GetChildActor())) C->bPlayerCar=i==1;
 	for (float X : {-450.f,400.f,-1250.f})

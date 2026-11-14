@@ -98,4 +98,8 @@ Everything in `AI\` runs on the player's own PC, on any maker's graphics card. T
 
 ## Briefing and motor pool
 
-`Docs/BriefingRework.md` covers the lectern, projector dust, department corridor and three working sectional garage shutters. Press E on a shutter or its wall control. The centre cruiser is the squad car. Regenerate their meshes with `Tools/PropKit/make_briefing_props.py` and `Tools/ImportBriefingProps.py`; validate on `L_Briefing` with `-HUGarageTest`. Existing saved construction geometry refreshes at play start.
+`Docs/BriefingRework.md` covers the lectern, projector dust, department corridor and three working sectional garage shutters. Press E on a shutter or its wall control. The centre cruiser is the squad car. Regenerate their meshes with `Tools/PropKit/make_briefing_props.py` and `Tools/ImportBriefingProps.py`; validate on `L_Briefing` with `-HUGarageTest`. Legacy, untagged construction geometry refreshes at play start; canonical saved layouts are preserved.
+
+## Permanent staffed precinct
+
+The canonical maps are `Content/Maps/L_Precinct.umap`, `L_Briefing.umap` and `L_Lobby.umap`; the editor opens the precinct. `Tools/CheckStationMaps.py` checks their saved revision. Refresh explicitly with `Tools/RefreshStationMaps.py` after building; tagged saved layouts are not regenerated at play start. `HUPrecinctLife.*` uses EA-07 for background staff, local phones and a turning fan. Staff positions, phone positions and fan position are editable on the saved `AHUPrecinctLifeLayout` actor in L_Precinct. See `Docs/PrecinctLife.md`; `-HUStaffTest` validates the background-only actors.

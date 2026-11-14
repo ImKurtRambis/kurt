@@ -284,7 +284,7 @@ void AHUBriefingRoom::BuildProjection()
 void AHUBriefingRoom::BeginPlay()
 {
 	Super::BeginPlay();
-	Build(); // refresh construction geometry serialized in the level before this rework
+	if (!ActorHasTag(TEXT("HU_SavedStationLayout"))) Build(); // legacy maps refresh; authored maps keep their saved geometry
 	BuildProjection();
 #if !UE_BUILD_SHIPPING
 	if(FParse::Param(FCommandLine::Get(),TEXT("HUGarageTest")))

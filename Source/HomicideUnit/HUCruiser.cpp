@@ -38,7 +38,7 @@ AHUCruiser::AHUCruiser()
 void AHUCruiser::BeginPlay()
 {
 	Super::BeginPlay();
-	OnConstruction(GetActorTransform()); // refresh parked cars serialized in child-actor templates
+	if (!ActorHasTag(TEXT("HU_SavedStationLayout"))) OnConstruction(GetActorTransform()); // legacy template upgrade only
 }
 
 // A fleet sedan; +X is the nose. Keep the block fallback for builds without the art.
