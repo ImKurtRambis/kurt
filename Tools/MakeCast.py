@@ -1,4 +1,4 @@
-# Builds the suspect cast: each MetaHuman starts from one of Epic's preset people (face, body, skin), gets hair and
+# Builds the cast (the suspects, and the uniforms, the Captain and the victims): each MetaHuman starts from one of Epic's preset people (face, body, skin), gets hair and
 # clothing in noir colours, is rigged and textured by Epic's cloud, then built to /Game/MetaHumans/MH_<Name>.
 # Must run in the FULL editor (texture baking needs rendered frames):
 #   UnrealEditor.exe HomicideUnit.uproject -ExecutePythonScript="Tools/MakeCast.py" -unattended
@@ -17,6 +17,22 @@ CAST = [
     ("Grace",   "WI_Hair_S_LowPonytail",    (0.12, 0.16, 0.12), (0.10, 0.09, 0.08)),
     ("Celeste", "WI_Hair_M_BobCurly",       (0.45, 0.42, 0.36), (0.06, 0.06, 0.08)),
     ("Etta",    "WI_Hair_M_Layered",        (0.08, 0.08, 0.16), (0.05, 0.05, 0.05)),
+]
+# everyone else at a case, on faces no suspect uses (every case seats all eight suspect faces): the uniforms at the tape
+# (AHUOfficer), the Captain (AHUBriefingRoom) and the victims (AHUVictim, by the victim's gender) - see HUPeople.h
+# (no comments at the ends of these rows: FixCastClothing.py reads the colours from them line by line)
+EXTRAS = [
+    # the uniforms: navy shirt and trousers
+    ("Mateo",   "WI_Hair_S_BuzzCut",        (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
+    ("Kelvin",  "WI_Hair_S_CoilBuzzCut",    (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
+    ("Zuri",    "WI_Hair_S_PulledBack",     (0.03, 0.05, 0.12), (0.02, 0.03, 0.07)),
+    # the Captain: white shirt
+    ("Orlando", "WI_Hair_S_SlickBack",      (0.80, 0.80, 0.77), (0.03, 0.03, 0.04)),
+    # the victims
+    ("Dominic", "WI_Hair_S_Messy",          (0.30, 0.26, 0.20), (0.05, 0.05, 0.06)),
+    ("Jorge",   "WI_Hair_S_RecedeMessy",    (0.12, 0.10, 0.09), (0.06, 0.05, 0.05)),
+    ("Jelena",  "WI_Hair_M_BobStraight",    (0.35, 0.10, 0.10), (0.05, 0.05, 0.06)),
+    ("Sunita",  "WI_Hair_S_Updo",           (0.15, 0.20, 0.28), (0.05, 0.05, 0.06)),
 ]
 
 def log(m): unreal.log_warning("MHCAST " + m)
@@ -62,13 +78,16 @@ def build(name, hair, shirt, pants):
         except RuntimeError as e: log(name + " built with rig warnings")
     finally:
         if sub.is_object_added_for_editing(ch): sub.remove_object_to_edit(ch)
-    EAL.save_directory(src.rsplit("/", 1)[0]); EAL.save_directory(out)
+    # the builder also puts shared pieces in Common (clothing materials, groom assets for hair, brows, beards):
+    # unsaved, they exist only in this editor's memory and every character loads without them
+    EAL.save_directory(src.rsplit("/", 1)[0]); EAL.save_directory(out); EAL.save_directory("/Game/MetaHumans/Common")
     log(name + (" built" if EAL.does_asset_exist(out + "/BP_MH_" + name) else " FAILED"))
 
-for row in CAST:
+for row in CAST + EXTRAS:
     try: build(*row)
     except Exception as e: log("%s error: %s" % (row[0], str(e)[:300]))
-# the builder leaves most body shapes' clothing without a base material (grey checker): repair it, apply colours
+# the builder leaves most body shapes' clothing without a base material (grey checker): repair it, apply colours.
+# (A parent that's only in memory looks fine here and fails in the game: run FixCastClothing.py again headless after.)
 import os; exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "FixCastClothing.py"), encoding="utf-8").read())
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "FixCastClothing.py"), encoding="utf-8").read())  # second pass: colours need the parent
 log("done")
