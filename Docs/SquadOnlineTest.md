@@ -19,19 +19,31 @@ squad (it ignores lobbies of your own account, so one account can't test it), an
 - The same build on both PCs. `Version.txt` beside `HomicideUnit.exe` (and the corner of the desk menu) must match;
   two different builds can't join each other ("a different version of the game").
 
-## Making the build
+## The build
 
-On the dev PC:
+**Ready to send:** `Packaged\SquadTest\HomicideUnit-build92.zip` (6 GB; build 92, commit 5f53d45, Development, without
+the local AI). The same build, unzipped, is beside it in `Packaged\SquadTest\HomicideUnit-build92`: the host can play
+from that folder. Unzip the same zip on the partner's PC and run `HomicideUnit.exe`. Before it was zipped, that build
+played the whole scripted shift with two copies over a laggy network and passed (`TestSquadShift.ps1 -Game`).
+
+- Development writes a log (`HomicideUnit\Saved\Logs\HomicideUnit.log` inside the game's folder), which is what to send
+  back if something goes wrong. Shipping writes none.
+- Without the AI, suspects answer with written lines. The AI runs on each PC by itself and isn't part of online play.
+- If Windows asks about the firewall, allow it. Steam's relays don't need any ports opened.
+
+**Making a new one** (after changes): package the committed code from a clean copy, so other unfinished edits in
+the working folder don't go in, then run the scripted shift on it before sending:
 
 ```
-powershell -ExecutionPolicy Bypass -File Tools\Package.ps1 -Config Development -NoAI
+git worktree add --detach ..\HU-SquadTest HEAD
+robocopy Content\MetaHumans ..\HU-SquadTest\Content\MetaHumans /E /MT:8
+robocopy Content\Characters\MetaHumans ..\HU-SquadTest\Content\Characters\MetaHumans /E /MT:8
+powershell -ExecutionPolicy Bypass -File ..\HU-SquadTest\Tools\Package.ps1 -Config Development -NoAI
+powershell -ExecutionPolicy Bypass -File Tools\TestSquadShift.ps1 -Game ..\HU-SquadTest\Packaged\Windows
 ```
 
-- `-Config Development` writes a log (`HomicideUnit\Saved\Logs\HomicideUnit.log` inside the build folder), which is
-  what to send back if something goes wrong. Shipping writes none.
-- `-NoAI` leaves out the local AI (several GB): suspects answer with written lines. Leave it off to test the voices
-  and the thinking suspects too; the AI runs on each PC by itself and isn't part of the online play.
-- Zip `Packaged\Windows` and send the same zip to both PCs.
+(The MetaHumans are built on this PC and not in git, so a clean copy needs them copied in.) Zip
+`..\HU-SquadTest\Packaged\Windows`, then `git worktree remove --force ..\HU-SquadTest`.
 
 ## The shift
 
