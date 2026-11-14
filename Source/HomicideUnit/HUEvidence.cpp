@@ -1,4 +1,5 @@
 #include "HUEvidence.h"
+#include "HUSound.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
@@ -140,6 +141,7 @@ void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
 	{
 		if (!(I && I->IsHolding(EHUTool::Crowbar))) { if (I) I->Say(S->HasTool(EHUTool::Crowbar) ? TEXT("It won't budge by hand. Take out the crowbar (5).") : TEXT("It won't budge. A crowbar from the supply locker would do it.")); return; }
 		bOpened = true;
+		HUSound::Play(this, TEXT("SFX_Crowbar"), GetActorLocation());
 		if (I) I->PlayReach();
 		if (Lid) { Lid->SetRelativeLocation(FVector(-18, 0, 30)); Lid->SetRelativeRotation(FRotator(0, 0, 70)); }
 		if (I) I->Say(TEXT("The lock gives with a crack. There's something inside."));
@@ -151,6 +153,7 @@ void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
 		return;
 	}
 	S->FindClue(ClueId);
+	HUSound::Play(this, TEXT("SFX_Bag"), GetActorLocation(), 0.8f);
 	FString Line = FString::Printf(TEXT("BAGGED: %s — %s"), *C.Name, *C.Detail);
 	const EHUProfile* P = S->ClueProfile.Find(ClueId);
 	const FString* Sign = S->ClueSign.Find(ClueId);

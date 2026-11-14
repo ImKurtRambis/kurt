@@ -1,4 +1,6 @@
 #include "HUCruiser.h"
+#include "HUSound.h"
+#include "HUMotorPoolDoor.h"
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
@@ -106,6 +108,7 @@ void AHUCruiser::Interact_Implementation(APawn* User, bool bSecondary)
 void AHUCruiser::Depart()
 {
 	bLeaving = true;
+	HUSound::Play(this, IsA<AHUMotorPoolDoor>() ? TEXT("SFX_RollDoor") : TEXT("SFX_CarDepart"), GetActorLocation());
 	const UHUCaseSubsystem* Cases = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	const FString Line = FString::Printf(TEXT("En route to %s..."), !DestinationLabel.IsEmpty() ? *DestinationLabel : Cases ? *Cases->Current.Place : TEXT("the scene"));
 	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)

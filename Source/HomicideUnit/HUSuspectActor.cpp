@@ -1,4 +1,5 @@
 #include "HUSuspectActor.h"
+#include "HUSound.h"
 #include "HUPhoneData.h"
 #include "HUProgress.h"
 #include "HUBuild.h"
@@ -158,6 +159,7 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 		if (bSecondary)
 		{
 			bCuffed = false; Escort = nullptr; Pose();
+			HUSound::Play(this, TEXT("SFX_Cuffs"), GetActorLocation(), 0.7f);
 			I->Say(FString::Printf(TEXT("You take the cuffs off %s. \"About time.\""), *S.Name));
 			return;
 		}
@@ -182,6 +184,7 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	if (I->IsHolding(EHUTool::Handcuffs))
 	{
 		bCuffed = true;
+		HUSound::Play(this, TEXT("SFX_Cuffs"), GetActorLocation());
 		Escort = User;
 		Pose();
 		I->PlayReach();
