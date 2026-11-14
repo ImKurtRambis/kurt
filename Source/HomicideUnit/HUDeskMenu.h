@@ -27,7 +27,11 @@ public:
 	UPROPERTY(VisibleAnywhere) USceneComponent* Root;
 	UPROPERTY(VisibleAnywhere) class UCameraComponent* Seat;
 	UPROPERTY(VisibleAnywhere) class USpotLightComponent* Highlight;
-	UPROPERTY(VisibleAnywhere) class UPointLightComponent* Lamp;
+	UPROPERTY(VisibleAnywhere) class UPointLightComponent* Lamp;      // a soft fill around the lamp
+	UPROPERTY(VisibleAnywhere) class USpotLightComponent* LampSpot;   // under the shade: the pool of light on the desk
+	UPROPERTY(VisibleAnywhere) class USpotLightComponent* Street;     // a streetlight outside, striped by the blinds
+	UPROPERTY(VisibleAnywhere) class UPointLightComponent* Neon;      // the sign across the street, flickering
+	UPROPERTY(VisibleAnywhere) class UPointLightComponent* ScreenGlow; // the computer's screen
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* PlateText;
 
 	// the level the case files and the desk phone take you to
@@ -56,6 +60,23 @@ protected:
 private:
 	UPROPERTY() TArray<UStaticMeshComponent*> Blocks;
 	UPROPERTY() TMap<UPrimitiveComponent*, int32> ItemOf;
+
+	// ---- the night outside: rain falling past the window, drops running down the glass, the neon, lightning ----
+	UPROPERTY() class UInstancedStaticMeshComponent* RainFall = nullptr;
+	UPROPERTY() class UInstancedStaticMeshComponent* RainDrops = nullptr;
+	struct FDrop { FVector P; float Size = 0.4f; float Len = 0.6f; float Speed = 0.f; float Hold = 0.f; };
+	TArray<FVector> Falling;
+	TArray<FDrop> Drops;
+	FRandomStream Weather;
+	UPROPERTY() TArray<class UMaterialInstanceDynamic*> NeonMats; // the sign's letters
+	UPROPERTY() TArray<class UMaterialInstanceDynamic*> SkyMats;  // the sky bands (lightning lights them)
+	TArray<FLinearColor> SkyBase;
+	UPROPERTY() TArray<class UTextRenderComponent*> Labels;       // print on things (rebuilt with the blocks)
+	UPROPERTY() class UTextRenderComponent* NeonText = nullptr;
+	FLinearColor NeonColor;
+	float NeonOff = 0.f, NextFlicker = 2.5f, Flash = -1.f, NextFlash = 14.f, StreetBase = 0.f;
+	void TickWeather(float Dt);
+	void ResetDrop(FDrop& D, bool bAnywhere);
 	FVector ItemPos[(int32)EHUDeskItem::Count];
 	UPROPERTY() class UHUMenuWidget* Widget = nullptr;
 	FString Typed;          // what's being typed

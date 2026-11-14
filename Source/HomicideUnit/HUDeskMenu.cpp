@@ -21,10 +21,60 @@
 #include "Misc/PackageName.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
+#include "Engine/StaticMesh.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "HUProps.h"
 
 using namespace HUBuild;
 
 static const float DeskZ = 75.f; // the desk top
+// the office: the back wall's room-side face, and the window in it (centred on Y = 0)
+static const float WallX = 120.f, WinHalf = 100.f, SillZ = 92.f, TopZ = 214.f;
+static const float BlindZ = 158.f;   // the blinds hang from the top of the window down to here
+static const float GlassX = WallX + 6.f;
+
+// a self-lit material (Tools/CreateGlowMaterials.py) tinted Col - additive for rain - or, without the asset, a plain one
+static UMaterialInstanceDynamic* GlowMat(UObject* Outer, FLinearColor Col, bool bAdd)
+{
+	static UMaterialInterface* Mats[2] = { nullptr, nullptr };
+	static bool bTried[2] = { false, false };
+	if (!bTried[bAdd])
+	{
+		bTried[bAdd] = true;
+		const TCHAR* Path = bAdd ? TEXT("/Game/Art/Materials/M_HU_GlowAdd.M_HU_GlowAdd") : TEXT("/Game/Art/Materials/M_HU_Glow.M_HU_Glow");
+		if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(FString(Path)))) Mats[bAdd] = LoadObject<UMaterialInterface>(nullptr, Path);
+		if (Mats[bAdd]) Mats[bAdd]->AddToRoot();
+	}
+	UMaterialInterface* Base = Mats[bAdd] ? Mats[bAdd] : LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Base, Outer);
+	D->SetVectorParameterValue(TEXT("Color"), Col);
+	return D;
+}
+
+// many copies of one shape in one draw (rain, lit windows); its instances are placed by the caller
+static UInstancedStaticMeshComponent* Instanced(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, bool bSphere, UMaterialInterface* Mat)
+{
+	UInstancedStaticMeshComponent* I = NewObject<UInstancedStaticMeshComponent>(Owner);
+	I->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, bSphere ? TEXT("/Engine/BasicShapes/Sphere.Sphere") : TEXT("/Engine/BasicShapes/Cube.Cube")));
+	I->SetupAttachment(Parent);
+	I->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	I->SetCastShadow(false);
+	I->SetMaterial(0, Mat);
+	I->RegisterComponent();
+	Out.Add(I);
+	return I;
+}
+
+// a furniture prop at its own proportions: Height tall (0 = its modelled size), standing on Base (its bottom-centre), turned Yaw
+static UStaticMeshComponent* PropAt(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, const TCHAR* Name, FVector Base, float Height, float Yaw, bool bCollide = true)
+{
+	UStaticMesh* M = PropMesh(Name);
+	if (!M) return nullptr;
+	const FVector Ext = M->GetBoundingBox().GetSize();
+	const FVector Size = Height > 0.f ? Ext * (Height / FMath::Max(1.f, (float)Ext.Z)) : Ext;
+	return Prop(Owner, Parent, Out, Name, Base + FVector(0, 0, Size.Z / 2), Size, FRotator(0, Yaw, 0), bCollide);
+}
 
 AHUDeskMenu::AHUDeskMenu()
 {
@@ -34,16 +84,51 @@ AHUDeskMenu::AHUDeskMenu()
 	// you, sitting at the desk, looking down at it
 	Seat = CreateDefaultSubobject<UCameraComponent>(TEXT("Seat"));
 	Seat->SetupAttachment(Root);
-	Seat->SetRelativeLocation(FVector(-118, 0, 138));
-	Seat->SetRelativeRotation(FRotator(-33, 0, 0));
+	// sitting back in the chair: the desk below, the window and the rain beyond it
+	Seat->SetRelativeLocation(FVector(-150, 0, 168));
+	Seat->SetRelativeRotation(FRotator(-19.5f, 0, 0));
 	Seat->SetFieldOfView(70.f);
-	// the desk lamp, and the light that picks out whatever you're pointing at
+	// the desk lamp: a warm cone from under the shade (placed with the lamp in OnConstruction), and a soft fill
+	LampSpot = CreateDefaultSubobject<USpotLightComponent>(TEXT("LampSpot"));
+	LampSpot->SetupAttachment(Root);
+	LampSpot->SetIntensity(7000.f);
+	LampSpot->SetAttenuationRadius(260.f);
+	LampSpot->SetInnerConeAngle(20.f);
+	LampSpot->SetOuterConeAngle(46.f);
+	LampSpot->SetSourceRadius(2.f);
+	LampSpot->SetLightColor(FLinearColor(1.f, 0.7f, 0.4f));
 	Lamp = CreateDefaultSubobject<UPointLightComponent>(TEXT("Lamp"));
 	Lamp->SetupAttachment(Root);
-	Lamp->SetRelativeLocation(FVector(22, -62, 118));
-	Lamp->SetIntensity(2600.f);
-	Lamp->SetAttenuationRadius(420.f);
-	Lamp->SetLightColor(FLinearColor(1.f, 0.78f, 0.5f));
+	Lamp->SetRelativeLocation(FVector(10, -40, 125));
+	Lamp->SetIntensity(380.f);
+	Lamp->SetAttenuationRadius(380.f);
+	Lamp->SetCastShadows(false);
+	Lamp->SetLightColor(FLinearColor(1.f, 0.72f, 0.45f));
+	// a streetlight high outside, shining in through the blinds: the slats lay cold stripes across the desk
+	Street = CreateDefaultSubobject<USpotLightComponent>(TEXT("Street"));
+	Street->SetupAttachment(Root);
+	Street->SetRelativeLocation(FVector(700, 200, 760));
+	Street->SetRelativeRotation((FVector(-10, -20, 75) - FVector(700, 200, 760)).Rotation());
+	Street->SetIntensity(400000.f);
+	Street->SetAttenuationRadius(2200.f);
+	Street->SetInnerConeAngle(7.f);
+	Street->SetOuterConeAngle(13.f);
+	Street->SetLightColor(FLinearColor(0.55f, 0.68f, 1.f));
+	// the neon sign's red, just outside the glass, and the green of the computer screen
+	Neon = CreateDefaultSubobject<UPointLightComponent>(TEXT("Neon"));
+	Neon->SetupAttachment(Root);
+	Neon->SetRelativeLocation(FVector(185, 110, 150));
+	Neon->SetIntensity(700.f);
+	Neon->SetAttenuationRadius(420.f);
+	Neon->SetCastShadows(false);
+	Neon->SetLightColor(FLinearColor(1.f, 0.1f, 0.07f));
+	ScreenGlow = CreateDefaultSubobject<UPointLightComponent>(TEXT("ScreenGlow"));
+	ScreenGlow->SetupAttachment(Root);
+	ScreenGlow->SetRelativeLocation(FVector(0, 52, 100));
+	ScreenGlow->SetIntensity(140.f);
+	ScreenGlow->SetAttenuationRadius(130.f);
+	ScreenGlow->SetCastShadows(false);
+	ScreenGlow->SetLightColor(FLinearColor(0.45f, 1.f, 0.65f));
 	Highlight = CreateDefaultSubobject<USpotLightComponent>(TEXT("Highlight"));
 	Highlight->SetupAttachment(Root);
 	Highlight->SetRelativeRotation(FRotator(-90, 0, 0));
@@ -108,69 +193,267 @@ void AHUDeskMenu::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	Clear(Blocks);
-	ItemOf.Reset();
+	for (UTextRenderComponent* T : Labels) if (T) T->DestroyComponent();
+	Labels.Reset();
+	ItemOf.Reset(); NeonMats.Reset(); SkyMats.Reset(); SkyBase.Reset();
+	RainFall = RainDrops = nullptr; NeonText = nullptr;
 	USceneComponent* R = RootComponent;
-	auto Part = [&](EHUDeskItem It, EShape S, FVector P, FVector Size, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator)
+	const EHUDeskItem None = EHUDeskItem::Count;
+	const FRotator Flat = FRotator::ZeroRotator;
+	auto Mark = [&](UStaticMeshComponent* M, EHUDeskItem It) { if (M && It != None) ItemOf.Add(M, (int32)It); return M; };
+	auto Part = [&](EHUDeskItem It, EShape S, FVector P, FVector Size, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator, EHUSurface Surf = EHUSurface::None)
 	{
-		UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Size, Col, Rot);
-		if (M && It != EHUDeskItem::Count) ItemOf.Add(M, (int32)It);
+		return Mark(Block(this, R, Blocks, S, P, Size, Col, Rot, true, Surf), It);
+	};
+	// decoration that's never clicked and doesn't need to block the mouse
+	auto Deco = [&](EShape S, FVector P, FVector Size, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator, EHUSurface Surf = EHUSurface::None)
+	{
+		return Block(this, R, Blocks, S, P, Size, Col, Rot, false, Surf);
+	};
+	// self-lit (lit windows, neon, the screen, a bulb): no shadows, they are the light
+	auto Glow = [&](FVector P, FVector Size, FLinearColor Col, FRotator Rot = FRotator::ZeroRotator, EShape S = EShape::Cube, bool bAdd = false)
+	{
+		UStaticMeshComponent* M = Block(this, R, Blocks, S, P, Size, FLinearColor::Black, Rot, false);
+		if (M) { M->SetMaterial(0, GlowMat(M, Col, bAdd)); M->SetCastShadow(false); }
 		return M;
 	};
-	const EHUDeskItem None = EHUDeskItem::Count;
+	// print: TextRender faces +X, so Yaw 180 reads from the chair; Pitch 90 lays it flat on the desk
+	auto Print = [&](FVector P, FRotator Rot, float Size, FColor Col, const TCHAR* Str)
+	{
+		UTextRenderComponent* T = NewObject<UTextRenderComponent>(this);
+		T->SetupAttachment(R);
+		T->SetRelativeLocation(P);
+		T->SetRelativeRotation(Rot);
+		T->SetHorizontalAlignment(EHTA_Center);
+		T->SetVerticalAlignment(EVRTA_TextCenter);
+		T->SetWorldSize(Size);
+		T->SetTextRenderColor(Col);
+		T->SetText(FText::FromString(Str));
+		T->RegisterComponent();
+		Labels.Add(T);
+		return T;
+	};
 
-	// the office: dark floor, walls, a window full of city lights behind the desk
-	Part(None, EShape::Cube, FVector(60, 0, -5), FVector(600, 600, 10), FLinearColor(0.06f, 0.04f, 0.03f));
-	Part(None, EShape::Cube, FVector(230, 0, 150), FVector(10, 600, 300), FLinearColor(0.12f, 0.13f, 0.14f));
-	for (float S : { -1.f, 1.f }) Part(None, EShape::Cube, FVector(60, S * 250, 150), FVector(600, 10, 300), FLinearColor(0.1f, 0.11f, 0.12f));
-	Part(None, EShape::Cube, FVector(224, 0, 165), FVector(2, 240, 130), FLinearColor(0.01f, 0.02f, 0.05f));
-	FRandomStream City(7);
-	for (int32 i = 0; i < 70; i++)
-		Part(None, EShape::Cube, FVector(222.5f, City.FRandRange(-115.f, 115.f), City.FRandRange(104.f, 160.f)), FVector(1, 3, 2),
-			City.FRand() < 0.7f ? FLinearColor(3.f, 2.2f, 0.9f) : FLinearColor(0.9f, 1.6f, 3.f));
-	for (float Y : { -120.f, 0.f, 120.f }) Part(None, EShape::Cube, FVector(222, Y, 165), FVector(4, 4, 134), FLinearColor(0.2f, 0.2f, 0.2f));
-	for (float Z : { 100.f, 230.f }) Part(None, EShape::Cube, FVector(222, 0, Z), FVector(4, 244, 4), FLinearColor(0.2f, 0.2f, 0.2f));
+	// ---------- the office: a wood floor, plaster over dark panelling, the window in the back wall ----------
+	const FLinearColor Plaster(0.07f, 0.08f, 0.066f), Panelling(0.05f, 0.022f, 0.01f), Trim(0.03f, 0.014f, 0.008f);
+	Part(None, EShape::Cube, FVector(0, 0, -5), FVector(700, 600, 10), FLinearColor(0.06f, 0.03f, 0.015f), Flat, EHUSurface::WoodFloor);
+	const float WT = 12.f, WallH = 300.f;
+	auto Wall = [&](float Y0, float Y1, float Z0, float Z1)
+	{
+		if (Y1 - Y0 > 0.5f && Z1 - Z0 > 0.5f) Part(None, EShape::Cube, FVector(WallX + WT / 2, (Y0 + Y1) / 2, (Z0 + Z1) / 2), FVector(WT, Y1 - Y0, Z1 - Z0), Plaster, Flat, EHUSurface::Plaster);
+	};
+	Wall(-320, -WinHalf, 0, WallH); Wall(WinHalf, 320, 0, WallH); Wall(-WinHalf, WinHalf, 0, SillZ); Wall(-WinHalf, WinHalf, TopZ, WallH);
+	for (float S : { -1.f, 1.f })
+	{
+		Part(None, EShape::Cube, FVector(-60, S * 215, WallH / 2), FVector(370, 10, WallH), Plaster * 0.85f, Flat, EHUSurface::Plaster);
+		Deco(EShape::Cube, FVector(-60, S * 209, 45), FVector(370, 2, 90), Panelling, Flat, EHUSurface::Walnut);
+		Deco(EShape::Cube, FVector(-60, S * 207.5f, 90), FVector(370, 4, 4), Trim);
+	}
+	Deco(EShape::Cube, FVector(WallX - 1, 0, 45), FVector(2, 420, 90), Panelling, Flat, EHUSurface::Walnut);   // panelling to the chair rail
+	Deco(EShape::Cube, FVector(WallX - 2.5f, 0, 90), FVector(4, 420, 4), Trim);                              // the chair rail
 
-	// the desk
+	// the window: a dark painted frame, a cross of mullions in the glass, a deep sill
+	const FLinearColor Frame(0.05f, 0.046f, 0.04f);
+	Deco(EShape::Cube, FVector(WallX - 1.5f, 0, TopZ + 3), FVector(5, WinHalf * 2 + 12, 6), Frame);
+	for (float S : { -1.f, 1.f }) Deco(EShape::Cube, FVector(WallX - 1.5f, S * (WinHalf + 3), (SillZ + TopZ) / 2), FVector(5, 6, TopZ - SillZ + 12), Frame);
+	Deco(EShape::Cube, FVector(WallX - 4, 0, SillZ - 2), FVector(22, WinHalf * 2 + 16, 4), Frame * 1.4f);
+	Deco(EShape::Cube, FVector(GlassX, 0, (SillZ + TopZ) / 2), FVector(4, 4, TopZ - SillZ), Frame);
+	Deco(EShape::Cube, FVector(GlassX, 0, 150), FVector(4, WinHalf * 2, 4), Frame);
+	Glow(FVector(GlassX + 1.f, 0, (SillZ + TopZ) / 2), FVector(0.2f, WinHalf * 2, TopZ - SillZ), FLinearColor(0.006f, 0.007f, 0.009f), Flat, EShape::Cube, true); // the glass's faint sheen
+
+	// venetian blinds let down to BlindZ, the slats tilted open toward the street (they stripe the streetlight)
+	const FLinearColor Slat(0.7f, 0.66f, 0.56f);
+	const float BX = WallX - 5.f, BW = WinHalf * 2 - 4.f;
+	Deco(EShape::Cube, FVector(BX, 0, TopZ - 3), FVector(5, BW + 4, 4), Slat * 0.75f);              // head rail
+	for (float Z = TopZ - 7.f; Z > BlindZ + 2.f; Z -= 3.2f) Deco(EShape::Cube, FVector(BX, 0, Z), FVector(4.8f, BW, 0.4f), Slat, FRotator(38, 0, 0));
+	Deco(EShape::Cube, FVector(BX, 0, BlindZ), FVector(5, BW, 1.4f), Slat * 0.8f);                  // bottom rail
+	for (float Y : { -70.f, 0.f, 70.f }) for (float D : { -2.6f, 2.6f })                          // ladder strings
+		Deco(EShape::Cube, FVector(BX + D, Y, (TopZ + BlindZ) / 2), FVector(0.15f, 0.15f, TopZ - BlindZ), Slat * 0.6f);
+	Deco(EShape::Cube, FVector(BX - 3, WinHalf - 10, (BlindZ + TopZ) / 2 - 22), FVector(0.3f, 0.3f, TopZ - BlindZ + 44), Slat * 0.6f); // pull cord
+	Deco(EShape::Cylinder, FVector(BX - 3, WinHalf - 10, BlindZ - 23), FVector(1.4f, 1.4f, 4), Slat * 0.5f);
+
+	// ---------- the city across the street: three rows of buildings, lit windows, a sky lit from below ----------
+	FRandomStream City(1957);
+	UInstancedStaticMeshComponent* Lit[3] = {
+		Instanced(this, R, Blocks, false, GlowMat(this, FLinearColor(1.2f, 0.72f, 0.28f), false)),  // lamps behind curtains
+		Instanced(this, R, Blocks, false, GlowMat(this, FLinearColor(0.32f, 0.48f, 0.75f), false)), // office tubes, a TV
+		Instanced(this, R, Blocks, false, GlowMat(this, FLinearColor(0.2f, 0.11f, 0.04f), false)) }; // a low lamp somewhere inside
+	// the squad room is high up: from the chair you look down through the window, so the city lies below eye level -
+	// rooftops across the street, a skyline further off, cut out against the haze of its own lights
+	struct FRow { float X, Depth, Y0, Y1, MinTop, MaxTop, FloorH, Bay, Chance; FLinearColor Col; };
+	const FRow Rows[] = {
+		{ 2000.f, 600.f, -2100.f, 2100.f, -520.f, -120.f, 290.f, 80.f, 0.6f, FLinearColor(0.018f, 0.016f, 0.017f) },
+		{ 2900.f, 800.f, -2900.f, 2900.f, -720.f, -150.f, 290.f, 85.f, 0.58f, FLinearColor(0.016f, 0.016f, 0.02f) },
+		{ 4000.f, 1000.f, -4000.f, 4000.f, -960.f, -250.f, 290.f, 90.f, 0.55f, FLinearColor(0.014f, 0.014f, 0.021f) },
+		{ 5600.f, 1400.f, -5800.f, 5800.f, -1300.f, -350.f, 290.f, 100.f, 0.5f, FLinearColor(0.012f, 0.013f, 0.022f) } };
+	const float StreetZ = -1900.f; // the street, six floors down
+	for (const FRow& Rw : Rows)
+		for (float Y = Rw.Y0; Y < Rw.Y1;)
+		{
+			const float W = City.FRandRange(220.f, 560.f), Top = City.FRandRange(Rw.MinTop, Rw.MaxTop), X = Rw.X + City.FRandRange(-120.f, 160.f);
+			// facades are self-lit just above black: dark shapes cut out of the glowing sky
+			Glow(FVector(X + Rw.Depth / 2, Y + W / 2, (StreetZ + Top) / 2), FVector(Rw.Depth, W - 20.f, Top - StreetZ), Rw.Col * City.FRandRange(0.15f, 0.3f));
+			if (City.FRand() < 0.3f) // a water tower on the roof
+			{
+				const FVector T(X + Rw.Depth / 2, Y + W * City.FRandRange(0.3f, 0.7f), Top);
+				Glow(T + FVector(0, 0, 150), FVector(150, 150, 170), Rw.Col * 0.2f, Flat, EShape::Cylinder);
+				Glow(T + FVector(0, 0, 32), FVector(120, 120, 64), Rw.Col * 0.15f);
+			}
+			else if (Rw.X > 3500.f && City.FRand() < 0.25f) // a red warning light on a far roof
+				Glow(FVector(X, Y + W / 2, Top + 30.f), FVector(22, 22, 22), FLinearColor(2.5f, 0.12f, 0.06f), Flat, EShape::Sphere);
+			for (float Z = Top - Rw.FloorH * 0.3f; Z > StreetZ + 200.f; Z -= Rw.FloorH)
+				for (float B = Y + 60.f; B < Y + W - 80.f; B += Rw.Bay)
+				{
+					const float Roll = City.FRand();
+					if (Roll > Rw.Chance) continue;
+					const int32 Kind = Roll < Rw.Chance * 0.62f ? 0 : Roll < Rw.Chance * 0.85f ? 1 : 2;
+					if (Lit[Kind]) Lit[Kind]->AddInstance(FTransform(FRotator::ZeroRotator, FVector(X - 2.f, B + Rw.Bay * 0.3f, Z), FVector(0.04f, Rw.Bay * 0.38f / 100.f, Rw.FloorH * 0.3f / 100.f)));
+				}
+			Y += W;
+		}
+	// beyond the skyline: the haze of the city's lights low down, darker toward the sky (lightning lights it - TickWeather)
+	const FLinearColor SkyCols[] = { FLinearColor(0.3f, 0.17f, 0.16f), FLinearColor(0.13f, 0.1f, 0.15f), FLinearColor(0.05f, 0.05f, 0.085f) };
+	const float Bands[] = { -4000.f, -600.f, 600.f, 7000.f };
+	for (int32 i = 0; i < 3; i++)
+		if (UStaticMeshComponent* S = Glow(FVector(9000, 0, (Bands[i] + Bands[i + 1]) / 2), FVector(10, 32000, Bands[i + 1] - Bands[i]), SkyCols[i]))
+		{
+			SkyMats.Add(Cast<UMaterialInstanceDynamic>(S->GetMaterial(0)));
+			SkyBase.Add(SkyCols[i]);
+		}
+	// a hotel's neon sign on the building across the street: H-O-T-E-L bent from red tube, in a frame of it
+	NeonColor = FLinearColor(3.f, 0.25f, 0.15f);
+	const FVector SignAt(1600, 430, -150);
+	auto Tube = [&](FVector C, float W, float H)
+	{
+		if (UStaticMeshComponent* T = Glow(C, FVector(5, FMath::Max(W, 5.f), FMath::Max(H, 5.f)), NeonColor)) NeonMats.Add(Cast<UMaterialInstanceDynamic>(T->GetMaterial(0)));
+	};
+	Deco(EShape::Cube, SignAt + FVector(10, 0, 0), FVector(12, 90, 450), FLinearColor(0.02f, 0.01f, 0.01f));
+	for (float S : { -1.f, 1.f }) { Tube(SignAt + FVector(0, S * 40, 0), 5, 440); Tube(SignAt + FVector(0, 0, S * 220), 85, 5); }
+	const TCHAR* Word = TEXT("HOTEL");
+	for (int32 i = 0; i < 5; i++)
+	{
+		const FVector L = SignAt + FVector(0, 0, 160.f - i * 80.f); // the letter's centre; -Y is its left, seen from the window
+		const float HW = 22.f, HH = 29.f;
+		auto Up = [&](float Y) { Tube(L + FVector(0, Y, 0), 5, HH * 2); };
+		auto Across = [&](float Z, float W, float Y) { Tube(L + FVector(0, Y, Z), W, 5); };
+		switch (Word[i])
+		{
+		case 'H': Up(-HW); Up(HW); Across(0, HW * 2, 0); break;
+		case 'O': Up(-HW); Up(HW); Across(HH, HW * 2, 0); Across(-HH, HW * 2, 0); break;
+		case 'T': Across(HH, HW * 2, 0); Up(0); break;
+		case 'E': Up(-HW); Across(HH, HW * 2, 0); Across(0, HW * 1.4f, -HW * 0.3f); Across(-HH, HW * 2, 0); break;
+		case 'L': Up(-HW); Across(-HH, HW * 2, 0); break;
+		default: break;
+		}
+	}
+
+	// rain falling past the window, and drops on the glass (their instances are made and moved at play: TickWeather)
+	RainFall = Instanced(this, R, Blocks, false, GlowMat(this, FLinearColor(0.08f, 0.09f, 0.11f), true));
+	RainDrops = Instanced(this, R, Blocks, true, GlowMat(this, FLinearColor(0.13f, 0.15f, 0.19f), true));
+
+	// ---------- the furniture round the walls ----------
+	// a filing cabinet in the corner left of the window, a coat stand with your coat and hat on the right
+	if (!PropAt(this, R, Blocks, TEXT("FilingCabinet"), FVector(WallX - 36, -158, 0), 132.f, 180.f))
+		Part(None, EShape::Cube, FVector(WallX - 36, -158, 66), FVector(70, 46, 132), FLinearColor(0.2f, 0.21f, 0.2f), Flat, EHUSurface::PaintedMetal);
+	{
+		const FVector C(WallX - 32, 142, 0);
+		const FLinearColor Brass(0.25f, 0.18f, 0.07f), Coat(0.16f, 0.12f, 0.08f);
+		Deco(EShape::Cylinder, C + FVector(0, 0, 1.5f), FVector(46, 46, 3), Trim);
+		Deco(EShape::Cylinder, C + FVector(0, 0, 90), FVector(4, 4, 180), Trim * 1.4f, Flat, EHUSurface::Walnut);
+		for (float A : { 0.f, 120.f, 240.f }) Deco(EShape::Cube, C + FRotator(0, A, 0).RotateVector(FVector(7, 0, 172)), FVector(14, 1.2f, 1.2f), Brass, FRotator(-25, A, 0));
+		Deco(EShape::Cube, C + FVector(-9, 0, 122), FVector(14, 44, 96), Coat, FRotator(-4, 0, 0), EHUSurface::Fabric);    // the trench coat
+		Deco(EShape::Cube, C + FVector(-9, 0, 162), FVector(16, 30, 14), Coat * 0.9f, FRotator(-4, 0, 0), EHUSurface::Fabric); // its collar
+		Deco(EShape::Cylinder, C + FVector(4, 0, 181), FVector(34, 34, 1.2f), FLinearColor(0.03f, 0.025f, 0.022f), FRotator(0, 0, 8), EHUSurface::Fabric); // the fedora's brim
+		Deco(EShape::Cylinder, C + FVector(4, 0, 186), FVector(19, 19, 11), FLinearColor(0.03f, 0.025f, 0.022f), FRotator(0, 0, 8), EHUSurface::Fabric);
+		Deco(EShape::Cylinder, C + FVector(4, 0, 182.2f), FVector(19.4f, 19.4f, 2.4f), FLinearColor(0.08f, 0.02f, 0.015f), FRotator(0, 0, 8)); // hatband
+	}
+
+	// ---------- the desk: a steel precinct desk (or the old wooden one) under a green blotter ----------
 	const FLinearColor Wood(0.2f, 0.1f, 0.04f);
-	Part(None, EShape::Cube, FVector(0, 0, DeskZ - 3), FVector(92, 184, 6), Wood);
-	for (float X : { -40.f, 40.f }) for (float Y : { -85.f, 85.f }) Part(None, EShape::Cube, FVector(X, Y, (DeskZ - 6) / 2), FVector(6, 6, DeskZ - 6), Wood * 0.7f);
-	Part(None, EShape::Cube, FVector(0, 0, DeskZ - 0.4f), FVector(60, 100, 0.4f), FLinearColor(0.05f, 0.12f, 0.06f)); // blotter
+	if (!Prop(this, R, Blocks, TEXT("Desk"), FVector(0, 0, DeskZ / 2), FVector(92, 184, DeskZ), FRotator(0, 180, 0)))
+	{
+		Part(None, EShape::Cube, FVector(0, 0, DeskZ - 3), FVector(92, 184, 6), Wood, Flat, EHUSurface::Walnut);
+		for (float X : { -40.f, 40.f }) for (float Y : { -85.f, 85.f }) Part(None, EShape::Cube, FVector(X, Y, (DeskZ - 6) / 2), FVector(6, 6, DeskZ - 6), Wood * 0.7f, Flat, EHUSurface::Walnut);
+	}
+	Part(None, EShape::Cube, FVector(-2, 0, DeskZ + 0.25f), FVector(58, 100, 0.5f), FLinearColor(0.035f, 0.075f, 0.045f), Flat, EHUSurface::Fabric);
+	for (float Y : { -48.f, 48.f }) Deco(EShape::Cube, FVector(-2, Y, DeskZ + 0.55f), FVector(58, 6, 0.4f), FLinearColor(0.05f, 0.02f, 0.01f), Flat, EHUSurface::Leather);
 
-	// the lamp
-	Part(None, EShape::Cylinder, FVector(22, -70, DeskZ + 1), FVector(14, 14, 2), FLinearColor(0.15f, 0.25f, 0.12f));
-	Part(None, EShape::Cylinder, FVector(22, -70, DeskZ + 22), FVector(1.5f, 1.5f, 42), FLinearColor(0.6f, 0.5f, 0.2f));
-	Part(None, EShape::Cylinder, FVector(22, -62, DeskZ + 42), FVector(18, 9, 9), FLinearColor(0.1f, 0.3f, 0.12f), FRotator(0, 0, 90));
+	// the lamp at the back left, leaning over the desk (or the old green banker's lamp); the light comes from its bulb
+	FVector Bulb(19, -77, DeskZ + 47); // inside the arm lamp's shade (measured off a screenshot)
+	if (!PropAt(this, R, Blocks, TEXT("DeskLamp"), FVector(34, -80, DeskZ), 50.f, 135.f, false))
+	{
+		Part(None, EShape::Cylinder, FVector(22, -70, DeskZ + 1), FVector(14, 14, 2), FLinearColor(0.15f, 0.25f, 0.12f));
+		Part(None, EShape::Cylinder, FVector(22, -70, DeskZ + 22), FVector(1.5f, 1.5f, 42), FLinearColor(0.6f, 0.5f, 0.2f));
+		Part(None, EShape::Cylinder, FVector(22, -62, DeskZ + 42), FVector(18, 9, 9), FLinearColor(0.1f, 0.3f, 0.12f), FRotator(0, 0, 90));
+		Bulb = FVector(22, -62, DeskZ + 38);
+		Glow(Bulb, FVector(3.5f, 3.5f, 3.5f), FLinearColor(6.f, 4.2f, 2.2f), Flat, EShape::Sphere); // the banker's lamp shows its bulb
+	}
+	LampSpot->SetRelativeLocation(Bulb);
+	LampSpot->SetRelativeRotation((FVector(-2, -22, DeskZ) - Bulb).Rotation());
+	Lamp->SetRelativeLocation(Bulb + FVector(-10, 10, 14));
 
-	// CASE FILES: a stack of manila folders, the top one stamped
-	for (int32 i = 0; i < 4; i++) Part(EHUDeskItem::CaseFiles, EShape::Cube, FVector(0, -5, DeskZ + 0.9f + i * 1.7f), FVector(30, 24, 1.5f), FLinearColor(0.75f, 0.6f, 0.32f), FRotator(0, -6 + i * 4, 0));
-	Part(EHUDeskItem::CaseFiles, EShape::Cube, FVector(-4, -5, DeskZ + 7.6f), FVector(8, 16, 0.2f), FLinearColor(0.6f, 0.05f, 0.03f), FRotator(0, 6, 0));
+	// CASE FILES: a stack of manila folders with their tabs, the top one stamped
+	const FLinearColor Manila(0.62f, 0.48f, 0.24f);
+	for (int32 i = 0; i < 4; i++)
+	{
+		const FRotator Rt(0, -6 + i * 4, 0);
+		const FVector C(0, -5, DeskZ + 0.9f + i * 1.7f);
+		Part(EHUDeskItem::CaseFiles, EShape::Cube, C, FVector(30, 24, 1.5f), Manila, Rt, EHUSurface::Fabric);
+		Part(EHUDeskItem::CaseFiles, EShape::Cube, C + Rt.RotateVector(FVector(15.5f, -7.f + i * 4.5f, 0)), FVector(2.5f, 7, 1.2f), Manila * 0.9f, Rt);
+	}
+	Part(EHUDeskItem::CaseFiles, EShape::Cube, FVector(-4, -5, DeskZ + 7.6f), FVector(8, 16, 0.2f), FLinearColor(0.5f, 0.04f, 0.03f), FRotator(0, 6, 0));
+	Print(FVector(-4, -5, DeskZ + 7.75f), FRotator(90, 186, 0), 2.6f, FColor(235, 225, 205), TEXT("HOMICIDE"));
 	ItemPos[(int32)EHUDeskItem::CaseFiles] = FVector(0, -5, DeskZ);
 
-	// THE COMPUTER: a beige CRT and keyboard
-	Part(EHUDeskItem::Computer, EShape::Cube, FVector(30, 50, DeskZ + 17), FVector(36, 38, 32), FLinearColor(0.62f, 0.58f, 0.48f));
-	Part(EHUDeskItem::Computer, EShape::Cube, FVector(11.8f, 50, DeskZ + 19), FVector(0.6f, 30, 22), FLinearColor(0.15f, 0.45f, 1.4f));
-	Part(EHUDeskItem::Computer, EShape::Cube, FVector(-8, 46, DeskZ + 1), FVector(13, 38, 2), FLinearColor(0.55f, 0.52f, 0.44f));
+	// THE COMPUTER: a beige CRT on the precinct login, and its keyboard
+	if (!Mark(PropAt(this, R, Blocks, TEXT("CRTMonitor"), FVector(32, 52, DeskZ), 40.f, 180.f), EHUDeskItem::Computer))
+		Part(EHUDeskItem::Computer, EShape::Cube, FVector(30, 52, DeskZ + 17), FVector(36, 38, 32), FLinearColor(0.62f, 0.58f, 0.48f));
+	Mark(Glow(FVector(11.1f, 52, DeskZ + 23.f), FVector(0.4f, 31, 24), FLinearColor(0.02f, 0.07f, 0.04f)), EHUDeskItem::Computer);
+	Print(FVector(10.6f, 52, DeskZ + 26.f), FRotator(0, 180, 0), 2.4f, FColor(110, 255, 150), TEXT("PRECINCT OS<br> <br>LOGIN: _"));
+	ScreenGlow->SetRelativeLocation(FVector(0, 52, DeskZ + 24));
+	if (!Mark(PropAt(this, R, Blocks, TEXT("Keyboard"), FVector(-6, 48, DeskZ), 0.f, 180.f), EHUDeskItem::Computer))
+		Part(EHUDeskItem::Computer, EShape::Cube, FVector(-8, 46, DeskZ + 1), FVector(13, 38, 2), FLinearColor(0.55f, 0.52f, 0.44f));
 	ItemPos[(int32)EHUDeskItem::Computer] = FVector(20, 50, DeskZ);
 
-	// DESK PHONE: black, handset on the cradle
-	Part(EHUDeskItem::DeskPhone, EShape::Cube, FVector(4, -46, DeskZ + 3.5f), FVector(18, 20, 7), FLinearColor(0.02f, 0.02f, 0.02f));
-	Part(EHUDeskItem::DeskPhone, EShape::Cylinder, FVector(4, -46, DeskZ + 8.5f), FVector(3.5f, 3.5f, 22), FLinearColor(0.03f, 0.03f, 0.03f), FRotator(0, 0, 90));
+	// DESK PHONE: the precinct's black desk set
+	if (!Mark(PropAt(this, R, Blocks, TEXT("DeskPhone"), FVector(6, -44, DeskZ), 0.f, 195.f), EHUDeskItem::DeskPhone))
+	{
+		Part(EHUDeskItem::DeskPhone, EShape::Cube, FVector(4, -46, DeskZ + 3.5f), FVector(18, 20, 7), FLinearColor(0.02f, 0.02f, 0.02f));
+		Part(EHUDeskItem::DeskPhone, EShape::Cylinder, FVector(4, -46, DeskZ + 8.5f), FVector(3.5f, 3.5f, 22), FLinearColor(0.03f, 0.03f, 0.03f), FRotator(0, 0, 90));
+	}
 	ItemPos[(int32)EHUDeskItem::DeskPhone] = FVector(4, -46, DeskZ);
 
 	// YOUR CELL PHONE: a flip phone, its little screen lit
 	Part(EHUDeskItem::CellPhone, EShape::Cube, FVector(-26, 26, DeskZ + 1), FVector(9, 5, 2), FLinearColor(0.08f, 0.08f, 0.1f), FRotator(0, 20, 0));
-	Part(EHUDeskItem::CellPhone, EShape::Cube, FVector(-26.5f, 26, DeskZ + 2.1f), FVector(3, 3, 0.2f), FLinearColor(0.3f, 1.2f, 0.6f), FRotator(0, 20, 0));
+	Mark(Glow(FVector(-26.5f, 26, DeskZ + 2.1f), FVector(3, 3, 0.2f), FLinearColor(0.25f, 0.9f, 0.5f), FRotator(0, 20, 0)), EHUDeskItem::CellPhone);
 	ItemPos[(int32)EHUDeskItem::CellPhone] = FVector(-26, 26, DeskZ);
 
-	// POLICE MANUAL: a thick navy binder
-	Part(EHUDeskItem::Manual, EShape::Cube, FVector(16, -80, DeskZ + 2.5f), FVector(24, 18, 5), FLinearColor(0.04f, 0.07f, 0.2f), FRotator(0, 12, 0));
-	Part(EHUDeskItem::Manual, EShape::Cube, FVector(16, -80, DeskZ + 5.1f), FVector(10, 8, 0.2f), FLinearColor(0.7f, 0.6f, 0.2f), FRotator(0, 12, 0));
-	ItemPos[(int32)EHUDeskItem::Manual] = FVector(16, -80, DeskZ);
+	// POLICE MANUAL: a thick navy binder, its rings showing at the spine
+	const FRotator ManRot(0, 12, 0);
+	const FVector ManAt(-12, -74, DeskZ);
+	Part(EHUDeskItem::Manual, EShape::Cube, ManAt + FVector(0, 0, 2.5f), FVector(24, 18, 5), FLinearColor(0.035f, 0.06f, 0.17f), ManRot, EHUSurface::Leather);
+	Part(EHUDeskItem::Manual, EShape::Cube, ManAt + ManRot.RotateVector(FVector(0, 0, 0)) + FVector(0, 0, 5.1f), FVector(10, 8, 0.2f), FLinearColor(0.7f, 0.6f, 0.2f), ManRot);
+	Print(ManAt + FVector(0, 0, 5.3f), FRotator(90, 180 + 12, 0), 1.3f, FColor(40, 30, 10), TEXT("POLICE<br>MANUAL"));
+	for (float Y : { -5.f, 0.f, 5.f }) Deco(EShape::Cylinder, ManAt + ManRot.RotateVector(FVector(0, -9.2f, 0)) + ManRot.RotateVector(FVector(Y, 0, 0)) + FVector(0, 0, 2.5f), FVector(2.2f, 2.2f, 0.6f), FLinearColor(0.5f, 0.5f, 0.52f), FRotator(0, 12, 90));
+	ItemPos[(int32)EHUDeskItem::Manual] = ManAt;
 
-	// THE PAPER: folded, a dark headline band
-	Part(EHUDeskItem::Paper, EShape::Cube, FVector(-22, -32, DeskZ + 0.6f), FVector(28, 20, 1.2f), FLinearColor(0.75f, 0.73f, 0.66f), FRotator(0, 18, 0));
-	Part(EHUDeskItem::Paper, EShape::Cube, FVector(-26, -32, DeskZ + 1.3f), FVector(5, 17, 0.2f), FLinearColor(0.05f, 0.05f, 0.05f), FRotator(0, 18, 0));
+	// THE PAPER: the late edition, folded, its headline up
+	Part(EHUDeskItem::Paper, EShape::Cube, FVector(-22, -32, DeskZ + 0.6f), FVector(28, 20, 1.2f), FLinearColor(0.62f, 0.6f, 0.53f), FRotator(0, 18, 0), EHUSurface::Fabric);
+	Print(FVector(-27.5f, -33.5f, DeskZ + 1.3f), FRotator(90, 198, 0), 2.2f, FColor(25, 22, 20), TEXT("THE EVENING LEDGER"));
+	Print(FVector(-22.f, -32.f, DeskZ + 1.3f), FRotator(90, 198, 0), 3.0f, FColor(15, 12, 10), TEXT("BODY FOUND<br>IN HOTEL"));
 	ItemPos[(int32)EHUDeskItem::Paper] = FVector(-22, -32, DeskZ);
+
+	// the rest of a long night: cold coffee, a full ashtray with one still burning, a cup of pens
+	const FLinearColor Mug(0.58f, 0.56f, 0.5f);
+	Deco(EShape::Cylinder, FVector(-4, 80, DeskZ + 5), FVector(8.5f, 8.5f, 10), Mug);
+	Deco(EShape::Cylinder, FVector(-4, 80, DeskZ + 9.4f), FVector(7.4f, 7.4f, 0.4f), FLinearColor(0.03f, 0.015f, 0.008f));
+	Deco(EShape::Cube, FVector(-4, 85, DeskZ + 5), FVector(1.4f, 3, 6), Mug);
+	Deco(EShape::Cylinder, FVector(-34, -62, DeskZ + 0.8f), FVector(11, 11, 1.6f), FLinearColor(0.12f, 0.13f, 0.13f), Flat, EHUSurface::Glass);
+	for (int32 i = 0; i < 3; i++) Deco(EShape::Cylinder, FVector(-34 + i * 1.6f, -63.5f + i * 1.4f, DeskZ + 1.9f), FVector(0.8f, 0.8f, 3.2f), FLinearColor(0.55f, 0.5f, 0.42f), FRotator(0, i * 50.f, 85));
+	Deco(EShape::Cylinder, FVector(-31, -58, DeskZ + 2.2f), FVector(0.8f, 0.8f, 6.5f), FLinearColor(0.7f, 0.68f, 0.62f), FRotator(0, 30, 80));
+	Glow(FVector(-29.4f, -55.2f, DeskZ + 2.6f), FVector(0.9f, 0.9f, 0.9f), FLinearColor(4.f, 0.9f, 0.15f), Flat, EShape::Sphere); // the cigarette's tip
+	Deco(EShape::Cylinder, FVector(42, -58, DeskZ + 5), FVector(7, 7, 10), FLinearColor(0.04f, 0.04f, 0.045f), Flat, EHUSurface::PaintedMetal);
+	for (int32 i = 0; i < 3; i++) Deco(EShape::Cylinder, FVector(42 + (i - 1) * 1.2f, -58 + (i - 1) * 1.5f, DeskZ + 11), FVector(0.9f, 0.9f, 14), i == 1 ? FLinearColor(0.5f, 0.04f, 0.03f) : FLinearColor(0.03f, 0.04f, 0.12f), FRotator((i - 1) * 8.f, 0, (i - 1) * 6.f));
 
 	// YOUR NAME PLATE: wood with a brass face, at the back edge, facing you
 	Part(EHUDeskItem::NamePlate, EShape::Cube, FVector(40, 8, DeskZ + 4), FVector(7, 44, 8), Wood * 1.4f);
@@ -196,6 +479,21 @@ void AHUDeskMenu::BeginPlay()
 {
 	Super::BeginPlay();
 	BuildFigurine();
+	// the rain: streaks falling past the window, drops beading and running on the glass
+	Weather.Initialize((int32)FPlatformTime::Cycles());
+	StreetBase = Street->Intensity;
+	if (RainFall)
+	{
+		Falling.SetNum(340);
+		for (FVector& Pt : Falling) Pt = FVector(Weather.FRandRange(GlassX + 20.f, 760.f), Weather.FRandRange(-330.f, 330.f), Weather.FRandRange(-320.f, 440.f));
+		for (int32 i = 0; i < Falling.Num(); i++) RainFall->AddInstance(FTransform::Identity);
+	}
+	if (RainDrops)
+	{
+		Drops.SetNum(130);
+		for (FDrop& D : Drops) ResetDrop(D, true);
+		for (int32 i = 0; i < Drops.Num(); i++) RainDrops->AddInstance(FTransform::Identity);
+	}
 	APlayerController* P = PC();
 	if (!P) return;
 	P->SetViewTarget(this);
@@ -253,6 +551,84 @@ void AHUDeskMenu::Tick(float DeltaSeconds)
 	// your name on the plate (with a cursor while you type it)
 	const FString Shown = bTyping && TypingField == 0 ? Typed + (FMath::Fmod(GetWorld()->GetTimeSeconds(), 1.0) < 0.5 ? TEXT("_") : TEXT(" ")) : Name();
 	PlateText->SetText(FText::FromString(Shown.IsEmpty() ? TEXT("— YOUR NAME —") : (TEXT("DET. ") + Shown).ToUpper()));
+	TickWeather(DeltaSeconds);
+}
+
+// ---------- the night outside ----------
+// a drop on the glass: it beads (holding still), then runs, catching now and then, until it reaches the sill
+void AHUDeskMenu::ResetDrop(FDrop& D, bool bAnywhere)
+{
+	D.P = FVector(GlassX + 2.2f, Weather.FRandRange(-WinHalf + 3.f, WinHalf - 3.f), bAnywhere ? Weather.FRandRange(SillZ + 3.f, TopZ - 3.f) : Weather.FRandRange(SillZ + 40.f, TopZ - 3.f));
+	D.Size = Weather.FRandRange(0.5f, 1.4f);
+	D.Len = D.Size;
+	D.Speed = 0.f;
+	D.Hold = Weather.FRandRange(0.5f, 14.f);
+}
+
+void AHUDeskMenu::TickWeather(float Dt)
+{
+	Dt = FMath::Min(Dt, 0.1f);
+	// rain past the window, slanted by the wind, starting again at the top when it reaches the street
+	if (RainFall && Falling.Num() == RainFall->GetInstanceCount())
+	{
+		static const FVector Vel(0, -120, -980);
+		static const FRotator Slant = FRotationMatrix::MakeFromZ(Vel.GetSafeNormal()).Rotator();
+		TArray<FTransform> T;
+		T.Reserve(Falling.Num());
+		for (FVector& Pt : Falling)
+		{
+			Pt += Vel * Dt;
+			if (Pt.Z < -320.f) Pt = FVector(Weather.FRandRange(GlassX + 20.f, 760.f), Weather.FRandRange(-330.f, 330.f), 440.f + Weather.FRandRange(0.f, 80.f));
+			if (Pt.Y < -340.f) Pt.Y += 680.f;
+			T.Add(FTransform(Slant, Pt, FVector(0.005f, 0.005f, 0.28f)));
+		}
+		RainFall->BatchUpdateInstancesTransforms(0, T, false, true, true);
+	}
+	// drops on the glass
+	if (RainDrops && Drops.Num() == RainDrops->GetInstanceCount())
+	{
+		TArray<FTransform> T;
+		T.Reserve(Drops.Num());
+		for (FDrop& D : Drops)
+		{
+			if (D.Speed <= 0.f)
+			{
+				D.Hold -= Dt;
+				if (D.Hold <= 0.f) D.Speed = Weather.FRandRange(6.f, 20.f);
+			}
+			else
+			{
+				D.P.Z -= D.Speed * Dt;
+				D.P.Y += FMath::Sin(D.P.Z * 0.4f + D.Size * 9.f) * 1.5f * Dt;
+				D.Len = FMath::Min(D.Len + Dt * 4.f, D.Size * 7.f); // a running drop draws its trail out behind it
+				if (Weather.FRand() < Dt * 0.5f) { D.Speed = 0.f; D.Hold = Weather.FRandRange(0.2f, 2.f); } // it catches on the glass
+				if (D.P.Z < SillZ + 1.5f) ResetDrop(D, false);
+			}
+			T.Add(FTransform(FRotator::ZeroRotator, D.P + FVector(0, 0, (D.Len - D.Size) * 0.5f), FVector(0.002f, D.Size / 100.f, D.Len / 100.f)));
+		}
+		RainDrops->BatchUpdateInstancesTransforms(0, T, false, true, true);
+	}
+	// the neon: steady, then a stutter now and then
+	NextFlicker -= Dt;
+	if (NextFlicker <= 0.f) { NeonOff = Weather.FRandRange(0.1f, 0.45f); NextFlicker = Weather.FRandRange(2.f, 8.f); }
+	const bool bOn = NeonOff <= 0.f || FMath::Fmod(NeonOff * 17.f, 1.f) > 0.5f;
+	NeonOff -= Dt;
+	Neon->SetIntensity(bOn ? 700.f : 80.f);
+	for (UMaterialInstanceDynamic* M : NeonMats) if (M) M->SetVectorParameterValue(TEXT("Color"), bOn ? NeonColor : NeonColor * 0.06f);
+	if (NeonText) NeonText->SetVisibility(bOn);
+	// lightning every so often: two quick flashes in the sky, and through the blinds
+	NextFlash -= Dt;
+	if (NextFlash <= 0.f) { Flash = 0.f; NextFlash = Weather.FRandRange(16.f, 40.f); }
+	float Bright = 0.f;
+	if (Flash >= 0.f)
+	{
+		Flash += Dt;
+		Bright = Flash < 0.07f ? 1.f : Flash < 0.15f ? 0.12f : Flash < 0.22f ? 0.75f : FMath::Max(0.f, 0.4f - (Flash - 0.22f) * 1.2f);
+		if (Flash > 0.6f) { Flash = -1.f; Bright = 0.f; }
+	}
+	for (int32 i = 0; i < SkyMats.Num(); i++)
+		if (SkyMats[i]) SkyMats[i]->SetVectorParameterValue(TEXT("Color"), SkyBase[i] + FLinearColor(0.55f, 0.6f, 0.8f) * Bright * (i == 0 ? 0.5f : 1.f));
+	Street->SetIntensity(StreetBase * (1.f + Bright * 3.f));
 }
 
 // ---------- input ----------
