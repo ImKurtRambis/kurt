@@ -21,6 +21,9 @@ class HOMICIDEUNIT_API AHUSquadRoom : public AActor, public IHUInteractable
 	GENERATED_BODY()
 public:
 	AHUSquadRoom();
+	// the precinct's personal offices (one per player): where office K's desk stands, and the office's corner
+	static FVector2D OfficeDesk(int32 K);
+	static FVector OfficeOrigin(int32 K);
 
 	UPROPERTY(VisibleAnywhere) USceneComponent* Root;
 	UPROPERTY(VisibleAnywhere) class UTextRenderComponent* BoardTitle;
@@ -68,6 +71,10 @@ private:
 	UPROPERTY() TArray<UPrimitiveComponent*> BenchParts; // roll call's benches (seat + back per bench)
 	// words on the room's walls (the duty roster, the notice boards), rebuilt with the room
 	UPROPERTY() TArray<class UTextRenderComponent*> RoomTexts;
+	// THE PRECINCT as a station (HUStation.cpp): every room, corridor and door, and each room's light
+	void BuildStation();
+	void StationLightsUp();
+	class UTextRenderComponent* RoomTextAt(FVector Pos, float Yaw, float Size, FColor Col, const FString& Text);
 	UPROPERTY() class UTextRenderComponent* RosterNames = nullptr; // the duty roster's names column (the squad is on it)
 	float ShotClock = 0.f; // -HURollCallShots: a camera tour of roll call, saved as screenshots
 	void RollCallShots(float DeltaSeconds);

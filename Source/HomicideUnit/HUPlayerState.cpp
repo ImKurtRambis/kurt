@@ -43,11 +43,14 @@ void AHUPlayerState::BeginPlay()
 	}), 1.f, false);
 }
 
+void AHUPlayerState::ServerSetOffice_Implementation(FHUOfficeLook NewLook) { Office = NewLook; }
+
 void AHUPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AHUPlayerState, bReady);
 	DOREPLIFETIME(AHUPlayerState, Desk);
+	DOREPLIFETIME(AHUPlayerState, Office);
 	DOREPLIFETIME(AHUPlayerState, Specialty);
 	DOREPLIFETIME(AHUPlayerState, SpecLevel);
 	DOREPLIFETIME(AHUPlayerState, Rank);

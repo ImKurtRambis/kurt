@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "HUOffice.h"
 #include "HUPlayerState.generated.h"
 
 UCLASS()
@@ -13,6 +14,9 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") bool bReady = false;
 	// your own desk at the precinct (0..3; -1 = none yet). Handed out by the host as you arrive.
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") int32 Desk = -1;
+	// how your personal office is done up (decorated at its catalogue, saved on your PC, shown to the squad)
+	UPROPERTY(Replicated) FHUOfficeLook Office;
+	UFUNCTION(Server, Reliable) void ServerSetOffice(FHUOfficeLook NewLook);
 
 	// your progress, shown to the squad and used by everyone's machine for perks (see HUProgress)
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Squad") uint8 Specialty = 0;
