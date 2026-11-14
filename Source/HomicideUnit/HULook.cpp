@@ -4,8 +4,8 @@
 
 namespace
 {
-	// the one detective's arm in blocks: a tan sleeve and his skin, 12 cm through
-	const FLinearColor DetectiveSkin(0.72f, 0.52f, 0.38f), DetectiveSleeve(0.55f, 0.45f, 0.3f);
+	// the one detective's arm in blocks: Isaiah's skin and the tan of his shirt, 12 cm through
+	const FLinearColor DetectiveSkin(0.32f, 0.2f, 0.13f), DetectiveSleeve(0.55f, 0.45f, 0.3f);
 	const float SleeveCm = 12.f;
 }
 

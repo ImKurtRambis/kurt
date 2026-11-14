@@ -66,7 +66,8 @@ bool HUPeople::ValidateCast()
 	bool bOK = true;
 	for (int32 Index = 0; Index < CastCount; ++Index)
 		if (!LoadClass<AActor>(nullptr, *FacePath(CastFace(Index)))) { UE_LOG(LogTemp, Error, TEXT("HomicideUnit: required cast model missing: %s"), *CastFace(Index)); bOK = false; }
-	UE_LOG(LogTemp, Display, TEXT("HomicideUnit: cast validation %s (%d models)"), bOK ? TEXT("PASSED") : TEXT("FAILED"), CastCount);
+	if (DetectiveFace() != TEXT("Isaiah")) UE_LOG(LogTemp, Warning, TEXT("HomicideUnit: the detective's own model (Isaiah) isn't built on this PC - %s is standing in. Run Tools/MakeCast.py."), *DetectiveFace());
+	UE_LOG(LogTemp, Display, TEXT("HomicideUnit: cast validation %s (%d models), the detective is %s"), bOK ? TEXT("PASSED") : TEXT("FAILED"), CastCount, *DetectiveFace());
 	return bOK;
 }
 
@@ -162,10 +163,10 @@ AActor* HUPeople::Lie(AActor* Owner, USceneComponent* Parent, const FString& Who
 	return Look;
 }
 
-// Bruce, from the cast, on every PC (a squad must agree on the face, so it never depends on what one PC has built).
-// He is also one of the four men a suspect can be cast as. To give the detective a face nobody else at a case wears:
-// add an unused Epic preset to EXTRAS in Tools/MakeCast.py, build the cast, and name that preset here.
-FString HUPeople::DetectiveFace() { return CastFace(1); }
+// Isaiah: one of Epic's preset people that no suspect, officer, Captain or victim is cast from, so nobody at a case
+// looks like the detective (Tools/MakeCast.py builds him, in a tan shirt). The packaged game always has him. On a PC
+// working from source that hasn't built the cast's extras yet, Bruce stands in (ValidateCast says so in the log).
+FString HUPeople::DetectiveFace() { return AvailableFace(TEXT("Isaiah"), CastFace(1)); }
 
 // Every player is this one model at its own size: no face, build or height of anyone's own.
 AActor* HUPeople::Detective(AActor* Owner, USceneComponent* Parent, AActor* Previous, bool bOwnerNoSee, float Scale)

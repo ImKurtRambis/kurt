@@ -1,7 +1,8 @@
-// -HUBodyTest on L_Precinct: stands two of the cast up and photographs every way a body moves (HUPersonAnimation):
+// -HUBodyTest on L_Precinct: stands the detective and one of the cast up and photographs every way a body moves (HUPersonAnimation):
 // idle, walking, talking, arms crossed, hands up, flinching, cuffed (from behind, and walking), crouching, a partner's
 // aimed arm, and - in Interview 1 - sitting at the table, talking and flinching there, and sitting with hands in the
-// lap. Screenshots land in Saved/Screenshots/<platform>/Body_*.png; then the game quits.
+// lap - and last, the detective's face from close up (Body_Face). Screenshots land in
+// Saved/Screenshots/<platform>/Body_*.png; then the game quits.
 #include "CoreMinimal.h"
 #include "HUPeople.h"
 #include "HUPersonAnimation.h"
@@ -10,6 +11,8 @@
 #include "Containers/Ticker.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Components/PointLightComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -23,6 +26,7 @@ namespace
 	{
 		TWeakObjectPtr<AHUSquadRoom> Room;
 		TWeakObjectPtr<AActor> Walker, Sitter;
+		TWeakObjectPtr<UPointLightComponent> Fill; // lights the face for the close-up
 		float Clock = -1.f;
 		int32 Done = 0;
 	};
@@ -48,7 +52,7 @@ namespace
 		if (GTest.Clock < 0.f)
 		{
 			// one standing in the main corridor facing the street door (-X), one in Interview 1's suspect chair
-			GTest.Walker = HUPeople::Stand(Room, Room->GetRootComponent(), HUPeople::CastFace(1), FVector(1100, 0, 0), 180.f);
+			GTest.Walker = HUPeople::Stand(Room, Room->GetRootComponent(), HUPeople::DetectiveFace(), FVector(1100, 0, 0), 180.f);
 			GTest.Sitter = HUPeople::Stand(Room, Room->GetRootComponent(), HUPeople::CastFace(5), FVector(1725, 451, 0), -90.f);
 			if (UHUPersonAnimation* A = HUPeople::AnimOf(GTest.Sitter.Get())) { A->bSeated = true; A->bTable = true; A->SeatHeight = 47.f; }
 			GTest.Clock = 0.f;
@@ -120,8 +124,28 @@ namespace
 		if (At(34.2f)) Shot(TEXT("SeatSide"));
 		if (At(34.5f) && SA) SA->bTable = false;
 		if (At(35.5f)) Shot(TEXT("SeatLapSide"));
-		if (At(36.5f))
+		// ---- who the detective is: head and shoulders, back in the corridor. The ceiling tube is straight overhead and
+		// leaves the face in shadow, so a soft light stands beside the camera for this one. ----
+		const USkeletalMeshComponent* WalkerBody = HUPeople::BodyOf(Wk);
+		const FVector Head = WalkerBody && WalkerBody->DoesSocketExist(TEXT("head")) ? RT.InverseTransformPosition(WalkerBody->GetSocketLocation(TEXT("head"))) : FVector(1100, 0, 165);
+		// (held on him every frame until the shot: a nudge of the real mouse turns the view otherwise)
+		if (GTest.Clock >= 36.2f && GTest.Clock < 37.8f) Camera(Head + FVector(-78, 14, 10), Head + FVector(0, 0, 5));
+		if (At(36.2f))
 		{
+			UPointLightComponent* L = NewObject<UPointLightComponent>(Room);
+			L->SetupAttachment(Room->GetRootComponent());
+			L->SetRelativeLocation(Head + FVector(-75, 50, 25));
+			L->SetIntensity(700.f);
+			L->SetAttenuationRadius(260.f);
+			L->SetCastShadows(false);
+			L->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f));
+			L->RegisterComponent();
+			GTest.Fill = L;
+		}
+		if (At(37.6f)) Shot(TEXT("Face"));
+		if (At(38.4f))
+		{
+			if (GTest.Fill.IsValid()) GTest.Fill->DestroyComponent();
 			UE_LOG(LogTemp, Display, TEXT("HUBodyTest: done, %d shots"), GTest.Done);
 			FPlatformMisc::RequestExit(false);
 			return false;
