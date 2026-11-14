@@ -141,6 +141,12 @@ void UHUBrainSubsystem::StartPrewrite()
 	GetGameInstance()->GetTimerManager().SetTimer(PumpTimer, FTimerDelegate::CreateUObject(this, &UHUBrainSubsystem::Pump), 0.5f, true);
 }
 
+void UHUBrainSubsystem::StopPrewrite()
+{
+	PreQueue.Reset(); Pre.Reset();
+	if (UGameInstance* GI = GetGameInstance()) GI->GetTimerManager().ClearTimer(PumpTimer);
+}
+
 // one answer at a time, never while a detective is waiting on a live one
 void UHUBrainSubsystem::Pump()
 {
@@ -216,6 +222,7 @@ void UHUBrainSubsystem::Send(const FString& SuspectId, const FString& Said, cons
 	Body->SetArrayField(TEXT("messages"), Msgs);
 	Body->SetNumberField(TEXT("max_tokens"), 160);
 	Body->SetNumberField(TEXT("temperature"), 0.8);
+	if (SampleSeed >= 0) Body->SetNumberField(TEXT("seed"), SampleSeed);
 	{ TSharedRef<FJsonObject> RF = MakeShared<FJsonObject>(); RF->SetStringField(TEXT("type"), TEXT("json_object")); Body->SetObjectField(TEXT("response_format"), RF); }
 	FString Json;
 	FJsonSerializer::Serialize(Body, TJsonWriterFactory<>::Create(&Json));

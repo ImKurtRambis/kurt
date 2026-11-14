@@ -507,23 +507,7 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 	if (bVoice)
 	{
 		// said out loud: the asker's thinking brain answers, told exactly what the game decided
-		if (User->IsLocallyControlled())
-		{
-			FString Sit;
-			const FString St = S.Statements.IsValidIndex(Statement) ? S.Statements[Statement].Text : FString();
-			if (Action == 1) { const FString* Rec = C->SuspectRecord.Find(SuspectId); Sit = FString::Printf(TEXT("The detective brings up your criminal record (%s)."), Rec ? **Rec : TEXT("nothing on it")); }
-			else if (!ClueId.IsEmpty())
-			{
-				FHUClue K; C->GetClue(ClueId, K);
-				const bool bCaught = !bWasBroken && C->IsBroken(SuspectId, Statement);
-				Sit = FString::Printf(TEXT("The detective shows you evidence: %s - %s. "), *K.Name, *K.Detail)
-					+ (bCaught ? FString::Printf(TEXT("It PROVES you lied when you said \"%s\". You're caught: admit what the truth was."), *St)
-						: TEXT("It does not prove anything you said is false. Stay with your story."));
-			}
-			else Sit = FString::Printf(TEXT("The detective calls you a liar about \"%s\" - with no evidence to show."), *St);
-			Sit += FString::Printf(TEXT(" Your answer must mean this: \"%s\""), *Reply);
-			Think(LastSaid, Sit, Reply);
-		}
+		if (User->IsLocallyControlled()) Think(LastSaid, C->InterrogationSituation(SuspectId, Action, Statement, ClueId, bWasBroken, Reply), Reply);
 	}
 	else
 	{

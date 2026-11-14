@@ -17,10 +17,12 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Two-player test on one PC (host + client over LAN) | `powershell -ExecutionPolicy Bypass -File Tools\TestSquad.ps1` |
 | Create any missing levels | `UnrealEditor-Cmd.exe HomicideUnit.uproject -run=pythonscript -script="Tools\CreateLevels.py"` |
 | Package a standalone game (Shipping, ~5 min; `-NoAI` leaves out the 14 GB local AI) | `powershell -ExecutionPolicy Bypass -File Tools\Package.ps1` → `Packaged\Windows\HomicideUnit.exe` |
+| Score the suspects' AI (~6 min; see `Tools\InterviewBench\README.md`) | `powershell -ExecutionPolicy Bypass -File Tools\InterviewBench.ps1` → `Saved\InterviewBench\<date>\report.md` |
 
 - **Close the game/editor before building** (a running `UnrealEditor.exe` locks the DLL). `Build.ps1` does this for you.
 - A build is done when it prints `Result: Succeeded`. Fix every `error C####` it prints.
 - After C++ changes, always build, then `TestLevel.ps1` the levels you touched.
+- After any change to the suspects' model, prompt (`UHUBrainSubsystem`) or interrogation rules, run `Tools\InterviewBench.ps1` and compare with the baseline; don't ship a drop in a score you can't explain.
 
 ## The game loop and the levels (`Content/Maps`)
 
