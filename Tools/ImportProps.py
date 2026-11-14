@@ -15,6 +15,15 @@ EAL = unreal.EditorAssetLibrary
 MESHES = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem) or getattr(unreal, "EditorStaticMeshLibrary", None)
 
 
+def nanite(mesh):
+    """Nanite on every prop (the glTF importer does it by default; this keeps it so if that ever changes): full detail
+    close up, no LODs to pop, and virtual shadow maps cache Nanite meshes' shadows - see DefaultEngine.ini"""
+    settings = mesh.get_editor_property("nanite_settings")
+    settings.set_editor_property("enabled", True)
+    mesh.set_editor_property("nanite_settings", settings)
+    return "on ({} tris)".format(mesh.get_num_triangles(0))
+
+
 def box_collision(mesh):
     """one box: the player and the camera can't pass through furniture"""
     if MESHES:
@@ -48,10 +57,11 @@ for name in names:
         unreal.log_error("ImportProps: couldn't move {} to {}".format(src, target)); continue
     mesh = unreal.load_asset(target)
     collision = box_collision(mesh)
+    detail = nanite(mesh)
     EAL.save_asset(target)
     b = mesh.get_bounding_box()
-    unreal.log("ImportProps: {:<18} X {:6.1f}..{:6.1f}  Y {:6.1f}..{:6.1f}  Z {:6.1f}..{:6.1f}  ({} materials, collision: {})".format(
-        "SM_" + name, b.min.x, b.max.x, b.min.y, b.max.y, b.min.z, b.max.z, len(mesh.static_materials), collision))
+    unreal.log("ImportProps: {:<18} X {:6.1f}..{:6.1f}  Y {:6.1f}..{:6.1f}  Z {:6.1f}..{:6.1f}  ({} materials, collision: {}, Nanite: {})".format(
+        "SM_" + name, b.min.x, b.max.x, b.min.y, b.max.y, b.min.z, b.max.z, len(mesh.static_materials), collision, detail))
 
 # moving the meshes leaves redirectors behind in the import folders
 redirectors = [a for a in EAL.list_assets(DEST, recursive=True) if unreal.load_asset(a).__class__.__name__ == "ObjectRedirector"]

@@ -53,6 +53,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 
 ## Rules that keep the game working
 | What things are made of (brick, carpet, tile... 14 textured surfaces, pass one to `Block`) | `HUSurfaces.*`, `Content/Art/Textures/README.md`, `Tools/Surfaces/` |
+| The renderer and the camera | `Config/DefaultEngine.ini` (Lumen light and reflections, Nanite, virtual shadow maps, TSR; nothing is baked). `HUFilmCamera.*`: one level-wide post-process volume on every machine - eye adaptation kept near the lights' fixed exposure, focus on the centre of the view (a view can call `FocusOn(cm)`, as the desk menu does), grain, vignette. Console: `HU.Film.Fstop`, `HU.Film.Grain`, `HU.Film.Off 1`. The colour grade is EA-08's, not here |
 
 1. **Interactables** implement `IHUInteractable` (`GetPrompt`, `Interact`; optional `HoverParts`, `Highlights`). Show text with `UHUInteractComponent::Say()` / `Notify()`.
 2. **Multiplayer = replay.** Every machine builds the *same* scene from the squad code. `UHUInteractComponent::Use()` sends an interaction to the host, which multicasts it; **every machine runs `Interact` on its own copy**. So `Interact` must be **deterministic** and must not assume the user is the local player:

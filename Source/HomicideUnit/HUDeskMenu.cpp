@@ -26,6 +26,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "HUProps.h"
 
+#include "HUFilmCamera.h"
 using namespace HUBuild;
 
 static const float DeskZ = 75.f; // the desk top
@@ -549,6 +550,9 @@ void AHUDeskMenu::Tick(float DeltaSeconds)
 	Highlight->SetRelativeLocation(FMath::VInterpTo(Highlight->GetRelativeLocation(), Target, DeltaSeconds, 12.f));
 	Highlight->SetVisibility(Panel == EHUMenuPanel::None);
 	// your name on the plate (with a cursor while you type it)
+	// and the camera's focus follows it there (the window and the city stay soft behind)
+	if (UHUFilmCamera* Film = GetWorld()->GetSubsystem<UHUFilmCamera>())
+		Film->FocusOn(FVector::Dist(Seat->GetComponentLocation(), GetActorTransform().TransformPosition(ItemPos[Pick] + FVector(0, 0, 6))));
 	const FString Shown = bTyping && TypingField == 0 ? Typed + (FMath::Fmod(GetWorld()->GetTimeSeconds(), 1.0) < 0.5 ? TEXT("_") : TEXT(" ")) : Name();
 	PlateText->SetText(FText::FromString(Shown.IsEmpty() ? TEXT("— YOUR NAME —") : (TEXT("DET. ") + Shown).ToUpper()));
 	TickWeather(DeltaSeconds);
