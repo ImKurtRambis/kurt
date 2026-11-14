@@ -1,0 +1,279 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Homicide Unit PropKit"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "OfficeChair",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "OfficeChair",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    },
+    {
+     "attributes": {
+      "POSITION": 4,
+      "NORMAL": 5,
+      "TEXCOORD_0": 6
+     },
+     "indices": 7,
+     "material": 1
+    },
+    {
+     "attributes": {
+      "POSITION": 8,
+      "NORMAL": 9,
+      "TEXCOORD_0": 10
+     },
+     "indices": 11,
+     "material": 2
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Black",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.011612245179743885,
+     0.011612245179743885,
+     0.012983032342173012,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.55
+   }
+  },
+  {
+   "name": "Chrome",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.6866853124353135,
+     0.6866853124353135,
+     0.6866853124353135,
+     1.0
+    ],
+    "metallicFactor": 1.0,
+    "roughnessFactor": 0.22
+   }
+  },
+  {
+   "name": "Fabric",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.016807375752887384,
+     0.019382360956935723,
+     0.02518685962736163,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.95
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "OfficeChair.bin",
+   "byteLength": 52704
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 12960,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 12960,
+   "byteLength": 12960,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 25920,
+   "byteLength": 8640,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 34560,
+   "byteLength": 7152,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 41712,
+   "byteLength": 1152,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 42864,
+   "byteLength": 1152,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 44016,
+   "byteLength": 768,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 44784,
+   "byteLength": 720,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 45504,
+   "byteLength": 2304,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 47808,
+   "byteLength": 2304,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 50112,
+   "byteLength": 1536,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 51648,
+   "byteLength": 1056,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 1080,
+   "type": "VEC3",
+   "min": [
+    -0.32600000500679016,
+    -4.440891999238953e-18,
+    -0.31622475385665894
+   ],
+   "max": [
+    0.2754952311515808,
+    0.6449999809265137,
+    0.31622475385665894
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 1080,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 1080,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5125,
+   "count": 1788,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 96,
+   "type": "VEC3",
+   "min": [
+    -0.024000000208616257,
+    0.30000001192092896,
+    -0.024000000208616257
+   ],
+   "max": [
+    0.024000000208616257,
+    0.4000000059604645,
+    0.024000000208616257
+   ]
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5126,
+   "count": 96,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 96,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5125,
+   "count": 180,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 8,
+   "componentType": 5126,
+   "count": 192,
+   "type": "VEC3",
+   "min": [
+    -0.28629830479621887,
+    0.4300000071525574,
+    -0.23999999463558197
+   ],
+   "max": [
+    0.23999999463558197,
+    0.9768726825714111,
+    0.23999999463558197
+   ]
+  },
+  {
+   "bufferView": 9,
+   "componentType": 5126,
+   "count": 192,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 10,
+   "componentType": 5126,
+   "count": 192,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 11,
+   "componentType": 5125,
+   "count": 264,
+   "type": "SCALAR"
+  }
+ ]
+}

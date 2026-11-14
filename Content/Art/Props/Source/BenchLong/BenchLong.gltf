@@ -1,0 +1,215 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Homicide Unit PropKit"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "BenchLong",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "BenchLong",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    },
+    {
+     "attributes": {
+      "POSITION": 4,
+      "NORMAL": 5,
+      "TEXCOORD_0": 6
+     },
+     "indices": 7,
+     "material": 1
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Wood",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     1,
+     1,
+     1,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.55,
+    "baseColorTexture": {
+     "index": 0
+    }
+   }
+  },
+  {
+   "name": "Steel",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.02315336617811041,
+     0.024157632448504756,
+     0.026241221894849898,
+     1.0
+    ],
+    "metallicFactor": 0.8,
+    "roughnessFactor": 0.45
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "BenchLong.bin",
+   "byteLength": 22656
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 3456,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3456,
+   "byteLength": 3456,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 6912,
+   "byteLength": 2304,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 9216,
+   "byteLength": 1584,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 10800,
+   "byteLength": 3744,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 14544,
+   "byteLength": 3744,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 18288,
+   "byteLength": 2496,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 20784,
+   "byteLength": 1872,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 288,
+   "type": "VEC3",
+   "min": [
+    -0.20000000298023224,
+    0.41999998688697815,
+    -2.0999999046325684
+   ],
+   "max": [
+    0.20000000298023224,
+    0.46000000834465027,
+    2.0999999046325684
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 288,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 288,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5125,
+   "count": 396,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 312,
+   "type": "VEC3",
+   "min": [
+    -0.20000000298023224,
+    0.0,
+    -1.9199999570846558
+   ],
+   "max": [
+    0.20000000298023224,
+    0.41999998688697815,
+    1.9199999570846558
+   ]
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5126,
+   "count": 312,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 312,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5125,
+   "count": 468,
+   "type": "SCALAR"
+  }
+ ],
+ "images": [
+  {
+   "uri": "wood.png"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0
+  }
+ ],
+ "samplers": [
+  {}
+ ]
+}

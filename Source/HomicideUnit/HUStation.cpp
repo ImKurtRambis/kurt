@@ -18,6 +18,7 @@
 // Corridor B runs north from the main corridor (X -150..150); the four personal offices open off it.
 #include "HUSquadRoom.h"
 #include "HUBuild.h"
+#include "HUProps.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
@@ -122,14 +123,18 @@ void AHUSquadRoom::BuildStation()
 		B(P + FVector(0, 0, S.Z - 3), FVector(S.X, S.Y, 6), C);
 		for (float DX : { -1.f, 1.f }) for (float DY : { -1.f, 1.f }) B(P + FVector(DX * (S.X / 2 - 6), DY * (S.Y / 2 - 6), (S.Z - 6) / 2), FVector(5, 5, S.Z - 6), C * 0.7f);
 	};
-	auto Chair = [&](FVector P, float BackDX, float BackDY)
+	// a chair facing away from its back (HUProps: a real one when the art is in, Kind = StackChair or OfficeChair)
+	auto Chair = [&](FVector P, float BackDX, float BackDY, const TCHAR* Kind = TEXT("StackChair"))
 	{
+		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(-BackDY, -BackDX));
+		if (Prop(this, R, Blocks, Kind, P + FVector(0, 0, 50), FVector(0, 0, 100), FRotator(0, Yaw, 0))) return;
 		B(P + FVector(0, 0, 46), FVector(46, 46, 7), Steel);
 		B(P + FVector(BackDX, BackDY, 76), BackDX != 0 ? FVector(5, 44, 52) : FVector(44, 5, 52), Steel);
 		for (float DX : { -18.f, 18.f }) for (float DY : { -18.f, 18.f }) B(P + FVector(DX, DY, 21), FVector(3, 3, 42), Steel * 0.6f, false);
 	};
 	auto Locker = [&](FVector P, float FaceYaw)
 	{
+		if (Prop(this, R, Blocks, TEXT("Locker"), P + FVector(0, 0, 95), FVector(45, 38, 190), FRotator(0, FaceYaw, 0))) return;
 		const bool bX = FMath::Abs(FaceYaw) < 1.f || FMath::Abs(FaceYaw - 180.f) < 1.f;
 		B(P + FVector(0, 0, 95), bX ? FVector(45, 38, 190) : FVector(38, 45, 190), Green);
 		const FVector F = FRotator(0, FaceYaw, 0).Vector();
@@ -231,12 +236,15 @@ void AHUSquadRoom::BuildStation()
 		B(FVector(-2000, 420, 112), FVector(520, 80, 5), Wood * 1.3f);
 		B(FVector(-2000, 400, 170), FVector(500, 2, 110), Glass * FLinearColor(1, 1, 1, 0.3f), false);
 		B(FVector(-2000, 520, 74), FVector(400, 60, 6), Desk); // the desk sergeant's side
-		Chair(FVector(-2050, 580, 0), 0, 22);
-		B(FVector(-1950, 520, 92), FVector(40, 30, 30), FLinearColor(0.6f, 0.57f, 0.48f), false); // the desk's computer
+		Chair(FVector(-2050, 580, 0), 0, 22, TEXT("OfficeChair"));
+		if (!Prop(this, R, Blocks, TEXT("CRTMonitor"), FVector(-1950, 520, 96), FVector(0, 0, 38), FRotator(0, 90, 0), false)) // the desk's computer
+			B(FVector(-1950, 520, 92), FVector(40, 30, 30), FLinearColor(0.6f, 0.57f, 0.48f), false);
+		Prop(this, R, Blocks, TEXT("DeskPhone"), FVector(-2090, 520, 83), FVector(0, 0, 12), FRotator(0, 90, 0), false);
 		Sign(FVector(-2000, 384, 145), -90, TEXT("FRONT DESK  ·  ALL VISITORS REPORT HERE"));
 		// benches for the public along the south wall, a plant, the city seal on the back wall
 		for (float X : { -2250.f, -1950.f })
 		{
+			if (Prop(this, R, Blocks, TEXT("RollCallBench"), FVector(X, -641, 44), FVector(47, 240, 88), FRotator(0, 90, 0))) continue;
 			B(FVector(X, -640, 45), FVector(240, 45, 6), Wood);
 			B(FVector(X, -662, 75), FVector(240, 5, 50), Wood);
 			for (float DX : { -100.f, 100.f }) B(FVector(X + DX, -640, 21), FVector(5, 40, 42), Steel);
@@ -252,6 +260,7 @@ void AHUSquadRoom::BuildStation()
 	for (int32 i = 0; i < 10; i++) Locker(FVector(-875, 600 + i * 48, 0), 180);         // and the east wall
 	for (float Y : { 500.f, 1000.f })
 	{
+		if (Prop(this, R, Blocks, TEXT("BenchLong"), FVector(-1225, Y, 23), FVector(40, 420, 46))) continue;
 		B(FVector(-1225, Y, 42), FVector(60, 420, 6), Wood);
 		for (float DY : { -180.f, 0.f, 180.f }) B(FVector(-1225, Y + DY, 20), FVector(40, 6, 40), Steel);
 	}
@@ -276,7 +285,8 @@ void AHUSquadRoom::BuildStation()
 		B(FVector(-805, 820, 90), FVector(70, 70, 180), FLinearColor(0.85f, 0.86f, 0.84f));
 		B(FVector(-805, 250, 95), FVector(70, 90, 190), FLinearColor(0.6f, 0.1f, 0.08f));
 		B(FVector(-769, 250, 120), FVector(2, 60, 100), Glass, false);
-		B(FVector(-170, 500, 190), FVector(6, 110, 65), Dark, false);
+		if (!Prop(this, R, Blocks, TEXT("CRTTV"), FVector(-192, 500, 190), FVector(0, 0, 46), FRotator(0, 180, 0), false)) // the TV, up on its shelf
+			B(FVector(-170, 500, 190), FVector(6, 110, 65), Dark, false);
 	}
 
 	// ======== THE CAPTAIN'S OFFICE ========
@@ -289,7 +299,7 @@ void AHUSquadRoom::BuildStation()
 		TrayParts.Add(B(Tray + FVector(0, -40, 85), FVector(30, 40, 3), FLinearColor(0.75f, 0.6f, 0.32f)));
 		Sign(FVector(-545, 1250, 60), 180, TEXT("THE CAPTAIN"));
 		// the big chair behind it, the flags, the bookcase, the couch for bad news
-		Chair(FVector(-410, 1250, 0), 24, 0);
+		Chair(FVector(-410, 1250, 0), 24, 0, TEXT("OfficeChair"));
 		for (float Y : { 1520.f, 1560.f })
 		{
 			Cyl(FVector(-200, Y, 110), FVector(3, 3, 220), FLinearColor(0.75f, 0.6f, 0.2f), false);
@@ -333,15 +343,23 @@ void AHUSquadRoom::BuildStation()
 				for (float S : { -1.f, 1.f })
 				{
 					const FVector P(-1350 + i * 300, -650 - row * 450 + S * 60, 0);
-					Table(P, FVector(150, 110, 76), Desk);
-					B(P + FVector(0, S * 30, 98), FVector(40, 36, 34), FLinearColor(0.6f, 0.57f, 0.48f), false);
-					B(P + FVector(0, -S * 10, 78), FVector(44, 16, 2), FLinearColor(0.55f, 0.53f, 0.46f), false);
-					Chair(P + FVector(0, -S * 90, 0), 0, -S * 22);
+					const FRotator Faces(0, -S * 90, 0); // toward the detective in the chair
+					if (!Prop(this, R, Blocks, TEXT("Desk"), P + FVector(0, 0, 38), FVector(110, 150, 76), Faces)) Table(P, FVector(150, 110, 76), Desk);
+					if (!Prop(this, R, Blocks, TEXT("CRTMonitor"), P + FVector(0, S * 30, 95), FVector(0, 0, 38), Faces, false))
+						B(P + FVector(0, S * 30, 98), FVector(40, 36, 34), FLinearColor(0.6f, 0.57f, 0.48f), false);
+					if (!Prop(this, R, Blocks, TEXT("Keyboard"), P + FVector(0, -S * 10, 78), FVector(16, 44, 0), Faces, false))
+						B(P + FVector(0, -S * 10, 78), FVector(44, 16, 2), FLinearColor(0.55f, 0.53f, 0.46f), false);
+					Prop(this, R, Blocks, TEXT("DeskPhone"), P + FVector(52, S * 28, 82), FVector(0, 0, 12), Faces, false);
+					Chair(P + FVector(0, -S * 90, 0), 0, -S * 22, TEXT("OfficeChair"));
 					for (int32 k = 0; k < 3; k++) B(P + FVector(-50 + k * 6, S * 20, 80 + k * 1.2f), FVector(24, 32, 1.2f), Paper, false);
 				}
 		// the water cooler, the printer, a whiteboard on the east wall
-		Cyl(FVector(-60, -300, 55), FVector(30, 30, 110), FLinearColor(0.85f, 0.85f, 0.85f));
-		Cyl(FVector(-60, -300, 130), FVector(26, 26, 40), FLinearColor(0.4f, 0.6f, 0.9f), false);
+		if (!Prop(this, R, Blocks, TEXT("WaterCooler"), FVector(-60, -300, 73.5f), FVector(0, 0, 147), FRotator(0, 180, 0)))
+		{
+			Cyl(FVector(-60, -300, 55), FVector(30, 30, 110), FLinearColor(0.85f, 0.85f, 0.85f));
+			Cyl(FVector(-60, -300, 130), FVector(26, 26, 40), FLinearColor(0.4f, 0.6f, 0.9f), false);
+		}
+		Prop(this, R, Blocks, TEXT("WallClock"), FVector(-T / 2 - 2.4f, -1250, 240), FVector(0, 0, 32), FRotator(0, 180, 0), false); // over the whiteboard's shoulder
 		B(FVector(-60, -1500, 50), FVector(70, 60, 100), FLinearColor(0.75f, 0.74f, 0.7f));
 		B(FVector(-9, -900, 160), FVector(2, 300, 120), FLinearColor(0.95f, 0.95f, 0.93f), false);
 		// (the case board, the upgrades board and the case wall are their own actors, hung in BeginPlay)
@@ -380,6 +398,7 @@ void AHUSquadRoom::BuildStation()
 		for (int32 i = 0; i < 6; i++)
 		{
 			const FVector P(1100 + i * 110, -500 - row * 350, 0);
+			if (Prop(this, R, Blocks, TEXT("FilingCabinet"), P + FVector(0, 0, 70), FVector(70, 50, 140), FRotator(0, 90, 0))) continue; // drawers to +Y
 			B(P + FVector(0, 0, 70), FVector(50, 70, 140), FLinearColor(0.42f, 0.44f, 0.4f));
 			for (int32 d = 0; d < 4; d++) B(P + FVector(0, 36, 20 + d * 34), FVector(30, 1, 3), Dark, false);
 		}

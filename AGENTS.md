@@ -45,6 +45,8 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Interrogation (pressure, moods, confession) | `HUInterrogation.h`, `UHUCaseSubsystem::Confront/Press/RaiseRecord`, interview UI in `AHUSuspectActor` + `HUPromptWidget` |
 | Voices (ElevenLabs v3 / OpenAI TTS, phone filter) | `HUVoiceSubsystem.*` — key from `ElevenLabsKey.txt` (git-ignored; **never commit or print keys**) |
 | Placeholder geometry | `HUBuild.*` (`Block`, `WallWithDoor`, `Clear`) |
+| Real furniture (desks, chairs, CRTs, phones, lockers, filing cabinets, benches, water cooler, clocks, cork boards) | `HUProps.h` (`Prop(..., Name, Center, Size, Rot)` - same box as the blocks, returns null without the art so you build the blocks), meshes in `/Game/Art/Props` (`Content/Art/Props/README.md`, `Tools/PropKit/`, `Tools/ImportProps.py`) |
+| Screenshot tour of any level | `-HUShots=X,Y,Yaw,Pitch\|...` `-HUShotsName=Prefix` (`HUShotTour.*`); add `-HUNoProps` for the same views with blocks |
 
 ## Rules that keep the game working
 | What things are made of (brick, carpet, tile... 14 textured surfaces, pass one to `Block`) | `HUSurfaces.*`, `Content/Art/Textures/README.md`, `Tools/Surfaces/` |

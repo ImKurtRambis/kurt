@@ -10,6 +10,7 @@
 #include "Engine/Engine.h"
 #include "HUMotorPool.h"
 #include "HUBuild.h"
+#include "HUProps.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -141,10 +142,13 @@ void AHUBriefingRoom::Build()
 	CaptainParts.Add(Block(Sphere, FVector(670, -380, 180), FVector(34, 30, 38), FLinearColor(0.6f, 0.42f, 0.32f)));
 	CaptainParts.Add(Block(Cylinder, FVector(670, -380, 200), FVector(40, 40, 8), FLinearColor(0.02f, 0.03f, 0.07f)));
 
-	// the laptop table (the laptop itself is its own actor, spawned at play)
-	Made(Block(Cube, FVector(560, 420, 75), FVector(90, 140, 4), Wood), EHUSurface::Walnut, Wood);
-	for (float DX : { -40.f, 40.f }) for (float DY : { -60.f, 60.f })
-		Block(Cube, FVector(560 + DX, 420 + DY, 37), FVector(4, 4, 74), Steel);
+	// the laptop table (the laptop itself is its own actor, spawned at play): a real desk when the art is in (HUProps)
+	if (!HUBuild::Prop(this, RootComponent, Blocks, TEXT("Desk"), FVector(560, 420, 38.5f), FVector(90, 140, 77), FRotator(0, 180, 0)))
+	{
+		Made(Block(Cube, FVector(560, 420, 75), FVector(90, 140, 4), Wood), EHUSurface::Walnut, Wood);
+		for (float DX : { -40.f, 40.f }) for (float DY : { -60.f, 60.f })
+			Block(Cube, FVector(560 + DX, 420 + DY, 37), FVector(4, 4, 74), Steel);
+	}
 
 	// four rows of chairs either side of the aisle, facing the screen
 	for (float X : { 250.f, 80.f, -90.f, -260.f })
@@ -152,6 +156,12 @@ void AHUBriefingRoom::Build()
 			for (int32 i = 0; i < 5; i++)
 			{
 				const float Y = Side * (180.f + i * 130.f);
+				// a real stacking chair when the art is in (HUProps): the whole chair is the seat
+				if (UStaticMeshComponent* Real = HUBuild::Prop(this, RootComponent, Blocks, TEXT("StackChair"), FVector(X, Y, 50), FVector(0, 0, 100)))
+				{
+					Seats.Add(Real, FVector(X, Y, 48));
+					continue;
+				}
 				// remember both the cushion and the backrest as "this chair"
 				Seats.Add(Made(Block(Cube, FVector(X, Y, 45), FVector(50, 50, 6), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));
 				Seats.Add(Made(Block(Cube, FVector(X - 24, Y, 75), FVector(4, 50, 50), Seat), EHUSurface::Fabric, Seat), FVector(X, Y, 48));

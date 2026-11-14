@@ -2,6 +2,7 @@
 #include "HUSquadBoards.h"
 #include "HUProgress.h"
 #include "HUBuild.h"
+#include "HUProps.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
 #include "HUPlayerState.h"
@@ -156,6 +157,12 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			for (float S : { -1.f, 1.f })
 			{
 				const float BY = S * BenchMidY;
+				// a real bench when the art is in (HUProps): one mesh stands for both the seat and the back
+				if (UStaticMeshComponent* RealBench = Prop(this, R, Blocks, TEXT("RollCallBench"), FVector(BX, BY, 44), FVector(42, BenchLen, 88)))
+				{
+					BenchParts.Add(RealBench); BenchParts.Add(RealBench);
+					continue;
+				}
 				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX, BY, BenchSeatZ - 2.5f), FVector(42, BenchLen, 5), Bench, Z0, true, EHUSurface::WoodFloor));
 				BenchParts.Add(Block(this, R, Blocks, EShape::Cube, FVector(BX - 19, BY, 75), FVector(4, BenchLen, 26), Bench, Z0, true, EHUSurface::WoodFloor));
 				for (float DY : { -BenchLen / 2 + 15.f, 0.f, BenchLen / 2 - 15.f }) Block(this, R, Blocks, EShape::Cube, FVector(BX, BY + DY, 21), FVector(34, 5, 42), Steel * 0.6f, Z0, true, EHUSurface::PaintedMetal);
@@ -174,6 +181,8 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		for (int32 i = 0; i < 12; i++)
 		{
 			const float LX = -575.f + i * 50.f;
+			// real lockers when the art is in (HUProps), facing into the room; the open one sized like its neighbours
+			if (Prop(this, R, Blocks, i == 4 ? TEXT("LockerOpen") : TEXT("Locker"), FVector(LX, 475, 95), FVector(46, 50, 190), FRotator(0, -90, 0), true, TEXT("Locker"))) continue;
 			const FLinearColor LC = LockerGreen * (i % 3 == 0 ? 0.9f : 1.f);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 5), FVector(50, 44, 10), Trim);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX, 475, 100), FVector(50, 46, 180), LC, Z0, true, EHUSurface::PaintedMetal);
@@ -191,6 +200,9 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 			Block(this, R, Blocks, EShape::Cube, FVector(LX + 16, 450.5f, 105), FVector(3, 2, 14), Steel * 1.4f, FRotator::ZeroRotator, false);
 			Block(this, R, Blocks, EShape::Cube, FVector(LX, 450.8f, 150), FVector(22, 0.5f, 6), Paper, FRotator::ZeroRotator, false);
 		}
+		// the water cooler by the doors and the clock over the lockers (only with the art: they had no blocks)
+		Prop(this, R, Blocks, TEXT("WaterCooler"), FVector(-560, -480, 73.5f), FVector(0, 0, 147), FRotator(0, 90, 0));
+		Prop(this, R, Blocks, TEXT("WallClock"), FVector(0, RY - 2.4f, 250), FVector(0, 0, 32), FRotator(0, -90, 0), false);
 
 		// DUTY ROSTER on the back wall, across the doors from the time clock: tonight's watch - and the squad
 		const FVector Ros(-700, -300, 0);
@@ -209,8 +221,12 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		struct FNote { float DX, Z, W, H; FLinearColor Col; const TCHAR* Head; FColor HeadCol; const TCHAR* Body; float Tilt; float BodyDrop = 0.f; };
 		auto NoticeBoard = [&](float CX, const TArray<FNote>& Notes)
 		{
-			Block(this, R, Blocks, EShape::Cube, FVector(CX, -497, 185), FVector(250, 4, 150), Trim, FRotator::ZeroRotator, false);
-			Block(this, R, Blocks, EShape::Cube, FVector(CX, -494.5f, 185), FVector(238, 1, 138), Cork, FRotator::ZeroRotator, false);
+			// a real cork board when the art is in: 8 cm deep so the cork face sits just behind the papers (y -494.2)
+			if (!Prop(this, R, Blocks, TEXT("CorkBoardWide"), FVector(CX, -495, 185), FVector(8, 250, 150), FRotator(0, 90, 0), false))
+			{
+				Block(this, R, Blocks, EShape::Cube, FVector(CX, -497, 185), FVector(250, 4, 150), Trim, FRotator::ZeroRotator, false);
+				Block(this, R, Blocks, EShape::Cube, FVector(CX, -494.5f, 185), FVector(238, 1, 138), Cork, FRotator::ZeroRotator, false);
+			}
 			for (const FNote& N : Notes)
 			{
 				const float X = CX + N.DX, Top = N.Z + N.H / 2;

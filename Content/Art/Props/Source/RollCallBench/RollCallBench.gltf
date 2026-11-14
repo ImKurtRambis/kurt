@@ -1,0 +1,215 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Homicide Unit PropKit"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "RollCallBench",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "RollCallBench",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    },
+    {
+     "attributes": {
+      "POSITION": 4,
+      "NORMAL": 5,
+      "TEXCOORD_0": 6
+     },
+     "indices": 7,
+     "material": 1
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Wood",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     1,
+     1,
+     1,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.55,
+    "baseColorTexture": {
+     "index": 0
+    }
+   }
+  },
+  {
+   "name": "Steel",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.02315336617811041,
+     0.024157632448504756,
+     0.026241221894849898,
+     1.0
+    ],
+    "metallicFactor": 0.8,
+    "roughnessFactor": 0.45
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "RollCallBench.bin",
+   "byteLength": 32592
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 5760,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 5760,
+   "byteLength": 5760,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 11520,
+   "byteLength": 3840,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 15360,
+   "byteLength": 2640,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 18000,
+   "byteLength": 4608,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 22608,
+   "byteLength": 4608,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 27216,
+   "byteLength": 3072,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 30288,
+   "byteLength": 2304,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 480,
+   "type": "VEC3",
+   "min": [
+    -0.20999999344348907,
+    0.41999998688697815,
+    -1.4500000476837158
+   ],
+   "max": [
+    0.20999999344348907,
+    0.8700000047683716,
+    1.4500000476837158
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 480,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 480,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5125,
+   "count": 660,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 384,
+   "type": "VEC3",
+   "min": [
+    -0.20999999344348907,
+    0.0,
+    -1.3200000524520874
+   ],
+   "max": [
+    0.20999999344348907,
+    0.8799999952316284,
+    1.3200000524520874
+   ]
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5126,
+   "count": 384,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 384,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5125,
+   "count": 576,
+   "type": "SCALAR"
+  }
+ ],
+ "images": [
+  {
+   "uri": "wood.png"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0
+  }
+ ],
+ "samplers": [
+  {}
+ ]
+}

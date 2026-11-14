@@ -1,5 +1,6 @@
 #include "HUSecurityDesk.h"
 #include "HUBuild.h"
+#include "HUProps.h"
 #include "HUInteractComponent.h"
 #include "HUSuspectActor.h"
 #include "HUCaseSubsystem.h"
@@ -52,6 +53,7 @@ void AHUSecurityDesk::OnConstruction(const FTransform& Transform)
 	for (float Y : { -62.f, 62.f }) Block(this, R, Blocks, EShape::Cube, FVector(0, Y, 17), FVector(64, 6, 34), Desk * 0.7f);
 	for (float Y : { -34.f, 34.f })
 	{
+		if (Prop(this, R, Blocks, TEXT("CRTMonitor"), FVector(-10, Y, 59), FVector(0, 0, 38))) continue; // a real CRT when the art is in
 		Block(this, R, Blocks, EShape::Cube, FVector(-10, Y, 59), FVector(34, 40, 38), Beige);
 		Block(this, R, Blocks, EShape::Cube, FVector(7.5f, Y, 61), FVector(1, 32, 26), FLinearColor(0.25f, 0.3f, 0.32f));
 	}

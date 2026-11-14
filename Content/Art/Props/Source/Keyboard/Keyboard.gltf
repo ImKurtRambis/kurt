@@ -1,0 +1,199 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Homicide Unit PropKit"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "Keyboard",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "Keyboard",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    },
+    {
+     "attributes": {
+      "POSITION": 4,
+      "NORMAL": 5,
+      "TEXCOORD_0": 6
+     },
+     "indices": 7,
+     "material": 1
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Beige",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.6104955708078648,
+     0.5583403896342679,
+     0.4178850708481375,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.55
+   }
+  },
+  {
+   "name": "KeyGrey",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.1589608350608804,
+     0.14995978981060856,
+     0.13286832155381798,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.6
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "Keyboard.bin",
+   "byteLength": 62928
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 288,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 576,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 768,
+   "byteLength": 144,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 912,
+   "byteLength": 19584,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 20496,
+   "byteLength": 19584,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 40080,
+   "byteLength": 13056,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 53136,
+   "byteLength": 9792,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.07999999821186066,
+    0.0,
+    -0.22499999403953552
+   ],
+   "max": [
+    0.07999999821186066,
+    0.03200000151991844,
+    0.22499999403953552
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5125,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 1632,
+   "type": "VEC3",
+   "min": [
+    -0.06700000166893005,
+    0.016593750566244125,
+    -0.20999999344348907
+   ],
+   "max": [
+    0.06499999761581421,
+    0.03961874917149544,
+    0.1979999989271164
+   ]
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5126,
+   "count": 1632,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 1632,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5125,
+   "count": 2448,
+   "type": "SCALAR"
+  }
+ ]
+}
