@@ -7,6 +7,9 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformFileManager.h"
 #include "Engine/GameInstance.h"
@@ -24,27 +27,116 @@ bool UHUBrainSubsystem::IsInstalled() const
 
 void UHUBrainSubsystem::Deinitialize()
 {
-	if (Server.IsValid()) { FPlatformProcess::TerminateProc(Server, true); FPlatformProcess::CloseProc(Server); }
+	for (FProcHandle* P : { &Server, &Lister }) if (P->IsValid()) { FPlatformProcess::TerminateProc(*P, true); FPlatformProcess::CloseProc(*P); }
 	Super::Deinitialize();
 }
 
-// start the local server in the background (once), then poll until it answers
+// ---------- starting the model: on the graphics card, else on the processor ----------
+// Ask llama-server which cards it can use (about a second), start it on the first choice, and poll until it answers.
+// A choice that fails hands over to the next; with none left, suspects answer with their written lines.
 void UHUBrainSubsystem::WarmUp()
 {
 	if (bReady || bStarting || !IsInstalled()) return;
+	// every question calls this: after the card and the processor have both failed, wait five minutes before trying again
+	if (GaveUpAt > 0.0 && FPlatformTime::Seconds() - GaveUpAt < 300.0) return;
 	bStarting = true;
 	StartedAt = FPlatformTime::Seconds();
+	Plan.Reset(); Cards.Reset();
+	FString Force;
+	FParse::Value(FCommandLine::Get(), TEXT("HUBrain="), Force);
+	bForced = !Force.IsEmpty();
+	if (bForced)
+	{
+		Plan.Add(!Force.Equals(TEXT("cpu"), ESearchCase::IgnoreCase) && !Force.Equals(TEXT("processor"), ESearchCase::IgnoreCase));
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: -HUBrain=%s - the %s, and nothing else"), *Force, Plan[0] ? TEXT("graphics card") : TEXT("processor"));
+		StartNext();
+		return;
+	}
+	// through cmd, so the list lands in a file (HUProcess::Launch ties the program to the game, and has no pipes);
+	// a file of this game's own, as two copies on one PC (squad testing) ask at the same moment
+	ListFile = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / FString::Printf(TEXT("BrainCards_%u.txt"), FPlatformProcess::GetCurrentProcessId()));
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(ListFile), true);
+	IFileManager::Get().Delete(*ListFile, false, true, true);
+	FString Shell = FPlatformMisc::GetEnvironmentVariable(TEXT("ComSpec"));
+	if (Shell.IsEmpty()) Shell = TEXT("cmd.exe");
+	Lister = HUProcess::Launch(Shell, FString::Printf(TEXT("/c \"\"%s\" --list-devices > \"%s\" 2>&1\""), *(Root() / TEXT("llama/llama-server.exe")), *ListFile), Root() / TEXT("llama"));
+	ListCards();
+}
+
+// wait for the list (20 s at most: a broken driver can hang it), then decide what to try
+void UHUBrainSubsystem::ListCards()
+{
+	const bool bRunning = Lister.IsValid() && FPlatformProcess::IsProcRunning(Lister);
+	if (bRunning && FPlatformTime::Seconds() - StartedAt < 20.0)
+	{
+		FTimerHandle H;
+		GetGameInstance()->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(this, &UHUBrainSubsystem::ListCards), 0.1f, false);
+		return;
+	}
+	if (Lister.IsValid()) { if (bRunning) FPlatformProcess::TerminateProc(Lister, true); FPlatformProcess::CloseProc(Lister); }
+	// "Available devices:", then a line a card:  "  Vulkan0: AMD Radeon RX 7600 (8176 MiB, 7310 MiB free)"
+	FString Out;
+	TArray<FString> Lines;
+	FFileHelper::LoadFileToString(Out, *ListFile);
+	IFileManager::Get().Delete(*ListFile, false, true, true);
+	Out.ParseIntoArrayLines(Lines);
+	bool bListed = false;
+	for (const FString& L : Lines)
+	{
+		if (L.Contains(TEXT("Available devices"))) { bListed = true; continue; }
+		if (bListed && L.Contains(TEXT(": "))) Cards += (Cards.IsEmpty() ? TEXT("") : TEXT(", ")) + L.TrimStartAndEnd();
+	}
+	// An empty list: no card llama.cpp can use, so straight to the processor. No list at all (it hung, or a newer
+	// llama.cpp words it differently): the card is still tried first.
+	if (bListed && Cards.IsEmpty())
+	{
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: llama.cpp found no graphics card it can use"));
+	}
+	else
+	{
+		Plan.Add(true);
+		UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: graphics cards llama.cpp can use: %s"), Cards.IsEmpty() ? TEXT("(it didn't say)") : *Cards);
+	}
+	Plan.Add(false);
+	StartNext();
+}
+
+void UHUBrainSubsystem::StartNext()
+{
+	if (Plan.Num() == 0)
+	{
+		bStarting = false;
+		GaveUpAt = FPlatformTime::Seconds();
+		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit brain: the model wouldn't run on this PC - suspects answer with their written lines"));
+		return;
+	}
+	bOnCard = Plan[0];
+	Plan.RemoveAt(0);
+	AttemptAt = FPlatformTime::Seconds();
 	const FString Exe = Root() / TEXT("llama/llama-server.exe");
-	const FString Args = FString::Printf(TEXT("-m \"%s\" --host 127.0.0.1 --port %d -c 4096 -ngl 99"), *(Root() / TEXT("models/suspect.gguf")), Port);
+	FString Args = FString::Printf(TEXT("-m \"%s\" --host 127.0.0.1 --port %d -c 4096"), *(Root() / TEXT("models/suspect.gguf")), Port);
+	// the card: every layer on it. The processor: no card at all, and under the game's priority, so frames stay smooth
+	Args += bOnCard ? TEXT(" -ngl 99") : TEXT(" --device none -ngl 0 --prio -1");
+#if !UE_BUILD_SHIPPING
+	if (bOnCard && FParse::Param(FCommandLine::Get(), TEXT("HUBrainBreakCard"))) Args += TEXT(" --device NoSuchCard"); // to test the hand-over
+#endif
 	Server = HUProcess::Launch(Exe, Args, Root() / TEXT("llama")); // ends with the game, even after a crash
-	UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: starting local model server (%s)"), Server.IsValid() ? TEXT("ok") : TEXT("failed"));
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: starting the model on the %s (%s)"), bOnCard ? TEXT("graphics card") : TEXT("processor"), Server.IsValid() ? TEXT("ok") : TEXT("failed"));
 	Ping();
+}
+
+void UHUBrainSubsystem::GiveUpOn(const FString& Why)
+{
+	UE_LOG(LogTemp, Warning, TEXT("HomicideUnit brain: %s on the %s%s"), *Why, bOnCard ? TEXT("graphics card") : TEXT("processor"), Plan.Num() ? TEXT(" - trying the processor") : TEXT(""));
+	if (Server.IsValid()) { FPlatformProcess::TerminateProc(Server, true); FPlatformProcess::CloseProc(Server); }
+	// a moment for Windows to free the port before the next server takes it
+	FTimerHandle H;
+	if (UGameInstance* GI = GetGameInstance()) GI->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(this, &UHUBrainSubsystem::StartNext), 0.5f, false);
 }
 
 void UHUBrainSubsystem::Ping()
 {
-	if (bReady) return;
-	if (FPlatformTime::Seconds() - StartedAt > 120.0) { bStarting = false; UE_LOG(LogTemp, Warning, TEXT("HomicideUnit brain: server never answered")); return; }
+	if (bReady || !bStarting) return;
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
 	Req->SetURL(FString::Printf(TEXT("http://127.0.0.1:%d/health"), Port));
 	Req->SetVerb(TEXT("GET"));
@@ -52,12 +144,58 @@ void UHUBrainSubsystem::Ping()
 	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
 	Req->OnProcessRequestComplete().BindLambda([Self](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
-		if (!Self.IsValid()) return;
-		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200) { Self->bReady = true; Self->bStarting = false; UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: ready")); return; }
+		if (!Self.IsValid() || Self->bReady || !Self->bStarting) return;
+		const int32 Code = bOk && Resp.IsValid() ? Resp->GetResponseCode() : 0;
+		if (Code == 200)
+		{
+			// a card that has the processor to fall back on must first show it's the faster of the two
+			if (Self->bOnCard && !Self->bForced && Self->Plan.Num() > 0) Self->CheckSpeed(); else Self->NowReady(0.0);
+			return;
+		}
+		// Nobody on the port and our server gone: it died (no usable card, a driver fault). Somebody answering "not
+		// yet" is a server still loading the model: ours, or another copy of the game's on this PC, which we share.
+		if (Code == 0 && (!Self->Server.IsValid() || !FPlatformProcess::IsProcRunning(Self->Server))) { Self->GiveUpOn(TEXT("the model's server stopped")); return; }
+		if (FPlatformTime::Seconds() - Self->AttemptAt > 120.0) { Self->GiveUpOn(TEXT("the model never answered")); return; }
 		FTimerHandle H;
-		if (UGameInstance* GI = Self->GetGameInstance()) GI->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(Self.Get(), &UHUBrainSubsystem::Ping), 1.5f, false);
+		if (UGameInstance* GI = Self->GetGameInstance()) GI->GetTimerManager().SetTimer(H, FTimerDelegate::CreateUObject(Self.Get(), &UHUBrainSubsystem::Ping), 1.f, false);
 	});
 	Req->ProcessRequest();
+}
+
+// A card can run the model and still be the wrong place for it: an old integrated chip, or a card so short of memory
+// that the model spills into shared memory, writes slower than the processor would. So ask for a few words and time
+// them. (-HUBrainMinSpeed=<tokens a second> moves the bar: 9999 sends any card to the processor, to test this.)
+void UHUBrainSubsystem::CheckSpeed()
+{
+	float MinSpeed = 6.f; // tokens a second: a desktop processor on its own writes 8 to 16
+	FParse::Value(FCommandLine::Get(), TEXT("HUBrainMinSpeed="), MinSpeed);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
+	Req->SetURL(FString::Printf(TEXT("http://127.0.0.1:%d/v1/chat/completions"), Port));
+	Req->SetVerb(TEXT("POST"));
+	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	Req->SetContentAsString(TEXT("{\"messages\": [{\"role\": \"user\", \"content\": \"Count from one to thirty, in words.\"}], \"max_tokens\": 24, \"temperature\": 0}"));
+	Req->SetTimeout(30.f);
+	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
+	Req->OnProcessRequestComplete().BindLambda([Self, MinSpeed](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	{
+		if (!Self.IsValid() || Self->bReady || !Self->bStarting) return;
+		double Speed = 0.0;
+		int32 Wrote = 0;
+		TSharedPtr<FJsonObject> Obj;
+		const bool bAnswered = bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Resp->GetContentAsString()), Obj) && Obj.IsValid();
+		if (const TSharedPtr<FJsonObject>* T; bAnswered && Obj->TryGetObjectField(TEXT("timings"), T)) { (*T)->TryGetNumberField(TEXT("predicted_per_second"), Speed); (*T)->TryGetNumberField(TEXT("predicted_n"), Wrote); }
+		if (!bAnswered) Self->GiveUpOn(TEXT("the model didn't answer a test question in 30 s"));
+		else if (Wrote >= 8 && Speed < MinSpeed) Self->GiveUpOn(FString::Printf(TEXT("the model writes only %.1f tokens a second"), Speed));
+		else Self->NowReady(Speed); // (too few words to time, or a server that doesn't report timings: keep the card)
+	});
+	Req->ProcessRequest();
+}
+
+void UHUBrainSubsystem::NowReady(double TokensPerSecond)
+{
+	bReady = true; bStarting = false;
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: ready on the %s after %.1f s%s"), bOnCard ? TEXT("graphics card") : TEXT("processor"), FPlatformTime::Seconds() - StartedAt,
+		TokensPerSecond > 0.0 ? *FString::Printf(TEXT(" - it writes %.0f tokens a second"), TokensPerSecond) : TEXT(""));
 }
 
 // what the suspect knows, what they're hiding, how they're holding up - and the rules
@@ -232,9 +370,11 @@ void UHUBrainSubsystem::Send(const FString& SuspectId, const FString& Said, cons
 	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Req->SetContentAsString(Json);
 	Req->SetTimeout(40.f);
+	Req->SetActivityTimeout(40.f); // the answer arrives all at once: without this Unreal gives up after 30 s of silence, which a slow processor can need
 	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
 	const FString Key = Said;
-	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Key, Done, bRemember](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	const double Asked = FPlatformTime::Seconds();
+	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Key, Done, bRemember, Asked](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
 		FHUReaction R;
 		FString Content;
@@ -244,6 +384,10 @@ void UHUBrainSubsystem::Send(const FString& SuspectId, const FString& Said, cons
 			const TArray<TSharedPtr<FJsonValue>>* Choices;
 			if (Obj->TryGetArrayField(TEXT("choices"), Choices) && Choices->Num() > 0)
 				if (const TSharedPtr<FJsonObject>* M; (*Choices)[0]->AsObject()->TryGetObjectField(TEXT("message"), M)) Content = (*M)->GetStringField(TEXT("content"));
+			// how fast this PC answers, in the log: the number to look at when a player says suspects are slow
+			double Speed = 0.0; int32 Wrote = 0;
+			if (const TSharedPtr<FJsonObject>* T; Obj->TryGetObjectField(TEXT("timings"), T)) { (*T)->TryGetNumberField(TEXT("predicted_per_second"), Speed); (*T)->TryGetNumberField(TEXT("predicted_n"), Wrote); }
+			if (Self.IsValid()) UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: answered in %.2f s (%d tokens at %.0f a second, on the %s)"), FPlatformTime::Seconds() - Asked, Wrote, Speed, *Self->RunsOn());
 		}
 		// the model's JSON (if it wrapped it in anything, cut to the braces)
 		const int32 A = Content.Find(TEXT("{")), B = Content.Find(TEXT("}"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
@@ -291,6 +435,7 @@ void UHUBrainSubsystem::AskSuspect(const FString& SuspectId, const FString& Ques
 	Req->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	Req->SetContentAsString(Json);
 	Req->SetTimeout(40.f);
+	Req->SetActivityTimeout(40.f);
 	TWeakObjectPtr<UHUBrainSubsystem> Self(this);
 	Req->OnProcessRequestComplete().BindLambda([Self, SuspectId, Question, Done](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{

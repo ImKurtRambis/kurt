@@ -2,9 +2,17 @@
 // cost nothing to play - no internet, no API, no tokens.
 //
 // Files (not in git - big; see AI\README.txt):
-//   AI\llama\llama-server.exe     llama.cpp server build (MIT)
+//   AI\llama\llama-server.exe     llama.cpp server, its Vulkan build (MIT)
 //   AI\models\suspect.gguf        the model (a small Apache-2.0 instruct model)
 // The first interview starts the server in the background on 127.0.0.1:8089; it shuts down with the game.
+//
+// WHERE IT RUNS is picked here, by itself (WarmUp):
+//   1. the graphics card - any maker's. llama.cpp's Vulkan build runs on NVIDIA, AMD and Intel cards alike (on an
+//      RTX 5070 Ti it writes as fast as the CUDA build, which is twelve times the download).
+//   2. the processor - when llama.cpp finds no card, the server dies or never answers on the card, or the card
+//      writes slower than a processor would (an old integrated chip, a model spilling out of video memory).
+//      About ten times slower than a good card, but it answers.
+// -HUBrain=card|cpu forces one: for testing, or as a launch option for a player whose card misbehaves.
 //
 // The game decides the facts. The prompt gives the suspect only what they know, the truth ONLY for lies that are
 // already on the record, and their mood (from the pressure system). It is told never to confess unless the game
@@ -33,6 +41,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Brain") bool IsReady() const { return bReady; }
 	// start it (if installed) - safe to call often
 	void WarmUp();
+	// where the model is running: "graphics card" or "processor" (empty until it's up)
+	UFUNCTION(BlueprintPure, Category = "Brain") FString RunsOn() const { return !bReady ? FString() : bOnCard ? TEXT("graphics card") : TEXT("processor"); }
 
 	// ask a suspect something. Their conversation so far is remembered for this case.
 	void AskSuspect(const FString& SuspectId, const FString& Question, FHUBrainReply Done);
@@ -79,4 +89,19 @@ private:
 	FString Root() const;
 	FString SystemPrompt(const FString& SuspectId) const;
 	void Ping();
+
+	// ---- where the model runs: the card, else the processor ----
+	TArray<bool> Plan;        // what's still to try, in order: true = the graphics card, false = the processor
+	bool bOnCard = true;      // what the server now running (or starting) uses
+	bool bForced = false;     // -HUBrain= picked it: no second choice, no speed check
+	FString Cards;            // the cards llama.cpp can use, as it names them (for the log)
+	double AttemptAt = 0.0;   // when the current server was started
+	double GaveUpAt = 0.0;    // when every choice had failed (no new try for five minutes)
+	FProcHandle Lister;       // "llama-server --list-devices", writing to ListFile
+	FString ListFile;
+	void ListCards();         // wait for that list, then plan
+	void StartNext();         // start the server on the next choice in Plan
+	void GiveUpOn(const FString& Why); // this choice failed: stop its server, try the next
+	void CheckSpeed();        // a card must write faster than a processor would
+	void NowReady(double TokensPerSecond);
 };
