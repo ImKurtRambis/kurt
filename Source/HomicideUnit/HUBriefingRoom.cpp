@@ -5,6 +5,7 @@
 #include "HUCharacter.h"
 #include "TextToSpeechEngineSubsystem.h"
 #include "HUVoiceSubsystem.h"
+#include "HUVoiceSpace.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundWave.h"
 #include "Engine/Engine.h"
@@ -449,6 +450,27 @@ void AHUBriefingRoom::HoverParts(UPrimitiveComponent* Part, TArray<UPrimitiveCom
 }
 // ---------- the 911 call, played over the room while the briefing runs ----------
 
+// The call's lines are asked for one after another, in the order they are said: each is made while the one before
+// it plays. (Asked for all at once they came back in any order, and the first line could be the last to arrive.)
+void AHUBriefingRoom::AskFor911Line(int32 i)
+{
+	UHUVoiceSubsystem* Voice = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+	if (!Voice || !CallLines.IsValidIndex(i)) return;
+	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	const int32 CallerVoice = 1 + FMath::Abs(C ? C->Current.Number : 0) % 7;
+	const bool bDispatch = CallSpeakers[i] == TEXT("DISPATCH");
+	const FString Direction = bDispatch
+		? TEXT("You are a 911 emergency dispatcher on a recorded call. Calm, steady, professional; warm but firm. Clear, measured pace.")
+		: TEXT("You are a terrified bystander on the phone to 911 moments after finding something horrible. Breathless and shaky, voice cracking, rushing the words, close to tears, small gasps between phrases.");
+	TWeakObjectPtr<AHUBriefingRoom> Self(this);
+	Voice->Synthesize(CallLines[i], bDispatch ? 0 : CallerVoice, Direction, true, FHUVoiceReady::CreateLambda([Self, i](USoundWave* S, float Secs)
+	{
+		if (!Self.IsValid() || !Self->CallState.IsValidIndex(i)) return;
+		Self->CallSounds[i] = S; Self->CallSeconds[i] = Secs; Self->CallState[i] = S ? 1 : 2;
+		Self->AskFor911Line(i + 1);
+	}));
+}
+
 void AHUBriefingRoom::Play911(float DeltaSeconds)
 {
 	UHUInteractComponent* I = nullptr;
@@ -468,35 +490,21 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 		const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 		if (C) C->Build911Call(CallSpeakers, CallLines);
 		if (CallLines.Num() == 0) { bCallDone = true; return; }
-		// with a voice key, ask for every line up front, acted: a calm dispatcher and a terrified caller
+		// with a voice, the lines are spoken: a calm dispatcher and a terrified caller (AskFor911Line)
 		CallSounds.Init(nullptr, CallLines.Num());
 		CallSeconds.Init(0.f, CallLines.Num());
 		CallState.Init(Voice && Voice->HasNeuralVoice() ? 0 : 2, CallLines.Num()); // 0 waiting, 1 ready, 2 caption only
-		if (Voice && Voice->HasNeuralVoice())
-		{
-			const int32 CallerVoice = 1 + FMath::Abs(C ? C->Current.Number : 0) % 7;
-			for (int32 i = 0; i < CallLines.Num(); i++)
-			{
-				const bool bDispatch = CallSpeakers[i] == TEXT("DISPATCH");
-				const FString Direction = bDispatch
-					? TEXT("You are a 911 emergency dispatcher on a recorded call. Calm, steady, professional; warm but firm. Clear, measured pace.")
-					: TEXT("You are a terrified bystander on the phone to 911 moments after finding something horrible. Breathless and shaky, voice cracking, rushing the words, close to tears, small gasps between phrases.");
-				TWeakObjectPtr<AHUBriefingRoom> Self(this);
-				Voice->Synthesize(CallLines[i], bDispatch ? 0 : CallerVoice, Direction, true, FHUVoiceReady::CreateLambda([Self, i](USoundWave* S, float Secs)
-				{
-					if (!Self.IsValid() || !Self->CallState.IsValidIndex(i)) return;
-					Self->CallSounds[i] = S; Self->CallSeconds[i] = Secs; Self->CallState[i] = S ? 1 : 2;
-				}));
-			}
-		}
+		if (Voice && Voice->HasNeuralVoice()) AskFor911Line(0);
 		CallIdx = 0;
 		LineTime = -1.f;
 		LineWait = 0.f;
 	}
-	LineTime += DeltaSeconds;
-	// the current line still playing (or still up long enough to read)?
+	// the current line still playing (or still up long enough to read)? (LineTime -1: waiting for the next line's
+	// voice. The clock only runs while a line is up - it used to run while waiting too, which skipped any line whose
+	// voice took more than a second.)
 	if (LineTime >= 0.f)
 	{
+		LineTime += DeltaSeconds;
 		if (LineTime < LineLength) return;
 		CallIdx++;
 		LineTime = -1.f;
@@ -514,9 +522,15 @@ void AHUBriefingRoom::Play911(float DeltaSeconds)
 	if (CallState[CallIdx] == 0 && LineWait < 8.f) return;
 	const bool bDispatch = CallSpeakers[CallIdx] == TEXT("DISPATCH");
 	if (I) I->CallLine = FText::FromString(FString::Printf(TEXT("911 CALL  ▸  %s:  \"%s\""), *CallSpeakers[CallIdx], *CallLines[CallIdx]));
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit briefing: 911 line %d of %d: %s"), CallIdx + 1, CallLines.Num(), CallState[CallIdx] == 1 && CallSounds[CallIdx] ? TEXT("spoken")
+		: CallState[CallIdx] == 0 ? TEXT("caption only - its voice hadn't arrived after 8 s") : TEXT("caption only - no voice for it"));
 	if (CallState[CallIdx] == 1 && CallSounds[CallIdx])
 	{
-		UGameplayStatics::PlaySound2D(this, CallSounds[CallIdx], 1.f);
+		// the tape plays from the lectern, to the room: louder in the front row than at the back, and from that side
+		// (UHUVoiceSpace); the sound itself is already a phone call on tape (UHUVoiceSubsystem::PhoneOnTape)
+		if (UHUVoiceSpace* Space = GetWorld()->GetSubsystem<UHUVoiceSpace>())
+			Space->Say(CallSounds[CallIdx], RootComponent, NAME_None, GetActorTransform().TransformPosition(FVector(600, -380, 126)), {}, UHUVoiceSpace::EFrom::Device);
+		else UGameplayStatics::PlaySound2D(this, CallSounds[CallIdx], 1.f);
 		LineLength = CallSeconds[CallIdx] + 0.35f; // a breath between lines
 	}
 	else

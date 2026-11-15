@@ -10,6 +10,7 @@
 #include "HUInteractComponent.h"
 #include "HUBrainSubsystem.h"
 #include "HUVoiceSubsystem.h"
+#include "HUVoiceSpace.h"
 #include "HUListenSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
@@ -370,7 +371,7 @@ void AHUSuspectActor::PlayFiller(uint8 Kind)
 	const FString& L = Ready[FMath::RandRange(0, Ready.Num() - 1)];
 	USoundWave* S = FillerSounds[L];
 	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
-	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, S, GetActorLocation() + FVector(0, 0, 170));
+	VoiceAudio = SayAloud(S);
 	SpeakNotBefore = GetWorld()->GetTimeSeconds() + (S ? S->Duration : 1.f) + 0.15;
 	HUPeople::Talk(Look, S ? S->Duration : 1.f);
 	LastReply = L;
@@ -390,8 +391,21 @@ void AHUSuspectActor::PlayVoice(USoundWave* Sound)
 		return;
 	}
 	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
-	VoiceAudio = UGameplayStatics::SpawnSoundAtLocation(this, Sound, GetActorLocation() + FVector(0, 0, 170));
+	VoiceAudio = SayAloud(Sound);
 	HUPeople::Talk(Look, Sound->Duration); // the hands and head go with the words
+}
+
+// The voice comes out of their mouth and stays there as their head moves. Where each player stands decides what they
+// hear: full across the table, quieter across the room, muffled behind glass or a wall (UHUVoiceSpace).
+UAudioComponent* AHUSuspectActor::SayAloud(USoundWave* Sound)
+{
+	UHUVoiceSpace* Space = GetWorld() ? GetWorld()->GetSubsystem<UHUVoiceSpace>() : nullptr;
+	if (!Space || !Sound) return nullptr;
+	USceneComponent* On = RootComponent;
+	FName Bone;
+	FVector At = GetActorLocation() + FVector(0, 0, 165); // nobody to look at (their model isn't built): where a head would be
+	UHUVoiceSpace::Mouth(Look, On, Bone, At);
+	return Space->Say(Sound, On, Bone, At, { this, Look.Get() });
 }
 
 // the thinking brain: words, emotion, body - shared with the squad, and spoken by the voice on every machine

@@ -113,27 +113,58 @@ void UHUVoiceSubsystem::Synthesize(const FString& Text, int32 Voice, const FStri
 	Req->ProcessRequest();
 }
 
+// A phone call played off a tape (the 911 call). Clean speech goes through what such a recording goes through:
+//   the line     only 300-3400 Hz gets down a phone line: the bass and the top are each cut twice over
+//                (24 dB an octave), leaving the middle - where the words are - as it was
+//   the handset  turned up into a little grit
+//   the deck     its speed wavers (a slow wow, a faster flutter), and there is hiss under everything
+void UHUVoiceSubsystem::PhoneOnTape(int16* S, int32 N)
+{
+	if (!S || N <= 0) return;
+	const float Dt = 1.f / Rate;
+	// a standard second-order filter (the "audio EQ cookbook" one), flat up to its corner
+	struct FCut
+	{
+		float B0, B1, B2, A1, A2, X1 = 0.f, X2 = 0.f, Y1 = 0.f, Y2 = 0.f;
+		FCut(bool bBassOut, float Hz, float SampleRate)
+		{
+			const float W = 2.f * PI * Hz / SampleRate, C = FMath::Cos(W), Alpha = FMath::Sin(W) / (2.f * 0.7071f), A0 = 1.f + Alpha;
+			B0 = (bBassOut ? (1.f + C) : (1.f - C)) / 2.f / A0; B2 = B0;
+			B1 = (bBassOut ? -(1.f + C) : (1.f - C)) / A0;
+			A1 = -2.f * C / A0; A2 = (1.f - Alpha) / A0;
+		}
+		float Run(float X) { const float Y = B0 * X + B1 * X1 + B2 * X2 - A1 * Y1 - A2 * Y2; X2 = X1; X1 = X; Y2 = Y1; Y1 = Y; return Y; }
+	};
+	FCut Cuts[] = { FCut(true, 300.f, Rate), FCut(true, 300.f, Rate), FCut(false, 3400.f, Rate), FCut(false, 3400.f, Rate) };
+	TArray<float> Line;
+	Line.SetNumUninitialized(N);
+	for (int32 i = 0; i < N; i++)
+	{
+		float X = S[i] / 32768.f;
+		for (FCut& C : Cuts) X = C.Run(X);
+		const float Out = FMath::Clamp(X * 1.8f, -1.f, 1.f); // louder than it went in, as a handset is
+		Line[i] = Out - (Out * Out * Out) / 3.f;             // and clipped softly
+	}
+	FRandomStream Hiss(N); // the same line always hisses the same way
+	const int32 Fade = FMath::Max(1, FMath::Min(N / 2, Rate / 30)); // the hiss comes in and goes out over 1/30 s, not with a click
+	for (int32 i = 0; i < N; i++)
+	{
+		// the tape runs a touch fast, then slow: read the line a wavering few samples back
+		const float T = i * Dt;
+		const float Back = 14.f + 10.f * FMath::Sin(2.f * PI * 0.55f * T) + 2.f * FMath::Sin(2.f * PI * 6.1f * T);
+		const float At = i - Back;
+		const int32 A = FMath::FloorToInt(At);
+		const float Out = A < 0 || A + 1 >= N ? 0.f : FMath::Lerp(Line[A], Line[A + 1], At - A);
+		const float Edge = FMath::Min(1.f, FMath::Min(i, N - 1 - i) / (float)Fade);
+		S[i] = (int16)FMath::Clamp((Out + Hiss.FRandRange(-1.f, 1.f) * 0.006f * Edge) * 32767.f, -32768.f, 32767.f);
+	}
+}
+
 USoundWave* UHUVoiceSubsystem::MakeSound(TArray<uint8>& Pcm16, bool bPhone, float& OutSeconds)
 {
 	const int32 N = Pcm16.Num() / 2;
 	int16* S = reinterpret_cast<int16*>(Pcm16.GetData());
-	if (bPhone)
-	{
-		// a telephone line: roughly 300 Hz - 3.4 kHz, a little gain and grit
-		const float Dt = 1.f / Rate;
-		const float RcHp = 1.f / (2.f * PI * 300.f), RcLp = 1.f / (2.f * PI * 3400.f);
-		const float AHp = RcHp / (RcHp + Dt), ALp = Dt / (RcLp + Dt);
-		float PrevIn = 0.f, Hp = 0.f, Lp = 0.f;
-		for (int32 i = 0; i < N; i++)
-		{
-			const float In = S[i] / 32768.f;
-			Hp = AHp * (Hp + In - PrevIn); PrevIn = In;
-			Lp = Lp + ALp * (Hp - Lp);
-			float Out = FMath::Clamp(Lp * 1.6f, -1.f, 1.f);
-			Out = Out - (Out * Out * Out) / 3.f; // soft clip
-			S[i] = (int16)FMath::Clamp(Out * 32767.f, -32768.f, 32767.f);
-		}
-	}
+	if (bPhone) PhoneOnTape(S, N);
 	USoundWaveProcedural* W = NewObject<USoundWaveProcedural>(this);
 	W->SetSampleRate(Rate);
 	W->NumChannels = 1;

@@ -49,6 +49,13 @@ Free offline VOICES (no keys, no tokens). The game starts Tools\VoiceServer.bat 
   set HU_VOICES=cuda or cpu first to force the voices (HU_VOICES=orpheus: the small voice plus Orpheus for 911 lines on any card).
  Test them in the game: UnrealEditor.exe HomicideUnit.uproject -game -nullrhi -unattended -HUNoBrain -HUVoiceTest [-HUVoices=cpu]
   (speaks a 911 call and four suspect lines twice; the log says what each line took).
+ Where a line is heard from is the game's work (UHUVoiceSpace); the server only ever sends back clean speech:
+  A suspect's line comes from their mouth: full across the table, a third as loud across a room (5 m), faint at 10 m,
+  half as loud behind glass and a murmur behind a wall. The 911 call plays from the briefing room's lectern, and the
+  game makes it a phone call on tape: only the 300-3400 Hz a phone line carries, then the recorder's waver and hiss.
+  Check it on any level (no voices needed): UnrealEditor.exe HomicideUnit.uproject /Game/Maps/L_Scene -game -nullrhi -nosound
+  -unattended -HUNoBrain -HUNoVoice -HUVoiceSpaceTest   (the log: "HUVoiceSpaceTest: ok ..." lines, then "all checks passed").
+  Add -HUVoiceSpaceTape=C:\path\line.wav (24 kHz 16-bit mono) to write line_on_tape.wav beside it: that line as the 911 call plays it.
 
 HEARING THE DETECTIVE (hold V in an interview, talk, let go). Uses sherpa-onnx (Apache-2.0) from AI\voice\bin\, on the processor
 (no graphics card needed - "NVIDIA" below is who made the model). The best model present is used:

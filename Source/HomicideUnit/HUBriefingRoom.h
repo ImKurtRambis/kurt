@@ -73,6 +73,7 @@ private:
 	TArray<uint8> CallState;
 	bool bCallDone = false;
 	void Play911(float DeltaSeconds);
+	void AskFor911Line(int32 Index); // has that line spoken, then asks for the next: they arrive in order
 	void SeatSquad();
 	TArray<TWeakObjectPtr<APawn>> Seated;
 	FString PendingLine;

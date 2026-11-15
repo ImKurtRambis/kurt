@@ -8,8 +8,9 @@
 //   (AI\voice\supertonic, run by sherpa-onnx). The server picks by itself; -HUVoices=cuda|cpu forces one.
 //   Its Python is in AI\python (see AI\README.txt).
 // Without a local voice or a key (or if a request fails) the line shows as a caption only - no robotic voice.
-// Audio comes back as raw 24 kHz PCM and plays as a procedural sound; "phone" lines go through a telephone
-// band-pass so a 911 call sounds like a recording.
+// Audio comes back as raw 24 kHz PCM and plays as a procedural sound. "Phone" lines (the 911 call) are a phone call
+// on tape: the line's narrow band, then the recorder's waver and hiss (PhoneOnTape).
+// This only makes the sound. Saying it somewhere - a suspect's mouth, the tape on the lectern - is UHUVoiceSpace.
 // The key is stored in the local save file on this PC. A shipped game should proxy these calls through a server.
 #pragma once
 
@@ -47,9 +48,14 @@ public:
 	// the free offline voices are installed
 	UFUNCTION(BlueprintPure, Category = "Voice") bool HasLocalVoice() const;
 
+	// 24 kHz 16-bit mono samples -> a sound that can be played once (bPhone: through PhoneOnTape first)
+	class USoundWave* MakeSound(TArray<uint8>& Pcm16, bool bPhone, float& OutSeconds);
+	// Turns clean speech (24 kHz, in place) into a phone call played off a tape: only the 300-3400 Hz a phone line
+	// carries, the handset's grit, then the deck - its speed wavering a little, hiss under everything.
+	static void PhoneOnTape(int16* Samples, int32 Num);
+
 private:
 	UPROPERTY() TArray<class USoundWaveProcedural*> Keep; // stop the GC taking sounds while they play
-	class USoundWave* MakeSound(TArray<uint8>& Pcm16, bool bPhone, float& OutSeconds);
 	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries);
 	FProcHandle ServerProc; bool bStarting = false, bOrpheusReady = false, bCsmReady = false; double StartedAt = 0.0;
 	bool bLoaded = false; // the server has finished loading whatever this PC can run

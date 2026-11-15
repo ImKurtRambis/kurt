@@ -118,6 +118,8 @@ private:
 	void RecordNextFiller();
 	void PlayFiller(uint8 Kind);
 	void PlayVoice(class USoundWave* Sound);
+	// out loud, from their mouth: every player hears it from where they stand (UHUVoiceSpace)
+	class UAudioComponent* SayAloud(class USoundWave* Sound);
 	UPROPERTY() class USoundWave* PendingVoice = nullptr;
 	FTimerHandle VoiceTimer;
 	int32 VoiceNum() const { return 1 + (int32)(GetTypeHash(SuspectId) % 10); }
