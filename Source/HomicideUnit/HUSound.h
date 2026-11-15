@@ -42,7 +42,9 @@ public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type T) const override { return T == EWorldType::Game || T == EWorldType::PIE; }
 private:
 	TMap<TWeakObjectPtr<AActor>, float> StepDist;
-	TArray<TObjectPtr<class UAudioComponent>> Loops;
+	// UPROPERTY: nothing else holds these looping sounds, so without it the garbage collector frees them about a minute
+	// in - the rain and music stop, and Deinitialize then stops freed memory (the crash on leaving a level)
+	UPROPERTY() TArray<TObjectPtr<class UAudioComponent>> Loops;
 	TSharedPtr<class IInputProcessor> Clicks;
 	int32 LastStep = 0;
 };
