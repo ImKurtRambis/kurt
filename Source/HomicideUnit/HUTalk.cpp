@@ -549,6 +549,7 @@ void UHUInteractComponent::TalkTest(float Dt)
 		UHUListenSubsystem* L = W->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
 		if (!L || !L->IsInstalled()) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: speech-to-text isn't installed here: holding V not checked")); }
 		else if (bTalkOpen) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: holding V beside %s opened the microphone (%s)"), *A->DisplayName(), *L->MicLabel()); }
+		else if (FParse::Param(FCommandLine::Get(), TEXT("nosound"))) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: this run has no sound (-nosound), so holding V couldn't open a microphone: not checked")); }
 		else { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: holding V beside %s did NOT open a microphone on this PC (none plugged in, or it is in use)"), *A->DisplayName()); }
 		TalkUp();
 		Next();
