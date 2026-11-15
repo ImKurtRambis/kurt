@@ -218,7 +218,7 @@ void UHUVoiceSpace::RunTest()
 	for (const EFrom From : { EFrom::Person, EFrom::Device })
 	{
 		FString Line;
-		for (const float Cm : { 100.f, 150.f, 300.f, 500.f, 1000.f, 1500.f, 2500.f })
+		for (const float Cm : { 100.f, 200.f, 300.f, 500.f, 1000.f, 1500.f, 2500.f })
 			Line += FString::Printf(TEXT("%s%.0f m %.0f%%"), Line.IsEmpty() ? TEXT("") : TEXT(", "), Cm / 100.f, LoudnessAt(Cm, From) * 100.f);
 		UE_LOG(LogTemp, Display, TEXT("HUVoiceSpaceTest: %s, loudness by distance: %s"), From == EFrom::Person ? TEXT("a person") : TEXT("a tape played to a room"), *Line);
 	}
