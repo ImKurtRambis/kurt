@@ -835,6 +835,21 @@ int32 UHUPromptWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, c
 		Bottom = P.Y - 10.f;
 	};
 	Caption(Owner->Subtitle.ToString(), Gold, false, nullptr);
+	// ---- talking to someone with no menu (hold V): the open microphone, then what you said while they think ----
+	if (Owner->bTalkOpen)
+	{
+		const UHUListenSubsystem* Mic = Owner->GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+		const FString T = TEXT("LISTENING  —  let go of V when you're done");
+		const FSlateFontInfo F = Font("Bold", 11);
+		const float W = Measure(T, F).X + 74.f, H = 48.f;
+		const FVector2D P((L.X - W) * 0.5f, Bottom - H);
+		Panel(Out, Ly, G, P, FVector2D(W, H), 1.f, Red);
+		Box(Out, Ly + 2, G, P + FVector2D(20, 14), FVector2D(10, 10), Red, 5.f);
+		Text(Out, Ly + 3, G, T, F, P + FVector2D(40, 9), Ink);
+		Bar(Out, Ly + 2, G, P + FVector2D(40, 32), FVector2D(W - 60, 5), Mic ? Mic->Level() : 0.f, Red);
+		Bottom = P.Y - 10.f;
+	}
+	else Caption(Owner->TalkLine.ToString(), Blue, true, nullptr);
 	{
 		// the 911 call: "911 CALL  ▸  NAME:  "line""
 		FString Call = Owner->CallLine.ToString();

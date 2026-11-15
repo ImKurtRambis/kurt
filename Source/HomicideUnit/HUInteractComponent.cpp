@@ -52,7 +52,8 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Keys->BindKey(EKeys::E, IE_Released, this, &UHUInteractComponent::ReleasePrimary);
 	Keys->BindKey(EKeys::Q, IE_Released, this, &UHUInteractComponent::ReleaseSecondary);
 	Keys->BindKey(EKeys::F, IE_Pressed, this, &UHUInteractComponent::ToggleFlashlight);
-	Keys->BindKey(EKeys::V, IE_Pressed, this, &UHUInteractComponent::ToggleUV);
+	Keys->BindKey(EKeys::V, IE_Pressed, this, &UHUInteractComponent::TalkDown); // held near someone: talk to them. A tap: the UV light (HUTalk.cpp)
+	Keys->BindKey(EKeys::V, IE_Released, this, &UHUInteractComponent::TalkUp);
 	Keys->BindKey(EKeys::R, IE_Pressed, this, &UHUInteractComponent::Scan);
 	Keys->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &UHUInteractComponent::UseHeld);
 	Keys->BindKey(EKeys::One, IE_Pressed, this, &UHUInteractComponent::Slot1);
@@ -315,6 +316,7 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		return;
 	}
 	TickMarkers();
+	TickTalk(DeltaTime); // hold V near someone and talk: no menu (HUTalk.cpp)
 	if (UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>())
 	{
 		const bool bWant = bMenuOpen && MenuRow == 6;

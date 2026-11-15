@@ -96,8 +96,13 @@ FText AHUSuspectActor::GetPrompt_Implementation(APawn* User) const
 	if (I && I->IsHolding(EHUTool::Handcuffs))
 		return FText::FromString(FString::Printf(TEXT("[E] Arrest %s — put the cuffs on  ·  [Q] Run their record"), *S.Name));
 	const bool bCanSeize = HUPhone::HasWarrant(Cases, SuspectId) && !Cases->SeizedPhones.Contains(SuspectId);
-	return FText::FromString(FString::Printf(TEXT("[E] Talk to %s%s  ·  [Q] %s"), *S.Name, S.Role.IsEmpty() ? TEXT("") : *(TEXT(", ") + S.Role),
-		bCanSeize ? TEXT("Seize their phone (you have a warrant)") : TEXT("Run their record")));
+	// with a microphone you just talk to them (hold V); E is the full interview sheet
+	const UHUListenSubsystem* Ears = GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
+	const FString Who = S.Name + (S.Role.IsEmpty() ? FString() : TEXT(", ") + S.Role);
+	const TCHAR* Other = bCanSeize ? TEXT("Seize their phone (you have a warrant)") : TEXT("Run their record");
+	return FText::FromString(Ears && Ears->IsInstalled()
+		? FString::Printf(TEXT("[V] Hold and talk to %s  ·  [E] Interview  ·  [Q] %s"), *Who, Other)
+		: FString::Printf(TEXT("[E] Talk to %s  ·  [Q] %s"), *Who, Other));
 }
 
 void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
@@ -107,8 +112,9 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!Cases || !Cases->GetSuspect(SuspectId, S) || !I) return;
 
-	if (bSecondary && bInterviewing && Interviewer.Get() == User && !bTyping) { bThinking = false; CloseInterview(); return; } // Q leaves, even mid-answer
-	if (bInterviewing && Interviewer.Get() == User && (bTyping || bThinking)) return; // typing / waiting on an answer
+	// (spoken to with no menu - bWalkUp - nothing is locked, so E and Q do what they always do)
+	if (bSecondary && bInterviewing && !bWalkUp && Interviewer.Get() == User && !bTyping) { bThinking = false; CloseInterview(); return; } // Q leaves, even mid-answer
+	if (bInterviewing && !bWalkUp && Interviewer.Get() == User && (bTyping || bThinking)) return; // typing / waiting on an answer
 	if (bCuffed)
 	{
 		if (bSecondary)
@@ -151,7 +157,8 @@ void AHUSuspectActor::Interact_Implementation(APawn* User, bool bSecondary)
 	}
 	// otherwise: the interview (opened only on the screen of whoever's doing it)
 	if (!User->IsLocallyControlled()) return;
-	if (bInterviewing && Interviewer.Get() == User) return; // in the interview you talk (V), not press keys
+	if (bInterviewing && !bWalkUp && Interviewer.Get() == User) return; // in the interview you talk (V), not press keys
+	if (bInterviewing && bWalkUp) CloseInterview(); // you were just talking: now it's the sit-down interview
 	OpenInterview(User);
 	I->Say(FString::Printf(TEXT("%s:  \"%s\"     (hold V and talk to them)"), *S.Name.ToUpper(), *S.Intro));
 }
@@ -191,11 +198,37 @@ void AHUSuspectActor::CloseInterview()
 {
 	if (APawn* U = Interviewer.Get())
 	{
-		if (APlayerController* PC = Cast<APlayerController>(U->GetController())) { PC->SetIgnoreMoveInput(false); PC->SetIgnoreLookInput(false); DisableInput(PC); }
-		if (UHUInteractComponent* I = U->FindComponentByClass<UHUInteractComponent>()) I->Interviewing = nullptr;
+		UHUInteractComponent* I = U->FindComponentByClass<UHUInteractComponent>();
+		if (bWalkUp) { if (I && I->TalkingTo.Get() == this) I->TalkingTo = nullptr; } // nothing was locked: nothing to give back
+		else
+		{
+			if (APlayerController* PC = Cast<APlayerController>(U->GetController())) { PC->SetIgnoreMoveInput(false); PC->SetIgnoreLookInput(false); DisableInput(PC); }
+			if (I) I->Interviewing = nullptr;
+		}
 	}
-	bInterviewing = false; Interviewer = nullptr;
+	bInterviewing = false; bWalkUp = false; Interviewer = nullptr;
 	bFacing = false; Stance = 0; Arms = 0; Gesture = 0; GestureT = -1.f; // back to how they were standing
+}
+
+// Spoken to with no interview open. The first thing said starts the conversation: they turn to you, their premade
+// lines get recorded, the brain warms up. Then it is Handle(), exactly as in the interview.
+void AHUSuspectActor::HearFrom(APawn* User, const FString& Said)
+{
+	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (!I || !User->IsLocallyControlled() || IsHidden() || Said.IsEmpty()) return;
+	if (StunLeft > 0.f) { I->Say(FString::Printf(TEXT("%s is in no state to talk. Give them a moment."), *DisplayName())); return; }
+	if (bInterviewing && (!bWalkUp || Interviewer.Get() != User)) return; // the sit-down interview has its own microphone
+	if (!bInterviewing)
+	{
+		bInterviewing = true; bWalkUp = true; Interviewer = User; LastReply.Reset();
+		bTyping = false; Draft.Reset(); bMicOpen = false; Heard.Reset();
+		bFacing = true;
+		RecordFillers();
+		if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
+	}
+	TalkedAt = GetWorld()->GetTimeSeconds();
+	if (bThinking) { I->Say(FString::Printf(TEXT("%s is still answering. Let them finish."), *DisplayName())); return; }
+	Handle(Said);
 }
 
 // typing a question: the other interview keys stand down until Enter / Esc
@@ -306,7 +339,7 @@ void AHUSuspectActor::Handle(const FString& Said)
 	if (!I) return;
 	if (SaysAny(Said, { TEXT("that's all"), TEXT("that is all"), TEXT("we're done"), TEXT("we are done"), TEXT("you can go"), TEXT("that'll be all"), TEXT("goodbye") }))
 	{
-		I->Say(FString::Printf(TEXT("You end the interview with %s."), *DisplayName()));
+		I->Say(bWalkUp ? FString::Printf(TEXT("You leave %s be."), *DisplayName()) : FString::Printf(TEXT("You end the interview with %s."), *DisplayName()));
 		CloseInterview();
 		return;
 	}
@@ -447,13 +480,15 @@ void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FS
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	if (!C || !C->GetSuspect(SuspectId, S)) return;
 	bThinking = false;
+	TalkedAt = GetWorld()->GetTimeSeconds();
 	if (User && User->IsLocallyControlled()) LastReply = Answer;
 	Emotion = InEmotion < HUReact::EmotionCount ? InEmotion : (uint8)HUReact::Calm;
 	Act(InAction);
 	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
 	{
 		const FString Body = InAction != HUReact::None ? FString::Printf(TEXT("  (%s)"), HUReact::ActionLabel(InAction)) : FString();
-		I->Say(FString::Printf(TEXT("\"%s\"   %s:  %s%s"), *Question, *S.Name.ToUpper(), *Answer, *Body));
+		// spoken to with no menu: their line under their name (you know what you just asked); in the interview, both
+		I->Say(bWalkUp ? FString::Printf(TEXT("%s:  %s%s"), *S.Name.ToUpper(), *Answer, *Body) : FString::Printf(TEXT("\"%s\"   %s:  %s%s"), *Question, *S.Name.ToUpper(), *Answer, *Body));
 	}
 	Speak(Answer, InEmotion);
 }
@@ -501,7 +536,14 @@ void AHUSuspectActor::EndPlay(const EEndPlayReason::Type Reason)
 void AHUSuspectActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (bInterviewing) { const APawn* V = Interviewer.Get(); if (!V || FVector::Dist2D(V->GetActorLocation(), GetActorLocation()) > 450.f) CloseInterview(); }
+	if (bInterviewing)
+	{
+		// Talking with no menu ends when you walk out of earshot or leave them be for half a minute (their voice
+		// finishes what it's saying either way); the sit-down interview only if you're somehow moved away.
+		const APawn* V = Interviewer.Get();
+		const bool bGaveUp = bWalkUp && !bThinking && GetWorld()->GetTimeSeconds() - TalkedAt > 30.0;
+		if (!V || bGaveUp || FVector::Dist2D(V->GetActorLocation(), GetActorLocation()) > (bWalkUp ? 800.f : 450.f)) CloseInterview();
+	}
 	// sprayed / tased: bent forward, then slowly straightening up
 	if (StunLeft > 0.f)
 	{

@@ -60,6 +60,10 @@ public:
 	void AutoPickMic(bool bAfterSilence);
 	bool LastWasSilent() const { return bLastSilent; }
 	void RecheckMic() { bProbedOnce = false; AutoPickMic(false); } // HU.MicCheck
+#if !UE_BUILD_SHIPPING
+	// sound handed over in place of the microphone (-HUTalkTest has the small voice say lines to the ears)
+	void HearSamples(const TArray<float>& Mono, int32 Rate, FHUHeard Done) { WarmUp(); Hear(Mono, Rate, Done); }
+#endif
 
 private:
 	TUniquePtr<Audio::FAudioCapture> Capture;

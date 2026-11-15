@@ -18,7 +18,8 @@ THE BRAIN. Put these here (they're big, so they're not in git):
   AI\models\suspect.gguf                   (a small instruct model, Apache-2.0)
 
 Without them the game still works: suspects answer typed questions with written lines.
-In an interview press T, type, Enter. The model only voices the suspect - the game decides every fact.
+Walk up to a suspect, hold V and talk - no menu (call a name, "Walter, where were you?", to talk to someone you aren't
+facing). E is the sit-down interview: there, T types instead. The model only voices the suspect - the game decides every fact.
 The game's log says where the model runs and how fast ("HomicideUnit brain: ready on the graphics card ... 193 tokens a second",
 then "answered in 0.24 s ..." for every answer).
 
@@ -57,7 +58,7 @@ Free offline VOICES (no keys, no tokens). The game starts Tools\VoiceServer.bat 
   -unattended -HUNoBrain -HUNoVoice -HUVoiceSpaceTest   (the log: "HUVoiceSpaceTest: ok ..." lines, then "all checks passed").
   Add -HUVoiceSpaceTape=C:\path\line.wav (24 kHz 16-bit mono) to write line_on_tape.wav beside it: that line as the 911 call plays it.
 
-HEARING THE DETECTIVE (hold V in an interview, talk, let go). Uses sherpa-onnx (Apache-2.0) from AI\voice\bin\, on the processor
+HEARING THE DETECTIVE (hold V near a suspect, talk, let go). Uses sherpa-onnx (Apache-2.0) from AI\voice\bin\, on the processor
 (no graphics card needed - "NVIDIA" below is who made the model). The best model present is used:
   AI\stt-accurate\  NVIDIA Parakeet TDT 0.6B v2, int8 (encoder/decoder/joiner .int8.onnx + tokens.txt, ~630 MB)
       from github.com/k2-fsa/sherpa-onnx releases "asr-models": sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2
@@ -67,3 +68,6 @@ HEARING THE DETECTIVE (hold V in an interview, talk, let go). Uses sherpa-onnx (
   Tested on 80 accented-English clips (EdAcc, 20 accents) and 61 interview lines, clean / with chatter / with noise:
       words wrong on accents  - Moonshine tiny 38% / 61% / 60%,  Parakeet 0.6B v2 21% / 33% / 32%.
   Test the installed model: UnrealEditor.exe HomicideUnit.uproject -game -HUListenTest=C:\path\question.wav (16-bit .wav; logs what it heard).
+  Test who a spoken line goes to: UnrealEditor.exe HomicideUnit.uproject /Game/Maps/L_Scene -game -nullrhi -nosound -unattended
+      -HUNoBrain -HUNoVoice -HUTalkTest   (the log: "HUTalkTest: ok ..." lines - the last three are said out loud by the small voice
+      and made out by the ears - then "all checks passed").

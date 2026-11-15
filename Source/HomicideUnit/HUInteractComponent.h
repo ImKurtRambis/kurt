@@ -5,6 +5,7 @@
 //   Your body holds still while you look it over: put the crosshair on a pouch (or scroll), LEFT CLICK uses it. Your hand keeps what it's holding.
 //   LEFT CLICK uses what you're holding: lights switch on/off, the scanner pings, the print kit and crowbar work
 //   on the evidence you're looking at. F / V / R grab the flashlight / UV light / scanner and use it in one go.
+//   HOLD V near a suspect and you're talking to them instead (HUTalk.cpp); a tap of V is the UV light.
 // Tools only work in your hand: prints need the print kit held, strongboxes need the crowbar held.
 // What you hold is drawn in first person, in your hand.
 #pragma once
@@ -117,6 +118,19 @@ public:
 	UFUNCTION(Server, Reliable) void ServerAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
 	UFUNCTION(NetMulticast, Reliable) void MulticastAnswer(const FString& SuspectPath, const FString& Question, const FString& Answer, uint8 Emotion, uint8 Action);
 
+	// ---- TALKING TO SOMEONE, NO MENU (HUTalk.cpp): walk up, hold V, speak, let go ----
+	//   Who it's for: anyone in earshot whose name you call ("Walter, where were you?", "Mr. Hale?"), else whoever
+	//   you're facing, else whoever you were already talking to. They turn to you and answer out loud, and you stay
+	//   free to move. It's the same conversation as the interview underneath: evidence you name, a lie you call out
+	//   and their record all count. A tap of V is still the UV light; E still opens the full interview sheet.
+	UPROPERTY(BlueprintReadOnly, Category = "Talk") bool bTalkOpen = false; // the microphone is open: you're being heard
+	UPROPERTY(BlueprintReadOnly, Category = "Talk") FText TalkLine;         // what you said and to whom, while they think (HUD)
+	TWeakObjectPtr<class AHUSuspectActor> TalkingTo;                        // who you last spoke to this way
+	// who a spoken line is for; null if nobody near enough heard it. OutHow says why them (the log, tests).
+	class AHUSuspectActor* WhoHears(const FString& Said, FString* OutHow = nullptr) const;
+	// say a line out loud to whoever it's for (the microphone ends up here; so do tests)
+	void SayTo(const FString& Said);
+
 	// a moment flagged on the security tapes: the note goes to the whole squad; bCatch = it's the clip that
 	// catches the culprit's lie (every machine puts the lie on its record)
 	void SendTapeNote(const FString& Note, bool bCatch);
@@ -227,4 +241,12 @@ private:
 	void SendBelt(uint8 Item, const FString& TargetPath);
 	void WheelUp(); void WheelDown();
 	void Setup(class APlayerController* PC);
+	// talking with no menu (HUTalk.cpp)
+	void TalkDown(); void TalkUp(); // V: held = talk, tapped = the UV light
+	void TickTalk(float Dt);
+	bool TalkBusy() const;          // a menu, the sit-down interview, a desk or the tapes has the keys
+	bool bTalkKey = false, bTalkHot = false, bTalkNoMic = false; double TalkKeyAt = 0.0; // V down; the microphone recording since then; none answered
+	bool bEarsWarm = false, bInEarshot = false; float EarsClock = 0.f;
+	void TalkTest(float Dt);        // -HUTalkTest
+	int32 TalkStep = -1, TalkWrong = 0; float TalkClock = 0.f;
 };

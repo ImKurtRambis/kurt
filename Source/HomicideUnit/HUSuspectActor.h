@@ -1,5 +1,7 @@
 // A person of interest at the scene, played by the shared MetaHuman cast.
-//   E starts the interview (you talk to them out loud - see below).   Q runs their record.
+//   HOLD V near them and talk: no menu, and you stay free to move (HUTalk.cpp decides who you're talking to).
+//   E is the sit-down interview: the same conversation, with their statements and your evidence on screen.
+//   Q runs their record.
 //   The CUFFS on your belt (look down, pick them, click) arrest them: cuffed, hands behind their back, and they follow you.
 //   Pepper spray or the taser (also on the belt) doubles them over for a few seconds.
 //   Walk them to the police van outside and put them in the back; the van takes them to the precinct.
@@ -45,6 +47,15 @@ public:
 	// how they're doing it: their emotion and what their body just did (for the HUD)
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") uint8 Emotion = 0;
 	UPROPERTY(BlueprintReadOnly, Category = "Interview") uint8 LastAction = 0;
+	// ---- spoken to with no interview open (hold V near them: UHUInteractComponent::SayTo) ----
+	//   They turn to you and answer, and you stay free to move and look around. Underneath it is the same
+	//   conversation as the interview (bInterviewing is set; bWalkUp says nothing is locked and no sheet is on
+	//   screen), so evidence you name, a lie you call out and their record all count. It ends when you walk out of
+	//   earshot, leave them be for half a minute, or say "that's all".
+	UPROPERTY(BlueprintReadOnly, Category = "Interview") bool bWalkUp = false;
+	void HearFrom(APawn* User, const FString& Said);
+	// here to be spoken to (not gone in the van). Doubled over, they still hear you: HearFrom says they can't answer.
+	bool CanHear() const { return !IsHidden(); }
 	// the thinking brain's answer (computed on the asker's PC), performed on every machine
 	void ApplyAnswer(APawn* User, const FString& Question, const FString& Answer, uint8 InEmotion, uint8 InAction);
 	TArray<FString> BaggedIds() const;
@@ -81,6 +92,7 @@ private:
 	float StunLeft = 0.f;
 	void Pose();
 	TWeakObjectPtr<APawn> Interviewer;
+	double TalkedAt = 0.0; // spoken to with no menu: when the last thing was said (they give up on you after a while)
 	void OpenInterview(APawn* User);
 	void CloseInterview();
 	void TypeKey(FKey Key);
