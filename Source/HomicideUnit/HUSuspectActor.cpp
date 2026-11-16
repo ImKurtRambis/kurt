@@ -9,6 +9,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
 #include "HUBrainSubsystem.h"
+#include "HUCanned.h"
 #include "HUVoiceSubsystem.h"
 #include "HUVoiceSpace.h"
 #include "HUListenSubsystem.h"
@@ -343,6 +344,14 @@ void AHUSuspectActor::Handle(const FString& Said)
 		CloseInterview();
 		return;
 	}
+	// a hello, or "who are you?": their introduction, there and then - nothing to think about, nothing to wait for
+	if (const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>(); C && HUCanned::Greeting(Said, DisplayName()))
+	{
+		if (UHUBrainSubsystem* B = GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->Tally(UHUBrainSubsystem::EAnsweredBy::Hand);
+		LastTopic = INDEX_NONE;
+		I->SendAnswer(GetPathName(), Said, HUCanned::Introduction(*C, SuspectId), 255, HUReact::FaceYou);
+		return;
+	}
 	const FString Clue = MatchClue(Said);
 	const bool bRecord = SaysAny(Said, { TEXT("record"), TEXT("rap sheet"), TEXT("priors"), TEXT("your history"), TEXT("arrested before"), TEXT("been arrested"), TEXT("criminal") });
 	const bool bLie = SaysAny(Said, { TEXT("lying"), TEXT("liar"), TEXT("lie"), TEXT("lied"), TEXT("the truth"), TEXT("bullshit"), TEXT("don't believe"), TEXT("not true"), TEXT("come clean") });
@@ -403,6 +412,10 @@ void AHUSuspectActor::PlayFiller(uint8 Kind)
 	if (Ready.Num() == 0) return; // not recorded yet: just the "..." until the answer
 	const FString& L = Ready[FMath::RandRange(0, Ready.Num() - 1)];
 	USoundWave* S = FillerSounds[L];
+	// A sound plays once: the one stored here is spent after its first use, and said again it would be silence.
+	// The voice keeps the line itself, so take a new sound of it each time.
+	float Fresh = 0.f;
+	if (UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>()) if (USoundWave* New = V->FromKept(L, VoiceNum(), Fresh)) S = New;
 	if (VoiceAudio.IsValid()) VoiceAudio->Stop();
 	VoiceAudio = SayAloud(S);
 	SpeakNotBefore = GetWorld()->GetTimeSeconds() + (S ? S->Duration : 1.f) + 0.15;
@@ -452,13 +465,20 @@ void AHUSuspectActor::Think(const FString& Said, const FString& Situation, const
 		if (!Self.IsValid()) return;
 		Self->bThinking = false;
 		FHUReaction Out = R;
-		if (Out.Say.IsEmpty())
+		if (!Out.Say.IsEmpty()) Self->LastTopic = INDEX_NONE;
+		else
 		{
-			// no brain (or it failed): the game's written line, or one for their mood
+			// No brain (not installed, not up yet, or it failed). In order: the game's own written line for what just
+			// happened; a hand-written answer if this is one of the questions everyone asks (HUCanned: built from what
+			// they've already told the detective); a line for their mood.
 			const UHUCaseSubsystem* C = Self->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 			const EHUSuspectMood M = C ? C->MoodOf(Self->SuspectId) : EHUSuspectMood::Calm;
-			Out.Say = !Fallback.IsEmpty() ? Fallback : M == EHUSuspectMood::Lawyered ? FString(TEXT("I want my lawyer.")) : HUInterrogation::PressLine(M, GetTypeHash(Said));
+			const int32 Topic = Fallback.IsEmpty() ? UHUBrainSubsystem::TopicOf(Said) : INDEX_NONE;
+			const FString Canned = C ? HUCanned::AnswerTopic(*C, Self->SuspectId, Topic, Topic == Self->LastTopic) : FString();
+			Self->LastTopic = Topic;
+			Out.Say = !Fallback.IsEmpty() ? Fallback : !Canned.IsEmpty() ? Canned : M == EHUSuspectMood::Lawyered ? FString(TEXT("I want my lawyer.")) : HUInterrogation::PressLine(M, GetTypeHash(Said));
 			Out.Emotion = 255; Out.Action = HUReact::None;
+			if (UHUBrainSubsystem* Brain = Self->GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) Brain->Tally(UHUBrainSubsystem::EAnsweredBy::Hand);
 		}
 		UHUInteractComponent* I = Asker.IsValid() ? Asker->FindComponentByClass<UHUInteractComponent>() : nullptr;
 		if (I) I->SendAnswer(Self->GetPathName(), Said, Out.Say, Out.Emotion, Out.Action);
@@ -469,9 +489,36 @@ void AHUSuspectActor::Think(const FString& Said, const FString& Situation, const
 	if (!OpenedWith.IsEmpty()) Sit += (Sit.IsEmpty() ? TEXT("") : TEXT(" ")) + FString::Printf(TEXT("You have already started your answer out loud with \"%s\" - carry straight on from there; don't repeat it."), *OpenedWith);
 	OpenedWith.Reset();
 	// a question every detective asks: written ahead of time, no wait (a premade opener still plays first)
-	if (FHUReaction Pre; Situation.IsEmpty() && B && B->TakeReady(SuspectId, Said, Pre)) { Deliver(Pre); return; }
-	if (B && B->IsReady()) B->React(SuspectId, Said, Sit, FHUBrainReact::CreateLambda(Deliver));
+	if (FHUReaction Pre; Situation.IsEmpty() && B && B->TakeReady(SuspectId, Said, Pre)) { B->Tally(UHUBrainSubsystem::EAnsweredBy::Ahead); Deliver(Pre); return; }
+	if (B && B->IsReady())
+	{
+		// off-script: this one is thought up now
+		TWeakObjectPtr<UHUBrainSubsystem> Brain(B);
+		B->React(SuspectId, Said, Sit, FHUBrainReact::CreateLambda([Deliver, Brain](const FHUReaction& R)
+		{
+			if (!R.Say.IsEmpty() && Brain.IsValid()) Brain->Tally(UHUBrainSubsystem::EAnsweredBy::Live);
+			Deliver(R);
+		}));
+	}
 	else { if (B) B->WarmUp(); Deliver(FHUReaction()); }
+}
+
+// The player is walking up: have their voice ready before a word is said - their stalling lines, their introduction,
+// and the answers to the questions everyone asks (the ones the brain has written for them and writes from now on;
+// the hand-written ones while there is no brain to write any). Only for someone being walked up to: voices cost.
+void AHUSuspectActor::GetReady()
+{
+	if (bReadied || IsHidden()) return;
+	bReadied = true;
+	UGameInstance* GI = GetGameInstance();
+	UHUVoiceSubsystem* V = GI ? GI->GetSubsystem<UHUVoiceSubsystem>() : nullptr;
+	const UHUCaseSubsystem* C = GI ? GI->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	if (!V || !C || !V->HasLocalVoice()) return;
+	RecordFillers();
+	V->MakeAhead(HUCanned::Introduction(*C, SuspectId), VoiceNum());
+	UHUBrainSubsystem* B = GI->GetSubsystem<UHUBrainSubsystem>();
+	if (B && B->IsInstalled()) B->VoiceAhead(SuspectId, VoiceNum());
+	if (!B || !B->IsReady()) for (int32 T = UHUBrainSubsystem::TopicCount - 1; T >= 0; T--) V->MakeAhead(HUCanned::AnswerTopic(*C, SuspectId, T), VoiceNum());
 }
 
 void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FString& Answer, uint8 InEmotion, uint8 InAction)

@@ -54,9 +54,32 @@ public:
 	// carries, the handset's grit, then the deck - its speed wavering a little, hiss under everything.
 	static void PhoneOnTape(int16* Samples, int32 Num);
 
+	// LINES KEPT, AND LINES MADE AHEAD (the local voices). Every line a local voice says is kept (the oldest go once
+	// there's about 20 minutes of them), so the same words in the same voice asked for again (Synthesize) play at
+	// once: written lines come round again. MakeAhead has a line said before anyone asks for it - one at a time, and
+	// only while nobody is waiting on a line.
+	void MakeAhead(const FString& Text, int32 Voice);
+	bool HasAhead(const FString& Text, int32 Voice) const;
+	// how many lines were asked for and found already made (played with no wait)
+	int32 ServedFromKept() const { return ServedKept; }
+	// a kept line as a new sound, right now (null if it isn't kept). A sound plays once: ask again to play it again.
+	class USoundWave* FromKept(const FString& Text, int32 Voice, float& OutSeconds);
+
 private:
 	UPROPERTY() TArray<class USoundWaveProcedural*> Keep; // stop the GC taking sounds while they play
-	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries);
+	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries, bool bAhead = false);
+	// kept sound (24 kHz 16-bit mono) by voice and words
+	TMap<FString, TArray<uint8>> Kept;
+	TArray<FString> KeptOrder; // oldest first
+	int64 KeptBytes = 0;
+	static FString KeptKey(const FString& Text, int32 Voice, bool bPhone);
+	void KeepSound(const FString& Key, const TArray<uint8>& Pcm);
+	TArray<TPair<FString, int32>> AheadQueue; // (words, voice) waiting their turn
+	bool bAheadBusy = false;
+	int32 Waiting = 0;         // lines someone is waiting on right now: they go first
+	int32 ServedKept = 0;
+	FTimerHandle AheadTimer;
+	void PumpAhead();
 	FProcHandle ServerProc; bool bStarting = false, bOrpheusReady = false, bCsmReady = false; double StartedAt = 0.0;
 	bool bLoaded = false; // the server has finished loading whatever this PC can run
 	void Ping(bool bFirst);

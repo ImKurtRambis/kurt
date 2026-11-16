@@ -23,6 +23,16 @@ facing). E is the sit-down interview: there, T types instead. The model only voi
 The game's log says where the model runs and how fast ("HomicideUnit brain: ready on the graphics card ... 193 tokens a second",
 then "answered in 0.24 s ..." for every answer).
 
+What a suspect says, cheapest first - most lines should cost no wait:
+  1. written by hand   a hello gets their introduction; and the six questions every detective asks (where were you, did
+                       you see anything, who can vouch for you, how did you know the victim, who did it, did you do it)
+                       are answered from what they've already told the detective whenever the model has nothing ready.
+                       This is also the floor for a PC that can't run the model at all: the case still plays.
+  2. written ahead     once a case starts, the model writes its own answers to those six for every suspect, in the
+                       background, so asking one is instant.
+  3. thought up live   everything else.
+  The log keeps count: "HomicideUnit brain: answers this case: 3 written by hand, 5 written ahead, 2 thought up live".
+
 Free offline VOICES (no keys, no tokens). The game starts Tools\VoiceServer.bat as it launches, and the server picks the voices.
  On an NVIDIA card with 12 GB or more - the big voices, on the card:
   Orpheus 3B (Apache-2.0)   - the 911 call and tape audio
@@ -50,6 +60,9 @@ Free offline VOICES (no keys, no tokens). The game starts Tools\VoiceServer.bat 
   set HU_VOICES=cuda or cpu first to force the voices (HU_VOICES=orpheus: the small voice plus Orpheus for 911 lines on any card).
  Test them in the game: UnrealEditor.exe HomicideUnit.uproject -game -nullrhi -unattended -HUNoBrain -HUVoiceTest [-HUVoices=cpu]
   (speaks a 911 call and four suspect lines twice; the log says what each line took).
+ Every line a local voice says is kept in memory, so the same words in the same voice play at once the second time
+  ("HomicideUnit voice: already made, no wait"). Walking up to a suspect has their introduction and the answers ready
+  for them spoken ahead ("HomicideUnit voice: made ahead ..."): one at a time, and never while a line is wanted now.
  Where a line is heard from is the game's work (UHUVoiceSpace); the server only ever sends back clean speech:
   A suspect's line comes from their mouth: full across the table, a third as loud across a room (5 m), faint at 10 m,
   half as loud behind glass and a murmur behind a wall. The 911 call plays from the briefing room's lectern, and the

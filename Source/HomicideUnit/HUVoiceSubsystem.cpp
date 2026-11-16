@@ -345,8 +345,92 @@ void UHUVoiceSubsystem::Ping(bool bFirst)
 	Req->ProcessRequest();
 }
 
-void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries)
+// ---------- lines made ahead ----------
+// A voice takes a second or more (the big ones, several) to say a line. What a suspect is likely to say next can be
+// said ahead of time and its sound kept: asked for later, the same words in the same voice play at once.
+FString UHUVoiceSubsystem::KeptKey(const FString& Text, int32 Voice, bool bPhone)
 {
+	FString Clean = Text.Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
+	Clean.TrimStartAndEndInline();
+	return FString::Printf(TEXT("%d%s|%s"), FMath::Abs(Voice), bPhone ? TEXT("p") : TEXT(""), *Clean);
+}
+
+void UHUVoiceSubsystem::KeepSound(const FString& Key, const TArray<uint8>& Pcm)
+{
+	constexpr int64 Cap = 64 * 1024 * 1024; // about 22 minutes of speech; the oldest goes first
+	if (Pcm.Num() == 0 || Kept.Contains(Key)) return;
+	Kept.Add(Key, Pcm);
+	KeptOrder.Add(Key);
+	KeptBytes += Pcm.Num();
+	while (KeptBytes > Cap && KeptOrder.Num() > 1)
+	{
+		if (const TArray<uint8>* Old = Kept.Find(KeptOrder[0])) KeptBytes -= Old->Num();
+		Kept.Remove(KeptOrder[0]);
+		KeptOrder.RemoveAt(0);
+	}
+}
+
+bool UHUVoiceSubsystem::HasAhead(const FString& Text, int32 Voice) const { return Kept.Contains(KeptKey(Text, Voice, false)); }
+
+USoundWave* UHUVoiceSubsystem::FromKept(const FString& Text, int32 Voice, float& OutSeconds)
+{
+	const TArray<uint8>* Have = Kept.Find(KeptKey(Text, Voice, false));
+	if (!Have) return nullptr;
+	TArray<uint8> Pcm = *Have; // a sound uses its samples up as it plays: every play gets its own
+	return MakeSound(Pcm, false, OutSeconds);
+}
+
+void UHUVoiceSubsystem::MakeAhead(const FString& Text, int32 Voice)
+{
+	if (!HasLocalVoice() || Text.TrimStartAndEnd().IsEmpty()) return;
+	const FString Key = KeptKey(Text, Voice, false);
+	if (Kept.Contains(Key)) return;
+	for (const TPair<FString, int32>& Q : AheadQueue) if (KeptKey(Q.Key, Q.Value, false) == Key) return;
+	AheadQueue.Add({ Text, Voice });
+	// looked at twice a second for as long as something is waiting to be made (and at once whenever a line comes back)
+	if (UGameInstance* GI = GetGameInstance(); GI && !GI->GetTimerManager().IsTimerActive(AheadTimer))
+		GI->GetTimerManager().SetTimer(AheadTimer, FTimerDelegate::CreateUObject(this, &UHUVoiceSubsystem::PumpAhead), 0.5f, true, 0.f);
+}
+
+// One at a time, and never while someone is waiting on a line: a voice says one thing at a time, so a line made
+// ahead at the wrong moment would hold up a real answer.
+void UHUVoiceSubsystem::PumpAhead()
+{
+	if (AheadQueue.Num() == 0)
+	{
+		if (UGameInstance* GI = GetGameInstance(); GI && !bAheadBusy) GI->GetTimerManager().ClearTimer(AheadTimer); // nothing left to look at
+		return;
+	}
+	if (bAheadBusy || Waiting > 0) return;
+	if (!IsLocalVoiceReady()) { WarmUp(); return; } // the voices are still loading: the next look will find them
+	const TPair<FString, int32> Job = AheadQueue[0];
+	AheadQueue.RemoveAt(0);
+	bAheadBusy = true;
+	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
+	SynthesizeLocal(Job.Key, Job.Value, false, false, FHUVoiceReady::CreateLambda([Self](USoundWave*, float)
+	{
+		if (Self.IsValid()) { Self->bAheadBusy = false; Self->PumpAhead(); }
+	}), 0, true);
+}
+
+void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, bool bBackground, FHUVoiceReady Done, int32 Tries, bool bAhead)
+{
+	FString Clean = Text.Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
+	Clean.TrimStartAndEndInline();
+	if (Clean.IsEmpty()) { Done.ExecuteIfBound(nullptr, 0.f); return; }
+	// already made (ahead of time, or a premade line said before): its sound is here, no waiting
+	const FString Key = KeptKey(Clean, Voice, bPhone);
+	if (const TArray<uint8>* Have = bAhead ? nullptr : Kept.Find(Key))
+	{
+		TArray<uint8> Pcm = *Have;
+		float Seconds = 0.f;
+		USoundWave* S = MakeSound(Pcm, bPhone, Seconds);
+		if (!bBackground) { ServedKept++; UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: already made, no wait: \"%s\""), *Clean.Left(60)); }
+		Done.ExecuteIfBound(S, Seconds);
+		return;
+	}
+	// wanted now, and still waiting its turn to be made ahead: this request makes it, no need for both
+	if (!bAhead) AheadQueue.RemoveAll([&Key](const TPair<FString, int32>& Q) { return KeptKey(Q.Key, Q.Value, false) == Key; });
 	// phone lines (the 911 call, tape audio) are Orpheus; everyone else is CSM. Either stands in if the other isn't loaded.
 	const bool bOrpheus = bPhone ? (bOrpheusReady || !bCsmReady) : (!bCsmReady && bOrpheusReady);
 	if (!bOrpheusReady && !bCsmReady)
@@ -356,15 +440,12 @@ void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool b
 		if (Tries > 120 || !bStarting) { Done.ExecuteIfBound(nullptr, 0.f); return; }
 		TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
 		FTimerHandle H;
-		GetGameInstance()->GetTimerManager().SetTimer(H, FTimerDelegate::CreateLambda([Self, Text, Voice, bPhone, bBackground, Done, Tries]()
+		GetGameInstance()->GetTimerManager().SetTimer(H, FTimerDelegate::CreateLambda([Self, Text, Voice, bPhone, bBackground, Done, Tries, bAhead]()
 		{
-			if (Self.IsValid()) Self->SynthesizeLocal(Text, Voice, bPhone, bBackground, Done, Tries + 1);
+			if (Self.IsValid()) Self->SynthesizeLocal(Text, Voice, bPhone, bBackground, Done, Tries + 1, bAhead);
 		}), 1.f, false);
 		return;
 	}
-	FString Clean = Text.Replace(TEXT("*"), TEXT("")).Replace(TEXT("\n"), TEXT(" "));
-	Clean.TrimStartAndEndInline();
-	if (Clean.IsEmpty()) { Done.ExecuteIfBound(nullptr, 0.f); return; }
 	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
 	Body->SetStringField(TEXT("engine"), bOrpheus ? TEXT("orpheus") : TEXT("csm"));
 	Body->SetStringField(TEXT("text"), Clean);
@@ -382,15 +463,29 @@ void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool b
 	// first CSM line of every session (it compiles for longer than that)
 	Req->SetActivityTimeout(bBackground ? 600.f : 120.f);
 	TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
-	Req->OnProcessRequestComplete().BindLambda([Self, Done, bPhone](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+	const bool bSomeoneWaits = !bAhead && !bBackground; // a line wanted now: nothing gets made ahead until it's back
+	if (bSomeoneWaits) Waiting++;
+	Req->OnProcessRequestComplete().BindLambda([Self, Done, bPhone, Key, bAhead, bBackground, bSomeoneWaits](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
 	{
 		if (!Self.IsValid()) return;
+		if (bSomeoneWaits) Self->Waiting = FMath::Max(0, Self->Waiting - 1);
 		TArray<uint8> Pcm;
 		if (bOk && Resp.IsValid() && Resp->GetResponseCode() == 200 && WavToPcm16(Resp->GetContent(), Pcm))
 		{
+			// Every line is kept (up to the cap), not only the ones made ahead: written lines come round again - "I want
+			// my lawyer", an introduction - and the second time they cost nothing. (Before MakeSound: a phone line's
+			// samples get changed.)
+			Self->KeepSound(Key, Pcm);
+			if (bAhead) // made to be kept, not played
+			{
+				UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: made ahead (%d more to make): \"%s\""), Self->AheadQueue.Num(), *Key.Mid(Key.Find(TEXT("|")) + 1).Left(60));
+				Done.ExecuteIfBound(nullptr, 0.f);
+				return;
+			}
 			float Seconds = 0.f;
 			USoundWave* S = Self->MakeSound(Pcm, bPhone, Seconds);
 			Done.ExecuteIfBound(S, Seconds);
+			Self->PumpAhead();
 			return;
 		}
 		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: local voice failed (%d) %s"), Resp.IsValid() ? Resp->GetResponseCode() : -1, Resp.IsValid() ? *Resp->GetContentAsString().Left(200) : TEXT(""));

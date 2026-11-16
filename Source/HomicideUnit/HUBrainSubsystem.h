@@ -69,6 +69,27 @@ public:
 	FString PromptFor(const FString& SuspectId) const { return SystemPrompt(SuspectId); }
 	bool IsWriting() const { return bPreBusy || LiveBusy > 0; }
 
+	// THE QUESTIONS EVERY DETECTIVE ASKS, in the order they're written ahead. TopicOf says which one a spoken line
+	// is (INDEX_NONE if none): the answers written ahead are filed under it, and so are the hand-written ones the
+	// game falls back on when there is no brain (HUCanned).
+	enum ETopic : int32 { DidYouDoIt, WhoDidIt, Vouch, SawAnything, KnewVictim, WhereWereYou, TopicCount };
+	static int32 TopicOf(const FString& Said);
+	// the question a topic stands for, as the brain is asked it ("Where were you when it happened?")
+	static const TCHAR* TopicQuestion(int32 Topic);
+	// the answer written ahead for this suspect and question, if there's a fresh one - left where it is (tests)
+	bool PeekReady(const FString& SuspectId, int32 Topic, FString& OutSay) const;
+
+	// WHO ANSWERED. Most of what a suspect says should cost nothing to wait for: a line written by hand from the
+	// case's facts, or one the brain wrote ahead while nobody was asking. Only what's off-script is thought up live.
+	// Counted per case (the log has the running total after every answer), so the split can be seen and tuned.
+	enum class EAnsweredBy : uint8 { Hand, Ahead, Live, Count };
+	void Tally(EAnsweredBy By);
+	int32 Tallied(EAnsweredBy By) const { return Answered[(int32)By]; }
+
+	// A suspect the player is walking up to: the answers written ahead for them get their voices made ahead too
+	// (UHUVoiceSubsystem::MakeAhead), so asking one is heard at once. Only for people in earshot - voices cost.
+	void VoiceAhead(const FString& SuspectId, int32 Voice);
+
 	UPROPERTY(EditAnywhere, Category = "Brain") int32 Port = 8089;
 
 private:
@@ -84,6 +105,8 @@ private:
 	int32 LiveBusy = 0;                      // live answers in flight: they go first
 	FTimerHandle PumpTimer;
 	void Pump();
+	int32 Answered[(int32)EAnsweredBy::Count] = { 0, 0, 0 };
+	TMap<FString, int32> NearVoice;          // suspects in earshot -> their voice number (their answers are voiced ahead)
 	uint32 StateOf(const FString& SuspectId) const;
 	void Send(const FString& SuspectId, const FString& Said, const FString& Situation, bool bRemember, FHUBrainReact Done);
 	FString Root() const;

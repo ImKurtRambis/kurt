@@ -1,5 +1,6 @@
 ﻿#include "HUBrainSubsystem.h"
 #include "HUCaseSubsystem.h"
+#include "HUVoiceSubsystem.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
@@ -247,13 +248,42 @@ namespace
 		{ TEXT("How did you know the victim?"), { TEXT("know the victim"), TEXT("know him"), TEXT("know her"), TEXT("relationship"), TEXT("how do you know"), TEXT("how did you know") } },
 		{ TEXT("Where were you when it happened?"), { TEXT("where were you"), TEXT("where was you"), TEXT("when it happened"), TEXT("at the time"), TEXT("what were you doing"), nullptr } },
 	};
-	int32 TopicOf(const FString& Said)
+	static_assert(UE_ARRAY_COUNT(Topics) == UHUBrainSubsystem::TopicCount, "UHUBrainSubsystem::ETopic names these, in this order");
+	int32 FindTopic(const FString& Said)
 	{
 		const FString L = Said.ToLower();
 		for (int32 t = 0; t < UE_ARRAY_COUNT(Topics); t++)
 			for (const TCHAR* K : Topics[t].Keys) if (K && L.Contains(K)) return t;
 		return INDEX_NONE;
 	}
+}
+
+int32 UHUBrainSubsystem::TopicOf(const FString& Said) { return FindTopic(Said); }
+const TCHAR* UHUBrainSubsystem::TopicQuestion(int32 Topic) { return Topic >= 0 && Topic < TopicCount ? Topics[Topic].Ask : TEXT(""); }
+
+bool UHUBrainSubsystem::PeekReady(const FString& SuspectId, int32 Topic, FString& OutSay) const
+{
+	const FPre* Have = Pre.Find(FString::Printf(TEXT("%s|%d"), *SuspectId, Topic));
+	if (!Have || Have->State != StateOf(SuspectId)) return false;
+	OutSay = Have->R.Say;
+	return true;
+}
+
+void UHUBrainSubsystem::Tally(EAnsweredBy By)
+{
+	Answered[(int32)By]++;
+	UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: answers this case: %d written by hand, %d written ahead, %d thought up live"),
+		Answered[(int32)EAnsweredBy::Hand], Answered[(int32)EAnsweredBy::Ahead], Answered[(int32)EAnsweredBy::Live]);
+}
+
+void UHUBrainSubsystem::VoiceAhead(const FString& SuspectId, int32 Voice)
+{
+	NearVoice.Add(SuspectId, Voice);
+	UHUVoiceSubsystem* V = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+	if (!V) return;
+	const FString Theirs = SuspectId + TEXT("|");
+	const uint32 State = StateOf(SuspectId);
+	for (const TPair<FString, FPre>& P : Pre) if (P.Key.StartsWith(Theirs) && P.Value.State == State) V->MakeAhead(P.Value.R.Say, Voice);
 }
 
 // what the answer depends on: their mood, which of their lies are broken, a confession
@@ -269,7 +299,8 @@ uint32 UHUBrainSubsystem::StateOf(const FString& Id) const
 
 void UHUBrainSubsystem::StartPrewrite()
 {
-	Pre.Reset(); PreQueue.Reset();
+	Pre.Reset(); PreQueue.Reset(); NearVoice.Reset();
+	for (int32& A : Answered) A = 0; // a new case: count its answers from nothing
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	if (!C || !IsInstalled()) return;
 	// topic by topic across everyone, so the likeliest questions are ready for everybody first
@@ -298,11 +329,17 @@ void UHUBrainSubsystem::Pump()
 		if (const FPre* Have = Pre.Find(Key); Have && Have->State == State) continue; // still good
 		bPreBusy = true;
 		TWeakObjectPtr<UHUBrainSubsystem> Self(this);
-		Send(Job.Key, Topics[Job.Value].Ask, FString(), false, FHUBrainReact::CreateLambda([Self, Key, State](const FHUReaction& R)
+		Send(Job.Key, Topics[Job.Value].Ask, FString(), false, FHUBrainReact::CreateLambda([Self, Key, State, Id = Job.Key](const FHUReaction& R)
 		{
 			if (!Self.IsValid()) return;
 			Self->bPreBusy = false;
-			if (!R.Say.IsEmpty()) Self->Pre.Add(Key, { R, State });
+			if (!R.Say.IsEmpty())
+			{
+				Self->Pre.Add(Key, { R, State });
+				// written for someone the player is standing near: have its voice ready too
+				if (const int32* Voice = Self->NearVoice.Find(Id))
+					if (UHUVoiceSubsystem* V = Self->GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>()) V->MakeAhead(R.Say, *Voice);
+			}
 			UE_LOG(LogTemp, Log, TEXT("HomicideUnit brain: prewrote %s (%d ready, %d to go): %s"), *Key, Self->Pre.Num(), Self->PreQueue.Num(), *R.Say);
 		}));
 		return;

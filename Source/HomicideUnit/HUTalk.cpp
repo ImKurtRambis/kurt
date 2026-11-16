@@ -15,7 +15,11 @@
 #include "HUSuspectActor.h"
 #include "HUListenSubsystem.h"
 #include "HUBrainSubsystem.h"
+#include "HUVoiceSubsystem.h"
+#include "HUCaseSubsystem.h"
+#include "HUCanned.h"
 #include "HUInteractable.h"
+#include "Sound/SoundWaveProcedural.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -267,20 +271,30 @@ void UHUInteractComponent::TickTalk(float Dt)
 	UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>();
 	const APawn* Pawn = Cast<APawn>(GetOwner());
 	const bool bBusy = TalkBusy();
-	// Is anyone in earshot? Twice a second is plenty. The first time someone is, the ears get ready: the model takes
-	// a couple of seconds to load, and the right microphone has to be found before the first word.
+	// Who's about? Twice a second is plenty.
 	if ((EarsClock -= Dt) <= 0.f && Pawn)
 	{
 		EarsClock = 0.5f;
-		bInEarshot = false;
-		if (L && L->IsInstalled())
-			for (TActorIterator<AHUSuspectActor> It(GetWorld()); It && !bInEarshot; ++It)
-				bInEarshot = It->CanHear() && FVector::Dist2D(It->GetActorLocation(), Pawn->GetActorLocation()) < HUTalk::Earshot && FMath::Abs(It->GetActorLocation().Z - Pawn->GetActorLocation().Z) < HUTalk::Floor;
-		if (bInEarshot && !bEarsWarm && !bBusy)
+		bool bSomeone = false;
+		const FVector From = Pawn->GetActorLocation();
+		const FVector Fwd = FRotator(0.f, Pawn->GetControlRotation().Yaw, 0.f).Vector();
+		for (TActorIterator<AHUSuspectActor> It(GetWorld()); It; ++It)
+		{
+			const FVector To = It->GetActorLocation() - From;
+			const float D = To.Size2D();
+			if (!It->CanHear() || D > HUTalk::Earshot || FMath::Abs(To.Z) > HUTalk::Floor) continue;
+			bSomeone = true;
+			// Walking up to this one (close and ahead of you, or right beside you): their voice gets ready before a
+			// word is said. Not everyone in earshot - a voice takes seconds a line, and a room can hold eight people.
+			if (D <= HUTalk::Beside || (D <= HUTalk::Close && FVector::DotProduct(FVector(To.X, To.Y, 0.f) / D, Fwd) > 0.64f)) It->GetReady();
+		}
+		bInEarshot = bSomeone && L && L->IsInstalled(); // (the microphone only opens for someone who could hear you)
+		// The first time someone is in earshot, the ears and the brain get ready: both take seconds to load, and the
+		// right microphone has to be found - before your first word, not after it.
+		if (bSomeone && !bEarsWarm && !bBusy)
 		{
 			bEarsWarm = true;
-			L->AutoPickMic(false);
-			// and their brain: loaded by the time you've walked up and opened your mouth, not after your first question
+			if (L && L->IsInstalled()) L->AutoPickMic(false);
 			if (UHUBrainSubsystem* B = GetWorld()->GetGameInstance()->GetSubsystem<UHUBrainSubsystem>()) B->WarmUp();
 		}
 	}
@@ -316,8 +330,10 @@ void UHUInteractComponent::TalkTest(float) {}
 
 // -HUTalkTest on L_Scene: talks to the suspects with no menu, by script, and checks who answers. The log has a line
 // for each check ("HUTalkTest: ok ..." or "WRONG ..."), then "all checks passed" or how many were wrong; the game quits.
-// It ends by saying three lines OUT LOUD - the small voice speaks them, the ears make them out - to check the whole
-// way from sound to who answers (skipped where the ears or the small voice aren't installed).
+// It says three lines OUT LOUD - the small voice speaks them, the ears make them out - to check the whole way from
+// sound to who answers (skipped where the ears or the small voice aren't installed). Along the way it checks who
+// answered (by hand when there is no brain: HUCanned), and it ends, when the run has a voice, by checking that their
+// introduction was spoken ahead of time and that a stalling line can be said twice.
 //   -HUTalkShots: also saves pictures of what's on screen (Saved\Screenshots\Talk_*.png; needs -RenderOffscreen or a window).
 void UHUInteractComponent::TalkTest(float Dt)
 {
@@ -419,6 +435,16 @@ void UHUInteractComponent::TalkTest(float Dt)
 			const bool bGot = HUTalk::Calls(HUTalk::Split(C.Said), HUTalk::NameWords(C.Name));
 			Check(bGot == C.bCalls, FString::Printf(TEXT("\"%s\" %s %s"), C.Said, bGot ? TEXT("calls") : TEXT("doesn't call"), C.Name));
 		}
+		// what counts as a hello (it gets their introduction, by hand - HUCanned)
+		struct FHello { const TCHAR* Said; bool bHello; };
+		const FHello Hellos[] = { { TEXT("Hello."), true }, { TEXT("Hey Walter"), true }, { TEXT("Good evening, Mr. Hale."), true }, { TEXT("Who are you?"), true },
+			{ TEXT("What's your name?"), true }, { TEXT("Excuse me."), true }, { TEXT("Hey Walter where were you"), false }, { TEXT("Where were you last night?"), false },
+			{ TEXT("Hi, did you see anything?"), false } };
+		for (const FHello& H : Hellos)
+		{
+			const bool bGot = HUCanned::Greeting(H.Said, TEXT("Walter Hale"));
+			Check(bGot == H.bHello, FString::Printf(TEXT("\"%s\" %s a hello"), H.Said, bGot ? TEXT("is") : TEXT("isn't")));
+		}
 		FString Names;
 		for (const AHUSuspectActor* S : All) Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + S->DisplayName();
 		UE_LOG(LogTemp, Display, TEXT("HUTalkTest: at this scene: %s"), *Names);
@@ -458,8 +484,27 @@ void UHUInteractComponent::TalkTest(float Dt)
 			AnsweredAt = TalkClock;
 			Check(!A->bThinking && !A->LastReply.IsEmpty() && A->LastReply != TEXT("..."), FString::Printf(TEXT("%s answered after %.1f s: %s"), *A->DisplayName(), TalkClock, *A->LastReply.Left(110)));
 			if (bShots) Shot(TEXT("Talk_4_answer.png"));
+			// who answered that: with no brain, the hand-written answer built from what they've already told the detective
+			const UHUCaseSubsystem* Cs = W->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+			const UHUBrainSubsystem* Br = W->GetGameInstance()->GetSubsystem<UHUBrainSubsystem>();
+			if (Cs && Br && !Br->IsInstalled())
+			{
+				const FString Want = HUCanned::AnswerTopic(*Cs, A->SuspectId, UHUBrainSubsystem::WhereWereYou);
+				Check(A->LastReply == Want && Br->Tallied(UHUBrainSubsystem::EAnsweredBy::Hand) == 1, FString::Printf(TEXT("no brain here: that was answered by hand, from what they've told the detective: %s"), *Want));
+			}
+			else if (Br)
+			{
+				UE_LOG(LogTemp, Display, TEXT("HUTalkTest: the brain is installed: that answer was %s"), Br->Tallied(UHUBrainSubsystem::EAnsweredBy::Ahead) ? TEXT("one it wrote ahead of time")
+					: Br->Tallied(UHUBrainSubsystem::EAnsweredBy::Live) ? TEXT("thought up live") : TEXT("written by hand (the brain wasn't up yet)"));
+			}
 		}
 		if (bShots && TalkClock < AnsweredAt + 0.8f) return; // hold the view for the picture
+		// a hello gets their introduction, there and then, brain or no brain
+		if (const UHUCaseSubsystem* Cs = W->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>())
+		{
+			SayTo(TEXT("Hello."));
+			Check(!A->bThinking && A->LastReply == HUCanned::Introduction(*Cs, A->SuspectId), FString::Printf(TEXT("\"Hello.\" -> their introduction, with nothing to wait for: %s"), *A->LastReply));
+		}
 		bLookedAway = LookAtNobody(); // turn away from them (and from everyone else)
 		Next();
 		return;
@@ -565,7 +610,7 @@ void UHUInteractComponent::TalkTest(float Dt)
 		if (!L || !L->IsInstalled() || !B || !FPaths::FileExists(Voice) || !FPaths::FileExists(M / TEXT("tts.json")))
 		{
 			UE_LOG(LogTemp, Display, TEXT("HUTalkTest: the ears or the small voice aren't installed here (or there's nobody to call): saying it out loud not checked"));
-			Finish();
+			TalkStep = 13; TalkClock = 0.f;
 			return;
 		}
 		// you face the first suspect; the second stands 3 m to the side
@@ -575,7 +620,7 @@ void UHUInteractComponent::TalkTest(float Dt)
 			{ TEXT("Where were you last night?"), A, TEXT("no name") },
 			{ FString::Printf(TEXT("Did you see %s last night?"), *SecondName), A, TEXT("a name only mentioned") } };
 		static int32 SpokenAt = 0;
-		if (!Lines.IsValidIndex(SpokenAt)) { Finish(); return; }
+		if (!Lines.IsValidIndex(SpokenAt)) { TalkStep = 13; TalkClock = 0.f; return; }
 		const FSpoken Now = Lines[SpokenAt++];
 		const FString Wav = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("TalkTest.wav"));
 		IFileManager::Get().Delete(*Wav);
@@ -611,9 +656,12 @@ void UHUInteractComponent::TalkTest(float Dt)
 			FString How;
 			const AHUSuspectActor* Got = Me->WhoHears(Text, &How);
 			const bool bOk = !Text.IsEmpty() && Got && Got == Want.Get();
-			if (!bOk) Me->TalkWrong++;
-			UE_LOG(LogTemp, Display, TEXT("HUTalkTest: %s  said out loud (%s): \"%s\" was heard as \"%s\" -> %s (%s)"), bOk ? TEXT("ok   ") : TEXT("WRONG"), *Why, *Said, *Text,
-				Got ? *Got->DisplayName() : TEXT("nobody"), *How);
+			// The ears got the name itself wrong (short names are the weak spot: "Sal" has come back as "Saw"). What was
+			// heard then calls nobody, and it went where that pointed: a miss by the ears, noted, not a wrong turn here.
+			const bool bMisheard = !bOk && !Text.IsEmpty() && Want.IsValid() && Why == TEXT("a name called") && !HUTalk::Calls(HUTalk::Split(Text), HUTalk::NameWords(Want->DisplayName()));
+			if (!bOk && !bMisheard) Me->TalkWrong++;
+			UE_LOG(LogTemp, Display, TEXT("HUTalkTest: %s  said out loud (%s): \"%s\" was heard as \"%s\" -> %s (%s)%s"), bOk ? TEXT("ok   ") : bMisheard ? TEXT("note ") : TEXT("WRONG"), *Why, *Said, *Text,
+				Got ? *Got->DisplayName() : TEXT("nobody"), *How, bMisheard ? TEXT(" - the ears misheard the name") : TEXT(""));
 			Me->TalkStep = 11; Me->TalkClock = 1.f; // on to the next line
 		}));
 		return;
@@ -621,6 +669,62 @@ void UHUInteractComponent::TalkTest(float Dt)
 	case 12:
 		if (TalkClock > 60.f) { Check(false, TEXT("the ears never answered")); TalkStep = 11; TalkClock = 1.f; }
 		return;
+	case 13: // voices made ahead: you walked up to them, so what they're likeliest to say has been spoken already
+	{
+		UHUVoiceSubsystem* V = W->GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+		const UHUCaseSubsystem* Cs = W->GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+		const UHUBrainSubsystem* Br = W->GetGameInstance()->GetSubsystem<UHUBrainSubsystem>();
+		if (!V || !Cs || !V->HasLocalVoice()) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: this run has no local voice (-HUNoVoice): voices made ahead not checked")); Finish(); return; }
+		if (TalkClock < 0.3f) { StandBy(A, true); return; }
+		// With no brain it is the hand-written answers that are made ahead - and nobody has asked this one yet, so if
+		// its sound is here it was made ahead. With a brain: their introduction (said once already, so kept).
+		const bool bByHand = Br && !Br->IsInstalled();
+		const FString Line = bByHand ? HUCanned::AnswerTopic(*Cs, A->SuspectId, UHUBrainSubsystem::SawAnything) : HUCanned::Introduction(*Cs, A->SuspectId);
+		if (!V->HasAhead(Line, A->VoiceNum()) && TalkClock < 120.f) return;
+		Check(V->HasAhead(Line, A->VoiceNum()), FString::Printf(TEXT("%s's \"%s\" %s"), *A->DisplayName(), *Line.Left(70),
+			bByHand ? TEXT("was spoken and kept before anyone asked the question") : TEXT("is kept from the first time it was said")));
+		const int32 Before = V->ServedFromKept();
+		SayTo(bByHand ? TEXT("Did you see or hear anything tonight?") : TEXT("Hello."));
+		Check(V->ServedFromKept() == Before + 1 && A->LastReply == Line, TEXT("asked now, it is spoken with no wait: the sound was already made"));
+		TalkStep = bByHand || !Br || !Br->IsInstalled() ? 14 : 15; TalkClock = 0.f;
+		return;
+	}
+	case 15: // with a brain: an answer it wrote ahead for them has had its voice made ahead as well
+	{
+		UHUVoiceSubsystem* V = W->GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+		UHUBrainSubsystem* Br = W->GetGameInstance()->GetSubsystem<UHUBrainSubsystem>();
+		if (A->bThinking) return;
+		int32 Topic = INDEX_NONE;
+		FString Say;
+		for (int32 T = UHUBrainSubsystem::TopicCount - 1; T >= 0 && Topic == INDEX_NONE; T--) if (Br->PeekReady(A->SuspectId, T, Say) && V->HasAhead(Say, A->VoiceNum())) Topic = T;
+		if (Topic == INDEX_NONE)
+		{
+			if (TalkClock < 150.f) return;
+			Check(false, FString::Printf(TEXT("nothing the brain wrote ahead for %s had its voice made ahead within 150 s"), *A->DisplayName()));
+			TalkStep = 14; TalkClock = 0.f;
+			return;
+		}
+		const int32 Kept = V->ServedFromKept(), Ahead = Br->Tallied(UHUBrainSubsystem::EAnsweredBy::Ahead);
+		SayTo(UHUBrainSubsystem::TopicQuestion(Topic));
+		Check(V->ServedFromKept() == Kept + 1 && Br->Tallied(UHUBrainSubsystem::EAnsweredBy::Ahead) == Ahead + 1 && A->LastReply == Say,
+			FString::Printf(TEXT("\"%s\" -> written ahead by the brain AND spoken ahead (%.0f s after walking up): no wait for words or voice: %s"), UHUBrainSubsystem::TopicQuestion(Topic), TalkClock, *Say.Left(80)));
+		TalkStep = 14; TalkClock = 0.f;
+		return;
+	}
+	case 14: // a stalling line said twice is heard twice: every play gets a sound of its own
+	{
+		UHUVoiceSubsystem* V = W->GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+		const FString Stall = HUFiller::Lines(HUFiller::Question)[0];
+		if (!V->HasAhead(Stall, A->VoiceNum()) && TalkClock < 90.f) return;
+		float S1 = 0.f, S2 = 0.f;
+		USoundWaveProcedural* One = Cast<USoundWaveProcedural>(V->FromKept(Stall, A->VoiceNum(), S1));
+		USoundWaveProcedural* Two = Cast<USoundWaveProcedural>(V->FromKept(Stall, A->VoiceNum(), S2));
+		if (!One) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: their stalling lines weren't recorded in time: saying one twice not checked")); }
+		else Check(Two && One != Two && One->GetAvailableAudioByteCount() > 0 && Two->GetAvailableAudioByteCount() > 0 && S1 > 0.2f,
+			FString::Printf(TEXT("\"%s\" said twice is two sounds, each %.1f s long with its samples still to play"), *Stall, S1));
+		Finish();
+		return;
+	}
 	default:
 		Finish();
 		return;

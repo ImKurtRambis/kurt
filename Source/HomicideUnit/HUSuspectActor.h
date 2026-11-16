@@ -56,6 +56,13 @@ public:
 	void HearFrom(APawn* User, const FString& Said);
 	// here to be spoken to (not gone in the van). Doubled over, they still hear you: HearFrom says they can't answer.
 	bool CanHear() const { return !IsHidden(); }
+	// The player is walking up to them: their voice gets ready before a word is said - stalling lines, their
+	// introduction, and the answers to the questions everyone asks - so those are heard at once. Safe to call often.
+	void GetReady();
+	// their voice: the same number is the same voice every time (the voices are picked by it)
+	int32 VoiceNum() const { return 1 + (int32)(GetTypeHash(SuspectId) % 10); }
+	// a line of theirs is playing right now
+	bool IsVoicing() const { return VoiceAudio.IsValid(); }
 	// the thinking brain's answer (computed on the asker's PC), performed on every machine
 	void ApplyAnswer(APawn* User, const FString& Question, const FString& Answer, uint8 InEmotion, uint8 InAction);
 	TArray<FString> BaggedIds() const;
@@ -134,5 +141,6 @@ private:
 	class UAudioComponent* SayAloud(class USoundWave* Sound);
 	UPROPERTY() class USoundWave* PendingVoice = nullptr;
 	FTimerHandle VoiceTimer;
-	int32 VoiceNum() const { return 1 + (int32)(GetTypeHash(SuspectId) % 10); }
+	bool bReadied = false;         // GetReady has run
+	int32 LastTopic = INDEX_NONE;  // the last common question answered by hand: asked again straight after, they don't recite it
 };
