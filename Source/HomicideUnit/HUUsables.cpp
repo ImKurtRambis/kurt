@@ -235,7 +235,7 @@ void HUUsables::Use(UPrimitiveComponent* C, APawn* User, bool bSecondary)
 		for (UActorComponent* AC : Comps)
 		{
 			const USceneComponent* SC = Cast<USceneComponent>(AC);
-			if (!SC || SC == C) continue;
+			if (!SC || SC == C || SC->ComponentHasTag(TEXT("HUOwnLight"))) continue; // desk lamps, exit signs, the street (HULamps)
 			const FVector L = OT.InverseTransformPosition(SC->GetComponentLocation());
 			if (!U->Room.IsInside(FVector2D(L.X, L.Y))) continue;
 			if (ULightComponent* Lt = Cast<ULightComponent>(AC)) { Lt->SetVisibility(!U->bOn); continue; }
@@ -286,6 +286,7 @@ void HUUsables::Use(UPrimitiveComponent* C, APawn* User, bool bSecondary)
 			U->Light = L;
 		}
 		if (U->Light.IsValid()) U->Light->SetVisibility(U->bOn);
+		if (U->Glow.IsValid()) U->Glow->SetVisibility(U->bOn); // its bulb
 		break;
 	}
 	case EHUUse::Drink:
@@ -302,6 +303,15 @@ void HUUsables::Use(UPrimitiveComponent* C, APawn* User, bool bSecondary)
 }
 
 // ---------- a light switch ----------
+void HUUsables::SetLamp(UPrimitiveComponent* C, ULocalLightComponent* Light, UStaticMeshComponent* Bulb, bool bOn)
+{
+	UHUUsableWorld* S = World(C);
+	UHUUsableWorld::FUse* U = S ? S->Find(C) : nullptr;
+	if (U) { U->Light = Light; U->Glow = Bulb; U->bOn = bOn; } // (a lamp nobody marked still lights, it just can't be switched)
+	if (Light) Light->SetVisibility(bOn);
+	if (Bulb) Bulb->SetVisibility(bOn);
+}
+
 UStaticMeshComponent* HUUsables::AddSwitch(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, FVector Pos, float Yaw, FBox2D Room)
 {
 	const FRotator R(0, Yaw, 0);

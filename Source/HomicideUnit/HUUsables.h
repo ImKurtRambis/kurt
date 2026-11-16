@@ -19,6 +19,7 @@
 class UPrimitiveComponent;
 class UStaticMeshComponent;
 class UPointLightComponent;
+class ULocalLightComponent;
 class APawn;
 
 UENUM()
@@ -54,6 +55,8 @@ namespace HUUsables
 	HOMICIDEUNIT_API void Use(UPrimitiveComponent* C, APawn* User, bool bSecondary);
 	// a light switch on a wall at Pos (Owner's frame), facing Yaw: it switches Owner's lights over Room (Owner's XY)
 	HOMICIDEUNIT_API UStaticMeshComponent* AddSwitch(AActor* Owner, USceneComponent* Parent, TArray<UStaticMeshComponent*>& Out, FVector Pos, float Yaw, FBox2D Room);
+	// a marked lamp's own light (and its lit bulb, if any), on or off now (HULamps). E then switches that light.
+	HOMICIDEUNIT_API void SetLamp(UPrimitiveComponent* C, ULocalLightComponent* Light, UStaticMeshComponent* Bulb, bool bOn);
 }
 
 // what every usable part is and where it's at (open, on...), and the drawers sliding
@@ -72,7 +75,7 @@ public:
 		int32 Uses = 0;              // how many times it's been used (the same on every machine)
 		float Slide = 0.f;           // a drawer: 0 shut .. 1 open
 		TWeakObjectPtr<UStaticMeshComponent> Tray, Front, Fill, Glow; // the drawer that slides out (box, front, what's in it); a lit screen
-		TWeakObjectPtr<UPointLightComponent> Light;        // a lamp's bulb
+		TWeakObjectPtr<ULocalLightComponent> Light;        // a lamp's bulb
 		TMap<TWeakObjectPtr<UPrimitiveComponent>, FLinearColor> Dimmed; // light panels a switch turned down
 	};
 	TMap<TObjectKey<UPrimitiveComponent>, FUse> Parts;

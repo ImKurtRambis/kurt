@@ -1,4 +1,5 @@
 #include "HUBriefingRoom.h"
+#include "HULamps.h"
 #include "HUCaseSubsystem.h"
 #include "HUBriefingLaptop.h"
 #include "HUInteractComponent.h"
@@ -147,9 +148,7 @@ void AHUBriefingRoom::Build()
 	}
 	for (int32 Side : {-1,1})
 		Made(Block(Cube,FVector(-RoomHalfX+2,Side*(RoomHalfY+90)/2,88),FVector(4,RoomHalfY-90,4),WainscotRail),EHUSurface::PaintedMetal,WainscotRail);
-	// ceiling lights
-	for (float X : { -400.f, 0.f, 400.f }) for (float Y : { -500.f, 0.f, 500.f })
-		Block(Cube, FVector(X, Y, RoomH - 4), FVector(120, 40, 4), FLinearColor(3.f, 3.f, 2.8f));
+	// (the ceiling's fluorescent strips are hung at play, with their light: BeginPlay, HULamps)
 
 	// the projector screen: a black frame, the blue slide, the header bar
 	Block(Cube, ScreenPos + FVector(4, 0, 0), FVector(4, 520, 300), FLinearColor(0.01f, 0.01f, 0.01f));
@@ -244,11 +243,7 @@ void AHUBriefingRoom::BuildCorridor()
 			Sign(FVector(X,Side*129,216),Side>0?-90:90,Departments[(Side>0?2:0)+i],8);
 		}
 	}
-	for(float X=X0-100;X>X1;X-=240)
-	{
-		B(FVector(X,0,297),FVector(115,36,6),Steel,EHUSurface::PaintedMetal);
-		B(FVector(X,0,293),FVector(104,26,2),FLinearColor(2.7f,2.9f,2.7f),EHUSurface::None);
-	}
+	// (its ceiling strips, every 240 cm from X0 - 100, are hung at play with their light: BeginPlay, HULamps)
 	B(FVector(X1+35,0,267),FVector(5,250,30),Steel,EHUSurface::PaintedMetal);
 	Sign(FVector(X1+39,0,260),0,TEXT("MOTOR POOL  /  FLEET SERVICES"),13);
 	if(MotorPool && MotorPool->GetChildActorClass()!=AHUMotorPool::StaticClass()) MotorPool->SetChildActorClass(AHUMotorPool::StaticClass());
@@ -296,23 +291,12 @@ void AHUBriefingRoom::BeginPlay()
 		UE_LOG(LogTemp,Display,TEXT("HUGarageTest: %s corridor clear at capsule height"),Blocked?TEXT("FAILED"):TEXT("PASSED"));
 	}
 #endif
-	// Dim the briefing while the projector is on; the corridor stays readable.
-	for (float X : { -400.f, 0.f, 400.f })
-	{
-		UPointLightComponent* L = NewObject<UPointLightComponent>(this);
-		L->SetupAttachment(RootComponent);
-		L->SetRelativeLocation(FVector(X, 0, RoomH - 40));
-		L->SetIntensity(2400.f);
-		L->SetAttenuationRadius(1400.f);
-		L->SetLightColor(FLinearColor(1.f, 0.96f, 0.88f));
-		L->RegisterComponent();
-	}
-	for(float X : {-960.f,-1230.f})
-	{
-		UPointLightComponent* L=NewObject<UPointLightComponent>(this); L->SetupAttachment(Root);
-		L->SetRelativeLocation(FVector(X,0,260)); L->SetIntensity(2400); L->SetAttenuationRadius(340);
-		L->SetLightColor(FLinearColor(.89f,.94f,.87f)); L->RegisterComponent();
-	}
+	// The light, from fittings you can see (HULamps): nine fluorescent strips, the row nearest the screen turned low for
+	// the projector so the briefing stays dim; the corridor's strips lit; EXIT over the door out to the motor pool.
+	for (float X : { -400.f, 0.f, 400.f }) for (float Y : { -500.f, 0.f, 500.f })
+		HULamps::Tube(this, RootComponent, Blocks, FVector(X, Y, RoomH), 0.f, X > 200.f ? 1.5f : 4.5f);
+	for (float X = -RoomHalfX - 110.f; X > MotorPoolPos.X + 900.f; X -= 240.f) HULamps::Tube(this, RootComponent, Blocks, FVector(X, 0, 300), 0.f, 3.8f);
+	HULamps::ExitSign(this, RootComponent, Blocks, FVector(-RoomHalfX, 0, 306), 0.f);
 	// The Captain uses the shared cast and a separate conversation capsule.
 	HUPeople::Stand(this, RootComponent, HUPeople::CaptainFace(), FVector(670, -380, 0), 180.f);
 	// the laptop, wired to this room's screen

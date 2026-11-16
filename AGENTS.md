@@ -22,6 +22,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 | Build the cast of MetaHumans (full editor, signed in to Epic; minutes per person; skips anyone built) | `UnrealEditor.exe HomicideUnit.uproject -ExecutePythonScript="Tools/MakeCast.py" -unattended` → `Content/MetaHumans` (not in git) |
 | Photograph everyone (MetaHumans) in a level | add `-HUPeopleShots` (and `-HUCrime=homicide` on `L_Scene` for a body) → `Saved\Screenshots` |
 | Photograph every way a body moves (idle, walk, talk, flinch, cuffed, crouch, seated at a table...) | `L_Precinct` with `-HUBodyTest` → `Saved\Screenshots\...\Body_*.png` |
+| Photograph the lamps (the precinct's rooms, or inside a scene and back at its door) | `L_Precinct`, or `L_Scene -HUPlace=DINER`, with `-HULampShots` → `Lamps_*.png`; the log says how many tubes and how many are tired |
 | Check where voices are heard from: loudness by distance, what glass and walls do, the 911 tape's sound, everyone's mouth (~1 min, no window) | any level with `-game -nullrhi -nosound -unattended -HUNoBrain -HUNoVoice -HUVoiceSpaceTest` → `HUVoiceSpaceTest:` lines in the log, the last `all checks passed`. With `-RenderOffscreen` in place of `-nullrhi -nosound` it also plays a line from the first person's mouth |
 | Check talking to suspects with no menu: who a spoken line is for, by script, ending with three lines said out loud to the ears (~1.5 min, no window) | `L_Scene` with `-game -nullrhi -nosound -unattended -HUNoBrain -HUNoVoice -HUTalkTest` → `HUTalkTest:` lines in the log, the last `all checks passed`. `-RenderOffscreen -HUTalkShots` in place of `-nullrhi -nosound` also saves pictures of the screen to `Saved\Screenshots\Talk_*.png` |
 
@@ -63,6 +64,7 @@ almost no Blueprint or art assets yet: rooms, props and people are made of engin
 
 ## Rules that keep the game working
 | What things are made of (brick, carpet, tile... 14 textured surfaces, pass one to `Block`) | `HUSurfaces.*`, `Content/Art/Textures/README.md`, `Tools/Surfaces/` |
+| Light (every light comes from a fitting you can see: never hang a bare point light) | `HULamps.*`: `Tube` (fluorescent strip; hums, a few flicker), `Pendant` (bulb under a shade, or a ceiling dome), `DeskLamp`, `ExitSign`, `Window` (blinds, the street's light in bars - `M_HU_BlindsLight`, `Tools/CreateBlindsLight.py`). Candela at the game's scale: a strip ~9, a desk lamp ~3.5. Room switches skip lights tagged `HUOwnLight` |
 | The renderer and the camera | `Config/DefaultEngine.ini` (Lumen light and reflections, Nanite, virtual shadow maps, TSR; nothing is baked). `HUFilmCamera.*`: one level-wide post-process volume on every machine - eye adaptation kept near the lights' fixed exposure, focus on the centre of the view (a view can call `FocusOn(cm)`, as the desk menu does), grain, vignette. Console: `HU.Film.Fstop`, `HU.Film.Grain`, `HU.Film.Off 1`. The colour grade is EA-08's, not here |
 
 1. **Interactables** implement `IHUInteractable` (`GetPrompt`, `Interact`; optional `HoverParts`, `Highlights`). Show text with `UHUInteractComponent::Say()` / `Notify()`.

@@ -20,6 +20,7 @@
 #include "HUBuild.h"
 #include "HUProps.h"
 #include "HUUsables.h"
+#include "HULamps.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
@@ -51,19 +52,40 @@ static const FVector2D StationLights[] = {
 FVector2D AHUSquadRoom::OfficeDesk(int32 K) { return FVector2D(520.f, OfficeY0 + OfficeW * (K + 0.5f)); }
 FVector AHUSquadRoom::OfficeOrigin(int32 K) { return FVector(OfficeX0, OfficeY0 + OfficeW * K, 0.f); }
 
+// THE PRECINCT'S LIGHT, all from fittings you can see (HULamps): a fluorescent strip at each ceiling spot (along corridor
+// B's length there), a bare bulb on a flex over each interview table, desk lamps on the night shift's desks, EXIT over
+// the street door and the roll-call doors, and windows with blinds on the outside walls, the street coming in through
+// the slats.
 void AHUSquadRoom::StationLightsUp()
 {
+	USceneComponent* R = RootComponent;
 	for (const FVector2D& P : StationLights)
 	{
-		UPointLightComponent* L = NewObject<UPointLightComponent>(this);
-		L->SetupAttachment(RootComponent);
-		L->SetRelativeLocation(FVector(P.X, P.Y, H - 40));
-		L->SetIntensity(4500.f);
-		L->SetAttenuationRadius(800.f);
-		L->SetCastShadows(false);
-		L->SetLightColor(FLinearColor(1.f, 0.92f, 0.8f));
-		L->RegisterComponent();
+		const bool bInterview = P.Y > 300.f && P.Y < 450.f && P.X > 1500.f;
+		if (bInterview) { HULamps::Pendant(this, R, Blocks, FVector(P.X, P.Y + 5.f, H), 95.f, 7.f, FLinearColor(1.f, 0.86f, 0.66f)); continue; }
+		const bool bCorridorB = FMath::Abs(P.X) < 1.f && P.Y > 300.f;
+		HULamps::Tube(this, R, Blocks, FVector(P.X, P.Y, H), bCorridorB ? 90.f : 0.f, 9.f);
 	}
+	// EXIT: the street door (west, 250 high) and the double doors back to roll call (east)
+	HULamps::ExitSign(this, R, Blocks, FVector(-2400, 0, 270), 0.f);
+	HULamps::ExitSign(this, R, Blocks, FVector(2400, 0, 242), 180.f);
+	// the night shift's desk lamps: every other bullpen desk has one, half of them on (the desks as BuildStation sets them)
+	for (int32 row = 0; row < 2; row++)
+		for (int32 i = 0; i < 4; i++)
+			for (float S : { -1.f, 1.f })
+			{
+				const int32 K = row * 8 + i * 2 + (S > 0 ? 1 : 0);
+				if (K % 2 != row % 2) continue;
+				const FVector P(-1350 + i * 300, -650 - row * 450 + S * 60, 0);
+				HULamps::DeskLamp(this, R, Blocks, P + FVector(-62, S * 40, 76), -S * 90.f, K % 4 < 2); // the far corner, clear of the papers
+			}
+	HULamps::DeskLamp(this, R, Blocks, FVector(-470, 1322, 77), 180.f);   // the Captain's
+	HULamps::DeskLamp(this, R, Blocks, FVector(-2150, 532, 77), -90.f);   // the desk sergeant's
+	HULamps::DeskLamp(this, R, Blocks, FVector(2030, -1330, 76), 0.f);    // records
+	// windows on the outside walls: the bullpen and records (south), the Captain (north), the lobby (west)
+	for (float X : { -1300.f, -750.f, -200.f, 1300.f, 1900.f }) HULamps::Window(this, R, Blocks, FVector(X, -1600, 175), 90.f);
+	HULamps::Window(this, R, Blocks, FVector(-690, 1600, 175), -90.f, 100.f);
+	HULamps::Window(this, R, Blocks, FVector(-2400, -420, 175), 0.f);
 }
 
 void AHUSquadRoom::BuildStation()
@@ -164,7 +186,7 @@ void AHUSquadRoom::BuildStation()
 	// ---- the slab, the ceiling ----
 	B(FVector(0, 0, -5), FVector(4800, 3200, 10), FLinearColor(0.2f, 0.2f, 0.19f), true, SF::Concrete);
 	B(FVector(0, 0, H + 5), FVector(4800, 3200, 10), Paint * 0.75f, true, SF::CeilingTile);
-	for (const FVector2D& P : StationLights) B(FVector(P.X, P.Y, H - 2), FVector(120, 30, 4), FLinearColor(3, 3, 2.7f), false); // the light panels
+	// (the ceiling's fittings are hung at play, with their light: StationLightsUp)
 
 	// ---- the floors ----
 	Floor(-1600, 2400, -150, 150, Lino);                           // main corridor

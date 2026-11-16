@@ -1,5 +1,6 @@
 ﻿#include "HUCrimeScene.h"
 #include "HUBuild.h"
+#include "HULamps.h"
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
 #include "HULadder.h"
@@ -481,29 +482,43 @@ void AHUCrimeScene::Build()
 	CrawlZone->OnComponentEndOverlap.AddDynamic(this, &AHUCrimeScene::OnCrawlLeave);
 	}
 
-	// ---- lights: one per room, except a room whose bulb is out (evidence in there needs a flashlight) ----
-	auto Light = [this](FVector Pos, float I, float R, FLinearColor Col)
+	// ---- lights, from fittings you can see (HULamps): fluorescent strips on chains where the place is institutional
+	// or industrial, warm bulbs under shades where it isn't; one room has its fittings dead (evidence in there needs a
+	// flashlight). Hung 60 below the ceiling, brighter the higher that is.
+	if (!bHotel)
 	{
-		UPointLightComponent* L = NewObject<UPointLightComponent>(this);
-		L->SetupAttachment(RootComponent);
-		L->SetRelativeLocation(Pos);
-		L->SetIntensity(I);
-		L->SetAttenuationRadius(R);
-		L->SetLightColor(Col);
-		L->RegisterComponent();
-	};
-	int32 DarkRoom = -1;
-	if (Rooms.Num() >= 3 && Rng.FRand() < 0.6f)
-		for (int32 Try = 0; Try < 6 && DarkRoom < 0; Try++) { const int32 i = Rng.RandRange(0, Rooms.Num() - 1); if (!Rooms[i].Contains(PlayerStart.X, PlayerStart.Y)) DarkRoom = i; }
-	for (int32 i = 0; i < Rooms.Num(); i++)
-	{
-		const FR& Rm = Rooms[i];
-		if (i == DarkRoom) { Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, ADark }); continue; }
-		const float Big = FMath::Max(Rm.W(), Rm.D());
-		Light(FVector(Rm.CX(), Rm.CY(), H - 60), 4000.f + Big * 3.f, Big * 0.9f + 400.f, FLinearColor(1.f, 0.9f, 0.75f));
-		Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, AOpen });
+		const bool bStrips = Key == TEXT("DINER") || Key == TEXT("BOWLING") || Key == TEXT("HOSPITAL") || Key == TEXT("BANK") || Key == TEXT("SALON") || Key == TEXT("WAREHOUSE");
+		const float Hang = H - 60.f, Cd = 9.f * FMath::Square(FMath::Max(1.f, (Hang - 20.f) / 300.f));
+		int32 DarkRoom = -1;
+		if (Rooms.Num() >= 3 && Rng.FRand() < 0.6f)
+			for (int32 Try = 0; Try < 6 && DarkRoom < 0; Try++) { const int32 i = Rng.RandRange(0, Rooms.Num() - 1); if (!Rooms[i].Contains(PlayerStart.X, PlayerStart.Y)) DarkRoom = i; }
+		for (int32 i = 0; i < Rooms.Num(); i++)
+		{
+			const FR& Rm = Rooms[i];
+			const bool bDead = i == DarkRoom;
+			Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, bDead ? ADark : AOpen });
+			const int32 NX = FMath::Max(1, FMath::RoundToInt(Rm.W() / 550.f)), NY = FMath::Max(1, FMath::RoundToInt(Rm.D() / 550.f));
+			for (int32 a = 0; a < NX; a++) for (int32 b = 0; b < NY; b++)
+			{
+				const FVector At(Rm.X0 + Rm.W() * (a + 0.5f) / NX, Rm.Y0 + Rm.D() * (b + 0.5f) / NY, H);
+				if (bStrips) HULamps::Tube(this, RootComponent, Blocks, At, Rm.W() >= Rm.D() ? 0.f : 90.f, Cd, bDead, 60.f);
+				else HULamps::Pendant(this, RootComponent, Blocks, At, 60.f, Cd * 0.8f, FLinearColor(1.f, 0.78f, 0.5f), bDead);
+			}
+		}
+		// the lofts: a bulb on a flex down to just over the loft
+		for (const FArea& A : Areas)
+			if (A.Kind == ALoft) HULamps::Pendant(this, RootComponent, Blocks, FVector(A.Rect.CX(), A.Rect.CY(), H), FMath::Max(0.f, H - A.Z - 215.f), 4.f, FLinearColor(1.f, 0.82f, 0.56f));
+		// EXIT over the door in, and windows either side of it: the street's lamps come in through the blinds
+		HULamps::ExitSign(this, RootComponent, Blocks, FVector(Plan.X0, EntY, 272), 0.f);
+		for (float Off : { -450.f, 450.f })
+		{
+			const float WY = EntY + Off;
+			if (WY < Plan.Y0 + 120.f || WY > Plan.Y1 - 120.f) continue;
+			bool bWall = false; // an inside wall meeting the front wall there
+			for (const FSplit& S : Splits) if (!S.bAtX && FMath::Abs(S.At - WY) < 90.f && FMath::Min(S.From, S.To) < Plan.X0 + 5.f) bWall = true;
+			if (!bWall) HULamps::Window(this, RootComponent, Blocks, FVector(Plan.X0, WY, 175), 0.f, 120.f, 140.f, FLinearColor(1.f, 0.72f, 0.42f));
+		}
 	}
-	for (const FArea& A : Areas) if (A.Kind == ALoft) Light(FVector(A.Rect.CX(), A.Rect.CY(), A.Z + 180), 2500.f, 800.f, FLinearColor(1.f, 0.85f, 0.65f));
 
 	// =====================================================================================================
 	// THE HOTEL - a fixed building you get to know case by case (where things end up still changes).
@@ -646,11 +661,12 @@ void AHUCrimeScene::Build()
 			Sign(FString::Printf(TEXT("FLOOR %d"), F + 1), FVector(-1380, -500, Z + 280), 0, 20, SignCol);
 			// the corridor: a runner and lamps
 			Box(FVector(0, 0, Z + 1), FVector(2700, 160, 2), FLinearColor(0.3f, 0.05f, 0.05f), EHUSurface::Carpet, false);
-			for (float X : { -900.f, 0.f, 900.f }) Lamp(FVector(X, 0, Z + FH - 50), 2200.f, 700.f, Warm);
+			// (ceilings: the slab above, 21 cm thick with its plaster skin - HULamps domes flush to it)
+			for (float X : { -900.f, 0.f, 900.f }) HULamps::Pendant(this, RootComponent, Blocks, FVector(X, 0, Z + FH - 21), 0.f, 3.5f, Warm);
 			Areas.Add({ { X0 + 30, -120, X1 - 30, 120 }, Z, ANarrow });
 			// the stair landing (west of the stairs)
 			Areas.Add({ { X0 + 30, Y0 + 30, -930, -180 }, Z, AOpen });
-			Lamp(FVector(-700, -600, Z + FH - 50), 2500.f, 900.f, Warm);
+			HULamps::Pendant(this, RootComponent, Blocks, FVector(-700, -600, Z + FH - 21), 0.f, 4.f, Warm);
 			// the rooms: a bed against the outside wall, a nightstand, a number on the door
 			auto Guest = [&](const FR& Rm, bool bNorth)
 			{
@@ -663,7 +679,7 @@ void AHUCrimeScene::Build()
 				const FR A = bNorth ? FR{ Rm.X0 + 30, Rm.Y0 + 30, Rm.X1 - 30, Rm.Y1 - 240 } : FR{ Rm.X0 + 30, Rm.Y0 + 240, Rm.X1 - 30, Rm.Y1 - 30 };
 				const bool bDark = (F - 1) * 5 + GuestN - 1 == DarkGuest;
 				Areas.Add({ A, Z, bDark ? ADark : AOpen });
-				if (!bDark) Lamp(FVector(Rm.CX(), Rm.CY(), Z + FH - 60), 5000.f, 1000.f, Warm);
+				HULamps::Pendant(this, RootComponent, Blocks, FVector(Rm.CX(), Rm.CY(), Z + FH - 21), 0.f, 8.f, Warm, bDark); // (the dark room's bulb is dead)
 			};
 			GuestN = 0;
 			for (const FR& Rm : North) Guest(Rm, true);
@@ -711,7 +727,14 @@ void AHUCrimeScene::Build()
 			// a chandelier every 7 m or so: the lobby's big
 			const int32 NX = FMath::Max(1, FMath::RoundToInt(Rm.W() / 700.f)), NY = FMath::Max(1, FMath::RoundToInt(Rm.D() / 700.f));
 			for (int32 a = 0; a < NX; a++) for (int32 b = 0; b < NY; b++)
-				Lamp(FVector(Rm.X0 + Rm.W() * (a + 0.5f) / NX, Rm.Y0 + Rm.D() * (b + 0.5f) / NY, FH - 60), 6000.f, 900.f, Warm);
+				HULamps::Pendant(this, RootComponent, Blocks, FVector(Rm.X0 + Rm.W() * (a + 0.5f) / NX, Rm.Y0 + Rm.D() * (b + 0.5f) / NY, FH - 21), 75.f, 9.6f, Warm);
+			// EXIT over the street door, windows either side of it, and a lamp on the front desk
+			if (&Rm == &Rooms[0])
+			{
+				HULamps::ExitSign(this, RootComponent, Blocks, FVector(X0 + 6, 0, 258), 0.f);
+				for (float WY : { -650.f, 650.f }) HULamps::Window(this, RootComponent, Blocks, FVector(X0 + 6, WY, 175), 0.f, 120.f, 140.f, FLinearColor(1.f, 0.72f, 0.42f));
+				HULamps::DeskLamp(this, RootComponent, Blocks, FVector(-300, 780, 110), 180.f);
+			}
 			Areas.Add({ { Rm.X0 + 80, Rm.Y0 + 80, Rm.X1 - 80, Rm.Y1 - 80 }, 0, AOpen });
 		}
 	}

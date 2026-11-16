@@ -7,6 +7,7 @@
 #include "HUBuild.h"
 #include "HUProps.h"
 #include "HUUsables.h"
+#include "HULamps.h"
 #include "HUSquadSubsystem.h"
 #include "HUCharacter.h"
 #include "HUPlayerState.h"
@@ -122,7 +123,7 @@ void AHUSquadRoom::OnConstruction(const FTransform& Transform)
 		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D + 5), RH / 2), FVector(W * 2, 10, RH), Wall, Z0, true, EHUSurface::Plaster);
 		Block(this, R, Blocks, EShape::Cube, FVector(0, S * (D - 2), 45), FVector(W * 2, 4, 90), Trim, Z0, true, EHUSurface::Walnut);
 	}
-	for (float X = -W + 250.f; X <= W - 250.f; X += (W - 250.f) / 2.f) for (float Y : { -D * 0.45f, D * 0.45f }) Block(this, R, Blocks, EShape::Cube, FVector(X, Y, RH - 4), FVector(140, 30, 4), FLinearColor(3, 3, 2.7f), FRotator::ZeroRotator, false);
+	// (the ceiling's tubes, the exit sign and the table lamp are hung at play: BeginPlay, HULamps)
 
 	if (!bPrecinct)
 	{
@@ -269,18 +270,13 @@ void AHUSquadRoom::BeginPlay()
 {
 	Super::BeginPlay();
 	UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
+	// ROLL CALL's light: two rows of fluorescent strips (HULamps), EXIT over the doors, a lamp on the case table
 	auto Lights = [this](float W, float D)
 	{
 		for (float X = -W + 250.f; X <= W - 250.f; X += (W - 250.f) / 2.f) for (float Y : { -D * 0.45f, D * 0.45f })
-		{
-			UPointLightComponent* L = NewObject<UPointLightComponent>(this);
-			L->SetupAttachment(RootComponent);
-			L->SetRelativeLocation(FVector(X, Y, RH - 50));
-			L->SetIntensity(6000.f);
-			L->SetAttenuationRadius(1000.f);
-			L->SetLightColor(FLinearColor(1.f, 0.9f, 0.75f));
-			L->RegisterComponent();
-		}
+			HULamps::Tube(this, RootComponent, Blocks, FVector(X, Y, RH), 0.f, 9.f);
+		HULamps::ExitSign(this, RootComponent, Blocks, FVector(-RX, 0, 258), 0.f);
+		HULamps::DeskLamp(this, RootComponent, Blocks, FVector(-447, -268, 75), 0.f);
 	};
 	if (!bPrecinct)
 	{
