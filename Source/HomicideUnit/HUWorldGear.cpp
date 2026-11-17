@@ -26,7 +26,7 @@ void UHUInteractComponent::ServerGear_Implementation(uint8 InHeld, uint8 InPose)
 
 void UHUInteractComponent::SendGear()
 {
-	const uint8 Pose = Grabbed.IsValid() ? PoseDrag : bHolding ? (Held == SlotCount + HUBelt::Cuffs ? PoseCuff : PoseWork) : PoseIdle;
+	const uint8 Pose = Grabbed.IsValid() ? PoseDrag : bHolding ? (Held == SlotCount + HUBelt::Cuffs ? PoseCuff : PoseWork) : Inspecting.IsValid() ? PoseLook : PoseIdle;
 	if (Held == SentHeld && Pose == SentPose) return;
 	SentHeld = Held; SentPose = Pose;
 	if (GetWorld()->GetNetMode() == NM_Standalone) return;
@@ -60,6 +60,7 @@ void UHUInteractComponent::TickWorldGear(APawn* Pawn, float Dt)
 	case PoseWork: Want = 38.f + 9.f * FMath::Sin(WorldT * 7.f); break;        // working at something low, in short strokes
 	case PoseCuff: Want = 70.f + 4.f * FMath::Sin(WorldT * 9.f); break;        // the cuffs held out, ratcheting
 	case PoseDrag: Want = 82.f; break;                                          // a hand flat on the furniture
+	case PoseLook: Want = 64.f + 2.f * FMath::Sin(WorldT * 1.3f); break;       // something held up close, turned over
 	default: break;
 	}
 	if (ReachS > 0.f) Want = FMath::Lerp(Want, 45.f, ReachS);                   // out and down for it

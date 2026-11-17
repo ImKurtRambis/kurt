@@ -121,6 +121,7 @@ bool UHUInteractComponent::SlotUsable(int32 Slot) const
 void UHUInteractComponent::SelectSlot(int32 Slot)
 {
 	if (Interviewing.IsValid()) return; // 1-6 ask questions in an interview
+	if (Inspecting.IsValid()) return;   // your hands are full: bag it or put it back first
 	if (Slot < 0 || Slot >= SlotCount || Slot == Held) return;
 	if (!SlotUsable(Slot)) { Say(FString::Printf(TEXT("You don't have a %s yet. The supply locker in the motor pool sells one."), HUTools::Name((EHUTool)(Slot - 1)))); return; }
 	Held = Slot;
@@ -134,6 +135,7 @@ void UHUInteractComponent::WheelDown() { if (bBeltOpen) { SetBeltSel(BeltSel + 1
 
 void UHUInteractComponent::UseHeld()
 {
+	if (Inspecting.IsValid()) return; // looking something over: E bags it, Q puts it back
 	if (bBeltOpen) { UseBelt(); return; }
 	if (Held >= SlotCount) { BeltAction(Held - SlotCount); return; } // something off the belt
 	if (IsHolding(EHUTool::Flashlight) || IsHolding(EHUTool::UVLight)) { bLightOn = !bLightOn; UpdateBeam(); return; }
@@ -145,6 +147,7 @@ void UHUInteractComponent::UseHeld()
 void UHUInteractComponent::ToggleFlashlight()
 {
 	if (!SlotUsable((int32)EHUTool::Flashlight + 1)) { Say(TEXT("You don't have a flashlight. The supply locker in the motor pool sells one.")); return; }
+	if (Inspecting.IsValid() && !IsHolding(EHUTool::Flashlight)) return; // (a light already in hand can still go on and off)
 	if (!IsHolding(EHUTool::Flashlight)) { SelectSlot((int32)EHUTool::Flashlight + 1); bLightOn = true; }
 	else bLightOn = !bLightOn;
 	UpdateBeam();
@@ -153,6 +156,7 @@ void UHUInteractComponent::ToggleFlashlight()
 void UHUInteractComponent::ToggleUV()
 {
 	if (!SlotUsable((int32)EHUTool::UVLight + 1)) { Say(TEXT("You don't have a UV light. The supply locker in the motor pool sells one.")); return; }
+	if (Inspecting.IsValid() && !IsHolding(EHUTool::UVLight)) return;
 	if (!IsHolding(EHUTool::UVLight)) { SelectSlot((int32)EHUTool::UVLight + 1); bLightOn = true; }
 	else bLightOn = !bLightOn;
 	UpdateBeam();
@@ -295,6 +299,7 @@ void UHUInteractComponent::Scan()
 
 void UHUInteractComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
+	if (Inspecting.IsValid() || InspectRoot) EndInspect(); // (lets go of the move lock it holds)
 	SetHover(TArray<UPrimitiveComponent*>());
 	if (Keys) if (APlayerController* PC = Cast<APlayerController>(Keys->GetOuter())) PC->PopInputComponent(Keys);
 	if (Widget) Widget->RemoveFromParent();
@@ -390,9 +395,14 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	}
 	PromptAge += DeltaTime;
 
+	// looking something over (HUInspect.cpp): the mouse turns it, E and Q go to it, and its prompt is the one up
+	if (Inspecting.IsValid() || InspectRoot) TickInspect(DeltaTime);
+	if (AHUEvidence* Ev = Inspecting.Get()) { Focus = nullptr; FocusPart = nullptr; Prompt = IHUInteractable::Execute_GetPrompt(Ev, Pawn); }
+	InspectTest(DeltaTime);
+
 	// the belt: look well down with nothing to pick up there. Opens past 55 degrees, closes back above 45.
 	const float Pitch = FRotator::NormalizeAxis(Look.Pitch);
-	const bool bFree = !bMenuOpen && !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Reading.IsValid() && !Grabbed.IsValid() && !bHolding;
+	const bool bFree = !bMenuOpen && !Focus && !Interviewing.IsValid() && !Watching.IsValid() && !Reading.IsValid() && !Grabbed.IsValid() && !bHolding && !Inspecting.IsValid();
 	const bool bWant = bFree && Pitch < (bBeltOpen ? -45.f : -55.f);
 	if (bWant != bBeltOpen)
 	{
@@ -1029,6 +1039,8 @@ void UHUInteractComponent::SetGrabbing(AActor* Thing)
 // E / Q pressed: instant things happen now; careful work (UseTime) needs holding, faster with coffee
 void UHUInteractComponent::BeginUse(bool bSecondary)
 {
+	// something in your hands: E bags it, Q puts it back, whatever you're looking at (sent to the squad like any use)
+	if (AHUEvidence* Ev = Inspecting.Get()) { SendUseOn(Ev, nullptr, bSecondary); return; }
 	if (!Focus) return;
 	const IHUInteractable* II = Cast<IHUInteractable>(Focus);
 	APawn* Pawn = Cast<APawn>(GetOwner());

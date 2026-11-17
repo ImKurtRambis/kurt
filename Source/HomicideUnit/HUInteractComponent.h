@@ -131,6 +131,20 @@ public:
 	// say a line out loud to whoever it's for (the microphone ends up here; so do tests)
 	void SayTo(const FString& Said);
 
+	// ---- LOOKING SOMETHING OVER (HUInspect.cpp): a piece of evidence held up in front of you ----
+	//   E picks it up (AHUEvidence) and it's in your hands, close to your face. You stand still; the mouse turns it
+	//   over. It has a mark on its underside: turn that to face you and hold it there a moment, and you see what it
+	//   is (its detail; the profile it points to). E bags it, Q puts it back where it was.
+	TWeakObjectPtr<class AHUEvidence> Inspecting;
+	// every squad player's game calls these as the evidence is picked up / put down; only the holder's own game
+	// draws it in the hand
+	void StartInspect(class AHUEvidence* E);
+	void EndInspect();
+	// you've turned this one's mark to face you
+	bool SawMark(const class AHUEvidence* E) const { return E && Inspecting.Get() == E && bMarkSeen; }
+	// which way its mark faces, in your view (X: towards the far side, so -1 is straight at you)
+	FVector MarkFacing() const;
+
 	// a moment flagged on the security tapes: the note goes to the whole squad; bCatch = it's the clip that
 	// catches the culprit's lie (every machine puts the lie on its record)
 	void SendTapeNote(const FString& Note, bool bCatch);
@@ -141,7 +155,7 @@ public:
 	// what's in your hand (Held) and what you're doing with it, sent to the squad; their copy of you raises the same
 	// tool on your body's right arm, aims it where you look, reaches, works over evidence while you bag it, holds the
 	// cuffs out while you cuff, and shines the beam from the torch in that hand.
-	enum EGearPose : uint8 { PoseIdle, PoseWork, PoseCuff, PoseDrag };
+	enum EGearPose : uint8 { PoseIdle, PoseWork, PoseCuff, PoseDrag, PoseLook };
 	UPROPERTY(Replicated) uint8 RepHeld = 0;
 	UPROPERTY(Replicated) uint8 RepPose = 0;
 	UFUNCTION(Server, Reliable) void ServerGear(uint8 InHeld, uint8 InPose);
@@ -249,4 +263,18 @@ private:
 	bool bEarsWarm = false, bInEarshot = false; float EarsClock = 0.f;
 	void TalkTest(float Dt);        // -HUTalkTest
 	int32 TalkStep = -1, TalkWrong = 0; float TalkClock = 0.f;
+	// looking something over (HUInspect.cpp)
+	UPROPERTY() USceneComponent* InspectRoot = nullptr;   // on the camera: where it's held
+	UPROPERTY() USceneComponent* InspectPivot = nullptr;  // turns: the thing's own space, its middle on the root
+	UPROPERTY() TArray<UStaticMeshComponent*> InspectParts;
+	FRotator InspectView;           // where you're looking: the mouse turns the thing instead, the view stays
+	float InspectPitch = 0.f;       // ...raised to about chest height as you bring it up
+	FQuat InspectTurn = FQuat::Identity;
+	FVector MarkSide = FVector(0, 0, -1); // the mark's side, in the thing's own space
+	float InspectIn = 0.f, MarkHeld = 0.f;
+	bool bMarkSeen = false, bInspectLocked = false;
+	void TickInspect(float Dt);
+	void InspectTest(float Dt);     // -HUInspectTest
+	int32 InspectStep = -1, InspectWrong = 0; float InspectClock = 0.f;
+	TWeakObjectPtr<class AHUEvidence> InspectSubject;
 };

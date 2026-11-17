@@ -91,6 +91,8 @@ void AHUEvidence::Reveal()
 void AHUEvidence::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// in someone's hand: nothing on the floor. If they're gone (a partner who left), it goes back where it was.
+	if (bHeld) { if (!HeldBy.IsValid()) PutBack(nullptr); return; }
 	if (bCovered || (Conceal != EHUConceal::Dark && Conceal != EHUConceal::Trace)) return;
 	// any detective's beam (yours, or a partner's you can see) - a moment's grace so a wobbling beam doesn't flicker it
 	const float Now = GetWorld()->GetTimeSeconds();
@@ -111,6 +113,12 @@ FText AHUEvidence::GetPrompt_Implementation(APawn* User) const
 	const UHUCaseSubsystem* S = Cases();
 	if (!S || !S->GetClue(ClueId, C)) return FText::GetEmpty();
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	if (bHeld)
+	{
+		if (User && HeldBy.Get() == User) return FText::FromString(TEXT("[E] Bag it   ·   [Q] Put it back   ·   move the mouse to turn it over"));
+		const APawn* H = HeldBy.Get();
+		return FText::FromString(FString::Printf(TEXT("%s is looking it over"), H && H->GetPlayerState() ? *H->GetPlayerState()->GetPlayerName() : TEXT("Your partner")));
+	}
 	if (Conceal == EHUConceal::Locked && !bOpened)
 	{
 		if (I && I->IsHolding(EHUTool::Crowbar)) return FText::FromString(TEXT("[E] Pry open the strongbox"));
@@ -128,14 +136,23 @@ FText AHUEvidence::GetPrompt_Implementation(APawn* User) const
 		else Help = TEXT("   (one hand on the light — slow. A partner holding it is faster)");
 	}
 	if (Conceal == EHUConceal::Trace) return FText::FromString(TEXT("[E] Swab the trace — ") + C.Name.ToUpper() + Help);
-	return FText::FromString(TEXT("[E] Examine — ") + C.Name.ToUpper() + Help);
+	if (Conceal == EHUConceal::Locked) return FText::FromString(TEXT("[E] Take out what's inside — ") + C.Name.ToUpper());
+	return FText::FromString(TEXT("[E] Pick up — ") + C.Name.ToUpper() + Help);
 }
 
 void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
 {
 	UHUCaseSubsystem* S = Cases();
 	FHUClue C;
-	if (!S || !S->GetClue(ClueId, C) || bSecondary) return;
+	if (!S || !S->GetClue(ClueId, C)) return;
+	// in someone's hand: E bags it, Q puts it back (only theirs to do)
+	if (bHeld)
+	{
+		if (!User || HeldBy.Get() != User) return;
+		if (bSecondary) PutBack(User); else Bag(User);
+		return;
+	}
+	if (bSecondary) return;
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (Conceal == EHUConceal::Locked && !bOpened)
 	{
@@ -152,34 +169,103 @@ void AHUEvidence::Interact_Implementation(APawn* User, bool bSecondary)
 		if (I) I->Say(S->HasTool(EHUTool::PrintKit) ? TEXT("There are prints on it. Take out the print kit (4) to lift them.") : TEXT("There are prints on it, but you can't lift them by hand. Get a print kit from the supply locker."));
 		return;
 	}
-	S->FindClue(ClueId);
-	HUSound::Play(this, TEXT("SFX_Bag"), GetActorLocation(), 0.8f);
-	FString Line = FString::Printf(TEXT("BAGGED: %s — %s"), *C.Name, *C.Detail);
+	// a thing you can hold: pick it up and look it over. Prints lifted, a trace swabbed: bagged as it's done.
+	if (IsHandled()) PickUp(User); else Bag(User);
+}
+
+void AHUEvidence::PickUp(APawn* User)
+{
+	HeldBy = User; bHeld = true;
+	if (Conceal != EHUConceal::Locked) Show(false); // off the floor (a strongbox stays put: it's what was inside you hold)
+	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr) { I->PlayReach(); I->StartInspect(this); }
+}
+
+void AHUEvidence::PutBack(APawn* User)
+{
+	HeldBy.Reset(); bHeld = false;
+	if (Conceal == EHUConceal::Dark) LitUntil = GetWorld()->GetTimeSeconds() + 0.6f; // back in the dark: seen again only in a beam
+	else Show(true);
+	if (UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr)
+	{
+		I->EndInspect();
+		I->PlayReach();
+		I->Say(TEXT("You put it back where you found it."));
+	}
+}
+
+FString AHUEvidence::MarkWords() const
+{
+	const UHUCaseSubsystem* S = Cases();
+	FHUClue C;
+	if (!S || !S->GetClue(ClueId, C)) return FString();
+	FString Line = FString::Printf(TEXT("%s — %s"), *C.Name.ToUpper(), *C.Detail);
 	const EHUProfile* P = S->ClueProfile.Find(ClueId);
 	const FString* Sign = S->ClueSign.Find(ClueId);
-	if (P && Sign && *P != EHUProfile::None)
-		Line += FString::Printf(TEXT("   PROFILE: %s points to a %s."), **Sign, HUProfiles::Name(*P));
+	if (P && Sign && *P != EHUProfile::None) Line += FString::Printf(TEXT("   PROFILE: %s points to a %s."), **Sign, HUProfiles::Name(*P));
+	return Line;
+}
+
+void AHUEvidence::MarkLead(FString& OutTitle, FString& OutBody) const
+{
+	OutTitle.Reset(); OutBody.Reset();
+	const UHUCaseSubsystem* S = Cases();
+	const EHUProfile* P = S ? S->ClueProfile.Find(ClueId) : nullptr;
+	if (P && *P != EHUProfile::None) { OutTitle = TEXT("PROFILE LEAD"); OutBody = FString::Printf(TEXT("Points to a %s"), HUProfiles::Name(*P)); }
+}
+
+void AHUEvidence::HandLook(TArray<UStaticMeshComponent*>& OutParts) const
+{
+	OutParts.Reset();
+	if (Conceal == EHUConceal::Locked) return; // the box stays; what's inside is a small packet the hand draws
+	for (UStaticMeshComponent* B : Blocks) if (B && B != Lid) OutParts.Add(B);
+}
+
+void AHUEvidence::Bag(APawn* User)
+{
+	UHUCaseSubsystem* S = Cases();
+	FHUClue C;
+	if (!S || !S->GetClue(ClueId, C)) return;
+	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	const bool bLooked = I && I->SawMark(this); // (only the holder's own game knows; the others show nothing anyway)
+	if (I) I->EndInspect();
+	HeldBy.Reset(); bHeld = false;
+	S->FindClue(ClueId);
+	HUSound::Play(this, TEXT("SFX_Bag"), User ? User->GetActorLocation() : GetActorLocation(), 0.8f);
 	if (I)
 	{
-		I->PlayReach(); // reach down and bag it
-		I->Say(Line);
-		I->Notify(TEXT("EVIDENCE BAGGED"), C.Name, FLinearColor(0.36f, 0.76f, 1.f));
-		if (P && *P != EHUProfile::None) I->Notify(TEXT("PROFILE LEAD"), FString::Printf(TEXT("Points to a %s"), HUProfiles::Name(*P)), FLinearColor(0.8f, 0.55f, 0.98f));
+		I->PlayReach(); // into the bag
+		FString Title, Body;
+		MarkLead(Title, Body);
+		if (!IsHandled())
+		{
+			// lifted or swabbed: worked over as it was taken, so what it shows is known now
+			I->Say(TEXT("BAGGED: ") + MarkWords());
+			I->Notify(TEXT("EVIDENCE BAGGED"), C.Name, FLinearColor(0.36f, 0.76f, 1.f));
+			if (!Title.IsEmpty()) I->Notify(Title, Body, FLinearColor(0.8f, 0.55f, 0.98f));
+		}
+		else
+		{
+			// its mark was read (and its lead noted) when it was turned to face you; bagged unread, the lab reads it
+			I->Say(bLooked ? FString::Printf(TEXT("BAGGED: %s."), *C.Name)
+				: FString::Printf(TEXT("BAGGED: %s. You didn't turn it over - what's on it will be in the case file."), *C.Name));
+			I->Notify(TEXT("EVIDENCE BAGGED"), C.Name, FLinearColor(0.36f, 0.76f, 1.f));
+		}
 	}
 	Destroy();
 }
 
-// careful work takes a moment: picking it up, lifting prints, swabbing, prying a lock (only with the right tool in hand)
+// careful work takes a moment: picking it up, lifting prints, swabbing, prying a lock (only with the right tool in hand).
+// In your hand, bagging it and putting it back are at once.
 float AHUEvidence::UseTime(APawn* User, bool bSecondary) const
 {
-	if (bSecondary) return 0.f;
+	if (bSecondary || bHeld) return 0.f;
 	const UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	switch (Conceal)
 	{
-	case EHUConceal::Locked: return !bOpened ? (I && I->IsHolding(EHUTool::Crowbar) ? 3.f : 0.f) : 0.8f;
+	case EHUConceal::Locked: return !bOpened ? (I && I->IsHolding(EHUTool::Crowbar) ? 3.f : 0.f) : 0.5f;
 	case EHUConceal::Prints: return I && I->IsHolding(EHUTool::PrintKit) ? 2.5f : 0.f;
 	case EHUConceal::Trace:  { const APawn* L = LitByPawn(); return L && L != User ? 2.f : 5.f; }
-	case EHUConceal::Dark:   { const APawn* L = LitByPawn(); return L && L != User ? 0.8f : 2.f; }
-	default:                 return 0.8f;
+	case EHUConceal::Dark:   { const APawn* L = LitByPawn(); return L && L != User ? 0.8f : 2.f; } // one hand on the light
+	default:                 return 0.5f;
 	}
 }
