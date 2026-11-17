@@ -29,6 +29,11 @@ private:
 	bool Tick(float Dt);
 	void OnLeaveMap(const FString& Next);
 	void Digest(const FString& Stage) const;
+	// the squad's notebook on this PC: the partner's finds and the host's interview, each under the right name
+	void CheckNotebook() const;
+	// cards on this PC's pager titled so and naming that detective
+	int32 CardsFrom(const FString& Title, const class APawn* By) const;
+	FString HostName, PartnerName; // the two detectives' names, taken at the scene
 	void Check(bool bOk, const FString& What) const;
 	void Say(const FString& What) const;
 	void Flag(const FString& Name) const;

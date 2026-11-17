@@ -8,6 +8,7 @@
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
+#include "HUNotebook.h"
 #include "HUBrainSubsystem.h"
 #include "HUCanned.h"
 #include "HUVoiceSubsystem.h"
@@ -537,6 +538,10 @@ void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FS
 		// spoken to with no menu: their line under their name (you know what you just asked); in the interview, both
 		I->Say(bWalkUp ? FString::Printf(TEXT("%s:  %s%s"), *S.Name.ToUpper(), *Answer, *Body) : FString::Printf(TEXT("\"%s\"   %s:  %s%s"), *Question, *S.Name.ToUpper(), *Answer, *Body));
 	}
+	// in the squad's notebook, whoever asked and wherever the rest of the squad is
+	if (UHUNotebook* NB = UHUNotebook::Of(this))
+		NB->Note(EHUNote::Heard, User, Question.IsEmpty() ? FString::Printf(TEXT("%s: %s"), *S.Name.ToUpper(), *Answer)
+			: FString::Printf(TEXT("%s, asked \"%s\": %s"), *S.Name.ToUpper(), *Question, *Answer), SuspectId);
 	// the words are on screen before the voice is asked for, so they show whatever the voice does
 	ShowNearby(User, FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Answer));
 	Speak(Answer, InEmotion);
@@ -570,11 +575,32 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 	Action &= 0x7F;
 	const int32 BreaksBefore = C->Breaks;
 	const bool bConfessedBefore = !C->Confessed.IsEmpty();
+	const TSet<FString> LiesBefore = UHUNotebook::LiesNow(C);
 	const bool bWasBroken = S.Statements.IsValidIndex(Statement) && C->IsBroken(SuspectId, Statement);
 	bool bTagTeam = false;
 	C->PressureScale = HUProgress::PressureMult(User, this, &bTagTeam); // specialty, Interview Suite, tag-team
 	const FString Reply = Action == 1 ? C->RaiseRecord(SuspectId) : !ClueId.IsEmpty() ? C->Confront(SuspectId, Statement, ClueId) : C->Press(SuspectId, Statement);
 	C->PressureScale = 1.f;
+	// in the squad's notebook: what they were shown or pressed on and what they said (said out loud, the answer is
+	// noted when the brain gives it: ApplyAnswer), a lie it put on the record, a confession - with who did it
+	if (UHUNotebook* NB = UHUNotebook::Of(this))
+	{
+		if (!bVoice)
+		{
+			FHUClue K;
+			const FString What = Action == 1 ? FString(TEXT("shown their record"))
+				: !ClueId.IsEmpty() && C->GetClue(ClueId, K) ? FString::Printf(TEXT("shown the %s"), *K.Name)
+				: S.Statements.IsValidIndex(Statement) ? FString::Printf(TEXT("pressed on \"%s\""), *S.Statements[Statement].Text) : FString(TEXT("pressed"));
+			NB->Note(EHUNote::Heard, User, FString::Printf(TEXT("%s, %s: %s"), *S.Name.ToUpper(), *What, *Reply), SuspectId);
+		}
+		NB->NoteNewLies(C, User, LiesBefore, true);
+		if (!bConfessedBefore && !C->Confessed.IsEmpty())
+		{
+			FHUSuspect Who;
+			const FString Name = C->GetSuspect(C->Confessed, Who) ? Who.Name : S.Name;
+			NB->Note(EHUNote::Confession, User, FString::Printf(TEXT("%s confessed."), *Name.ToUpper()), C->Confessed, TEXT("CONFESSION"), FString::Printf(TEXT("%s confessed"), *Name));
+		}
+	}
 	UHUInteractComponent* I = User ? User->FindComponentByClass<UHUInteractComponent>() : nullptr;
 	if (!I) return;
 	if (bVoice)

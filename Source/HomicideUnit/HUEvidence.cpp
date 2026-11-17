@@ -3,6 +3,7 @@
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
+#include "HUNotebook.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -230,6 +231,12 @@ void AHUEvidence::Bag(APawn* User)
 	if (I) I->EndInspect();
 	HeldBy.Reset(); bHeld = false;
 	S->FindClue(ClueId);
+	// in the squad's notebook, with who bagged it - and a card for the rest of the squad
+	if (UHUNotebook* NB = UHUNotebook::Of(this))
+	{
+		NB->Note(EHUNote::Evidence, User, FString::Printf(TEXT("%s — %s"), *C.Name.ToUpper(), *C.Detail), ClueId, TEXT("EVIDENCE BAGGED"), C.Name);
+		NB->FoundBy.Add(ClueId, UHUNotebook::WhoOf(User));
+	}
 	HUSound::Play(this, TEXT("SFX_Bag"), User ? User->GetActorLocation() : GetActorLocation(), 0.8f);
 	if (I)
 	{

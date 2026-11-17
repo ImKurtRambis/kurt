@@ -2,6 +2,7 @@
 #include "HUBuild.h"
 #include "HUCaseSubsystem.h"
 #include "HUInteractComponent.h"
+#include "HUNotebook.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/PointLightComponent.h"
@@ -12,6 +13,7 @@
 #include "GameFramework/Pawn.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
+#include "Misc/DateTime.h"
 #include "UnrealClient.h"
 
 using namespace HUBuild;
@@ -147,7 +149,21 @@ FString AHUCaseBoard::Signature() const
 	for (const TPair<FString, FString>& P : C->BoardPins) S += P.Key + TEXT(">") + P.Value + TEXT(",");
 	for (const TPair<FString, uint8>& P : C->BoardMarks) S += FString::Printf(TEXT("%s=%d,"), *P.Key, P.Value);
 	for (const TPair<TWeakObjectPtr<APawn>, FString>& P : Holding) S += TEXT("^") + P.Value;
+	// who bagged what, and who caught which lie (written on the cards)
+	if (const UHUNotebook* NB = UHUNotebook::Of(this))
+	{
+		for (const TPair<FString, FString>& P : NB->FoundBy) S += TEXT("#") + P.Key + TEXT("=") + P.Value;
+		for (const TPair<FString, FString>& P : NB->CaughtBy) S += TEXT("!") + P.Key + TEXT("=") + P.Value;
+	}
 	return S;
+}
+
+// "FOUND BY MIKE", for an evidence card (empty if nobody's on record for it)
+static FString FinderLine(const UObject* Ctx, const FString& ClueId)
+{
+	const UHUNotebook* NB = UHUNotebook::Of(Ctx);
+	const FString* Who = NB ? NB->FoundBy.Find(ClueId) : nullptr;
+	return Who ? FString::Printf(TEXT("FOUND BY %s"), *Who->ToUpper().Left(18)) : FString();
 }
 
 void AHUCaseBoard::Tick(float DeltaSeconds)
@@ -222,6 +238,15 @@ void AHUCaseBoard::Rebuild()
 		const uint8 Mark = C->BoardMarks.FindRef(S.Id);
 		if (Mark == 1) { UTextRenderComponent* T = Write(TEXT("PRIME<br>SUSPECT"), U, PZ(244), 7.5f * Sc, FColor(225, 15, 15), 11.f); T->SetRelativeRotation(FRotator(0, 0, -14)); }
 		if (Mark == 2) { UTextRenderComponent* T = Write(TEXT("CLEARED"), U, PZ(244), 7.5f * Sc, FColor(20, 70, 200), 11.f); T->SetRelativeRotation(FRotator(0, 0, -14)); }
+		// their lies on the record, and who caught the last one
+		if (const UHUNotebook* NB = UHUNotebook::Of(this))
+		{
+			int32 Lies = 0; FString By;
+			for (int32 s = 0; s < S.Statements.Num(); s++)
+				if (C->IsBroken(S.Id, s)) { Lies++; if (const FString* W = NB->CaughtBy.Find(FString::Printf(TEXT("%s|%d"), *S.Id, s))) By = *W; }
+			if (Lies > 0) Write(Lies == 1 ? (By.IsEmpty() ? FString(TEXT("1 LIE ON RECORD")) : FString::Printf(TEXT("LIE CAUGHT BY %s"), *By.ToUpper().Left(12)))
+				: (By.IsEmpty() ? FString::Printf(TEXT("%d LIES ON RECORD"), Lies) : FString::Printf(TEXT("%d LIES - LAST BY %s"), Lies, *By.ToUpper().Left(10))), U, 187.3f, 2.6f, FColor(235, 70, 60));
+		}
 
 		int32 Row = 0, More = 0;
 		for (int32 e = 0; e < Ev.Num(); e++)
@@ -232,7 +257,8 @@ void AHUCaseBoard::Rebuild()
 			bool bHeld = false; for (const TPair<TWeakObjectPtr<APawn>, FString>& P : Holding) bHeld |= P.Value == Ev[e];
 			PlaceCard(EvCards[e], U, Z, FMath::Min(58.f, Step - 4.f), 17, bHeld ? HeldPaper : Paper, bHeld ? 6.f : 1.5f);
 			FHUClue Clue; C->GetClue(Ev[e], Clue);
-			Write(Wrap(Clue.Name, 16, 2), U, Z - 1, 3.6f, Ink, bHeld ? 7.2f : 2.6f);
+			Write(Wrap(Clue.Name, 16, 2), U, Z, 3.6f, Ink, bHeld ? 7.2f : 2.6f);
+			Write(FinderLine(this, Ev[e]), U, Z - 6.1f, 2.5f, FColor(35, 50, 105), bHeld ? 7.2f : 2.6f);
 			Thread(At(U - 22 * Sc, PZ(213), 3.2f), At(U - 22 * Sc, Z + 6, 3.2f));
 			Row++;
 		}
@@ -258,7 +284,8 @@ void AHUCaseBoard::Rebuild()
 		bool bHeld = false; for (const TPair<TWeakObjectPtr<APawn>, FString>& P : Holding) bHeld |= P.Value == Ev[e];
 		PlaceCard(EvCards[e], U, Z, 58, 18, bHeld ? HeldPaper : Paper, bHeld ? 6.f : 1.5f);
 		FHUClue Clue; C->GetClue(Ev[e], Clue);
-		Write(Wrap(Clue.Name, 16, 2), U, Z - 1, 3.6f, Ink, bHeld ? 7.2f : 2.6f);
+		Write(Wrap(Clue.Name, 16, 2), U, Z, 3.6f, Ink, bHeld ? 7.2f : 2.6f);
+		Write(FinderLine(this, Ev[e]), U, Z - 6.3f, 2.5f, FColor(35, 50, 105), bHeld ? 7.2f : 2.6f);
 	}
 }
 
@@ -340,7 +367,13 @@ void AHUCaseBoard::Interact_Implementation(APawn* User, bool bSecondary)
 	if (Ev.IsValidIndex(Ei))
 	{
 		FHUClue Clue; C->GetClue(Ev[Ei], Clue);
-		if (bSecondary) { I->Say(FString::Printf(TEXT("%s — %s"), *Clue.Name.ToUpper(), *Clue.Detail)); return; }
+		if (bSecondary)
+		{
+			const UHUNotebook* NB = UHUNotebook::Of(this);
+			const FString* By = NB ? NB->FoundBy.Find(Ev[Ei]) : nullptr;
+			I->Say(FString::Printf(TEXT("%s — %s%s"), *Clue.Name.ToUpper(), *Clue.Detail, By ? *FString::Printf(TEXT("   (bagged by %s)"), **By) : TEXT("")));
+			return;
+		}
 		if (Held == Ev[Ei])
 		{
 			C->BoardPins.Remove(Ev[Ei]);
@@ -375,6 +408,31 @@ void AHUCaseBoard::TestStep(float DeltaSeconds)
 		for (int32 e = 0; e < FMath::Min(9, C->Current.Clues.Num()); e++) C->Found.AddUnique(C->Current.Clues[e].Id);
 		C->bAwaitingCaptain = true;
 		UE_LOG(LogTemp, Log, TEXT("HUBoardTest: case %d, %d suspects, %d bagged"), C->Current.Number, C->Current.Suspects.Num(), C->Found.Num());
+		// the squad's notebook as two detectives would have left it: you bagged every third piece, a partner the rest
+		if (UHUNotebook* NB = UHUNotebook::Of(this))
+		{
+			NB->Sync();
+			const FString Partner = TEXT("Rosa Delgado");
+			auto PartnerNote = [&](EHUNote Kind, const FString& Text, const FString& Ref)
+			{
+				UHUNotebook::FEntry E; E.Kind = Kind; E.Who = Partner; E.Text = Text; E.Ref = Ref; E.Clock = FDateTime::Now().ToString(TEXT("%H:%M"));
+				NB->Entries.Add(E);
+			};
+			for (int32 e = 0; e < C->Found.Num(); e++)
+			{
+				FHUClue K; C->GetClue(C->Found[e], K);
+				const FString Text = FString::Printf(TEXT("%s — %s"), *K.Name.ToUpper(), *K.Detail);
+				if (e % 3 == 0) NB->Note(EHUNote::Evidence, P, Text, K.Id); else PartnerNote(EHUNote::Evidence, Text, K.Id);
+				NB->FoundBy.Add(K.Id, e % 3 == 0 ? UHUNotebook::WhoOf(P) : Partner);
+			}
+			if (C->Current.Suspects.Num() && C->Current.Suspects[0].Statements.Num())
+			{
+				const FHUSuspect& S = C->Current.Suspects[0];
+				PartnerNote(EHUNote::Heard, FString::Printf(TEXT("%s, asked \"Where were you at ten?\": %s"), *S.Name.ToUpper(), *S.Statements[0].Text), S.Id);
+				PartnerNote(EHUNote::Lie, FString::Printf(TEXT("%s: \"%s\" - a lie, and it's on the record."), *S.Name.ToUpper(), *S.Statements[0].Text), S.Id);
+			}
+			NB->Note(EHUNote::Lookup, P, TEXT("Ran a background check: no record on file."));
+		}
 	}
 	auto Use = [&](UPrimitiveComponent* Part, bool bQ)
 	{
@@ -406,5 +464,13 @@ void AHUCaseBoard::TestStep(float DeltaSeconds)
 	if (Passed(5.5f)) FScreenshotRequest::RequestScreenshot(TEXT("CaseBoard_Close"), false, false);
 	if (Passed(6.5f)) Stand(160, -190, 12);
 	if (Passed(7.5f)) FScreenshotRequest::RequestScreenshot(TEXT("CaseBoard_Left"), false, false);
-	if (Passed(9.f)) FPlatformMisc::RequestExit(false);
+	// the squad's notebook open (N), and the case board's cards with who bagged them
+	if (Passed(8.f)) { Stand(150, 0, 2); if (I) I->ToggleNotebook(); }
+	if (Passed(9.f)) FScreenshotRequest::RequestScreenshot(TEXT("CaseBoard_Notebook"), true, false);
+	if (Passed(10.f))
+	{
+		const UHUNotebook* NB = UHUNotebook::Of(this);
+		UE_LOG(LogTemp, Log, TEXT("HUBoardTest: notebook %d entries, %d found-by, open %d"), NB ? NB->Entries.Num() : -1, NB ? NB->FoundBy.Num() : -1, I && I->bNotebookOpen);
+		FPlatformMisc::RequestExit(false);
+	}
 }

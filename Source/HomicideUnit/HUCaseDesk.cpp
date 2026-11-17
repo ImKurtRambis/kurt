@@ -5,6 +5,7 @@
 #include "HUProfiles.h"
 #include "HUPlayerState.h"
 #include "HUDeskRecords.h"
+#include "HUNotebook.h"
 #include "HUPhoneData.h"
 #include "HUOffenderBrain.h"
 #include "HUSecurityDesk.h"
@@ -854,6 +855,7 @@ void AHUCaseDesk::Rebuild()
 			if (!C->GetClue(Id, Cl)) continue;
 			P.Lines.Add(FString::Printf(TEXT("#%s  %s"), *Cl.Id.ToUpper(), *Cl.Name.ToUpper()));
 			P.Lines.Add(TEXT("   ") + Cl.Detail);
+			if (const UHUNotebook* NB = UHUNotebook::Of(this)) if (const FString* By = NB->FoundBy.Find(Id)) P.Lines.Add(TEXT("   Bagged by ") + *By);
 			if (const FString* Sign = C->ClueSign.Find(Id)) if (!Sign->IsEmpty()) P.Lines.Add(TEXT("   Lab: ") + *Sign);
 			if (const FString* Pin = C->BoardPins.Find(Id)) P.Lines.Add(TEXT("   Pinned on the board under ") + SuspectName(*Pin));
 			P.Lines.Add(TEXT(""));

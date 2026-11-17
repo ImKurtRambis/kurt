@@ -4,6 +4,7 @@
 #include "HUCaseSubsystem.h"
 #include "HUEvidence.h"
 #include "HUInteractComponent.h"
+#include "HUNotebook.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -249,6 +250,11 @@ void AHUVictim::ExamineSpot(int32 Spot, UHUInteractComponent* I)
 	Examined.Add(Spot);
 	I->PlayReach();
 	I->Say(FString::Printf(TEXT("THE %s:  %s"), *FString(SpotName(Spot)).ToUpper(), *Text));
+	// the first look at each part, in the squad's notebook (a sign of who did it is a card for the rest of the squad)
+	if (bFirst)
+		if (UHUNotebook* NB = UHUNotebook::Of(this))
+			NB->Note(EHUNote::Body, Cast<APawn>(I->GetOwner()), FString::Printf(TEXT("THE %s: %s"), *FString(SpotName(Spot)).ToUpper(), *Text), FString(),
+				Sign != EHUProfile::None ? TEXT("PROFILE LEAD") : nullptr, Sign != EHUProfile::None ? FString::Printf(TEXT("the body points to a %s"), HUProfiles::Name(Sign)) : FString());
 	if (bFirst && Sign != EHUProfile::None)
 	{
 		if (UHUCaseSubsystem* S = Cases()) if (!S->BodyLeads.Contains(Sign)) S->AddBodyLead(Sign); // (once per case, even over two visits)

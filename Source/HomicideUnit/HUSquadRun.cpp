@@ -11,6 +11,7 @@
 #include "HUSuspectActor.h"
 #include "HUEvidence.h"
 #include "HUSquadRoom.h"
+#include "HUNotebook.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -161,9 +162,50 @@ void UHUSquadRun::Digest(const FString& Stage) const
 	FString Verdict = C->LastVerdict;
 	int32 Cut;
 	if (Verdict.FindChar(TEXT('.'), Cut)) Verdict.LeftInline(Cut); // the rest (pay, XP, promotions) is each detective's own
-	UE_LOG(LogTemp, Display, TEXT("HUSquadRun DIGEST %s | case '%s' killer %s active %d briefed %d | found [%s] | breaks %d confessed '%s' | arrested [%s] | booked [%s] awaiting %d | phones [%s] | pressure [%s] | verdict '%s'"),
+	// the squad's notebook: who bagged what, who caught which lie, and how many notes of each kind each detective has
+	TArray<FString> FoundBy, CaughtBy, Notes;
+	if (const UHUNotebook* NB = UHUNotebook::Of(World()))
+	{
+		for (const TPair<FString, FString>& KV : NB->FoundBy) FoundBy.Add(KV.Key + TEXT("=") + KV.Value);
+		for (const TPair<FString, FString>& KV : NB->CaughtBy) CaughtBy.Add(KV.Key + TEXT("=") + KV.Value);
+		TMap<FString, int32> Count;
+		for (const UHUNotebook::FEntry& E : NB->Entries) Count.FindOrAdd(FString(UHUNotebook::KindName(E.Kind)) + TEXT(":") + E.Who)++;
+		for (const TPair<FString, int32>& KV : Count) Notes.Add(FString::Printf(TEXT("%s=%d"), *KV.Key, KV.Value));
+	}
+	UE_LOG(LogTemp, Display, TEXT("HUSquadRun DIGEST %s | case '%s' killer %s active %d briefed %d | found [%s] | breaks %d confessed '%s' | arrested [%s] | booked [%s] awaiting %d | phones [%s] | pressure [%s] | verdict '%s' | found by [%s] | lies caught by [%s] | notes [%s]"),
 		*Stage, *C->Current.Title, *C->Current.Solution.Killer, C->bCaseActive, C->bBriefed, *Sorted(C->Found), C->Breaks, *C->Confessed,
-		*Sorted(C->Arrested), *Sorted(Book), C->bAwaitingCaptain, *Sorted(C->SeizedPhones), *Sorted(Pres), *Verdict);
+		*Sorted(C->Arrested), *Sorted(Book), C->bAwaitingCaptain, *Sorted(C->SeizedPhones), *Sorted(Pres), *Verdict, *Sorted(FoundBy), *Sorted(CaughtBy), *Sorted(Notes));
+}
+
+int32 UHUSquadRun::CardsFrom(const FString& Title, const APawn* By) const
+{
+	const UHUInteractComponent* I = Hands();
+	const FString Lead = Title + TEXT(" — ") + UHUNotebook::WhoOf(By) + TEXT(":");
+	int32 N = 0;
+	if (I) for (const FString& Pg : I->Pages()) if (Pg.StartsWith(Lead)) N++;
+	return N;
+}
+
+void UHUSquadRun::CheckNotebook() const
+{
+	const UHUNotebook* NB = UHUNotebook::Of(World());
+	const UHUCaseSubsystem* C = Case();
+	if (!NB || !C) { Check(false, TEXT("there's a squad notebook")); return; }
+	// (as they were at the scene: by the end the other copy may have gone)
+	Check(!PartnerName.IsEmpty() && PartnerName != HostName, FString::Printf(TEXT("the two detectives go by their own names in the notebook (%s, %s)"), *HostName, *PartnerName));
+	int32 ByPartner = 0, Bagged = 0, Heard = 0, Lies = 0;
+	for (const FString& Id : C->Found) if (NB->FoundBy.FindRef(Id) == PartnerName) ByPartner++;
+	for (const UHUNotebook::FEntry& E : NB->Entries)
+	{
+		if (E.Kind == EHUNote::Evidence && E.Who == PartnerName) Bagged++;
+		if (E.Kind == EHUNote::Heard && E.Who == HostName) Heard++;
+		if (E.Kind == EHUNote::Lie && E.Who == HostName) Lies++;
+	}
+	Check(C->Found.Num() > 0 && ByPartner == C->Found.Num() && Bagged == C->Found.Num(),
+		FString::Printf(TEXT("the notebook has every bagged piece as found by the partner, %s (%d of %d, %d notes)"), *PartnerName, ByPartner, C->Found.Num(), Bagged));
+	Check(Heard > 0, FString::Printf(TEXT("the notebook has what the suspects told the host, %s (%d answers)"), *HostName, Heard));
+	const int32 OnRecord = UHUNotebook::LiesNow(C).Num();
+	Check(Lies == OnRecord && NB->CaughtBy.Num() == OnRecord, FString::Printf(TEXT("the notebook has every lie on the record, caught by the host (%d of %d)"), Lies, OnRecord));
 }
 
 void UHUSquadRun::OnLeaveMap(const FString& NextMap)
@@ -383,6 +425,8 @@ void UHUSquadRun::Scene()
 		int32 Sus = 0;
 		for (TActorIterator<AHUSuspectActor> It(World()); It; ++It) Sus++;
 		Say(FString::Printf(TEXT("at the scene of '%s': %d pieces of evidence, %d people, culprit %s, van %s"), *C->Current.Title, Todo.Num(), Sus, Killer ? *Killer->GetName() : TEXT("MISSING"), Van ? TEXT("found") : TEXT("MISSING")));
+		HostName = UHUNotebook::WhoOf(bHost ? Me() : Partner());
+		PartnerName = UHUNotebook::WhoOf(bHost ? Partner() : Me());
 		Digest(TEXT("scene-start"));
 		Cursor = 0; Tries = 0;
 		Next(1.0);
@@ -416,6 +460,8 @@ void UHUSquadRun::Scene()
 			int32 Left = 0;
 			for (const TWeakObjectPtr<AActor>& E : Todo) if (E.IsValid()) Left++;
 			Check(Left == 0, FString::Printf(TEXT("every piece the partner bagged is gone from the host's scene too (%d left, %d bagged here)"), Left, C->Found.Num()));
+			const int32 Cards = CardsFrom(TEXT("EVIDENCE BAGGED"), Partner());
+			Check(Cards > 0, FString::Printf(TEXT("the host was told of the partner's finds as they came in (%d cards naming %s)"), Cards, *UHUNotebook::WhoOf(Partner())));
 		}
 		Tries = 0;
 		Next(0.5);
@@ -470,6 +516,11 @@ void UHUSquadRun::Scene()
 		{
 			I->Held = 0;
 			Check(Killer && Killer->IsEscortedBy(Me()), TEXT("the partner has the culprit in cuffs, by the arm"));
+			if (UHUNotebook::LiesNow(C).Num() > 0)
+			{
+				const int32 Cards = CardsFrom(TEXT("LIE ON THE RECORD"), Partner());
+				Check(Cards > 0, FString::Printf(TEXT("the partner, across the scene, was told of the lies the host caught (%d cards naming %s)"), Cards, *UHUNotebook::WhoOf(Partner())));
+			}
 			Flag(TEXT("arrested"));
 			Next(0.5);
 			return;
@@ -596,6 +647,7 @@ void UHUSquadRun::Precinct()
 			return;
 		}
 		Check(!C->bCaseActive && !C->LastVerdict.IsEmpty(), TEXT("the host's game closed the case: ") + C->LastVerdict);
+		CheckNotebook();
 		Digest(TEXT("final"));
 		Next(1.0);
 		return;
@@ -604,6 +656,7 @@ void UHUSquadRun::Precinct()
 		{
 			if (C->bCaseActive || C->LastVerdict.IsEmpty()) { if (NowS() - StepStart > 30.0) { Check(false, TEXT("the partner's game never got the Captain's verdict")); Digest(TEXT("final")); Done(TEXT("no verdict")); } else After(0.5); return; }
 			Check(true, TEXT("the partner's game closed the case: ") + C->LastVerdict);
+			CheckNotebook();
 			Digest(TEXT("final"));
 			Flag(TEXT("partner-final"));
 			Done(TEXT("shift over"));
@@ -623,6 +676,8 @@ void UHUSquadRun::Deinitialize() { Super::Deinitialize(); }
 bool UHUSquadRun::Tick(float) { return false; }
 void UHUSquadRun::OnLeaveMap(const FString&) {}
 void UHUSquadRun::Digest(const FString&) const {}
+void UHUSquadRun::CheckNotebook() const {}
+int32 UHUSquadRun::CardsFrom(const FString&, const APawn*) const { return 0; }
 void UHUSquadRun::Check(bool, const FString&) const {}
 void UHUSquadRun::Say(const FString&) const {}
 void UHUSquadRun::Flag(const FString&) const {}

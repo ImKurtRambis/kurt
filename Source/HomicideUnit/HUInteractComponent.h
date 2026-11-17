@@ -131,6 +131,11 @@ public:
 	// say a line out loud to whoever it's for (the microphone ends up here; so do tests)
 	void SayTo(const FString& Said);
 
+	// ---- THE SQUAD'S NOTEBOOK (HUNotebook.h): N opens it - what everyone bagged, heard and looked up, and who ----
+	UPROPERTY(BlueprintReadOnly, Category = "Notebook") bool bNotebookOpen = false;
+	int32 NotebookScroll = 0; // newest entries scrolled past (the mouse wheel, while it's open)
+	void ToggleNotebook();
+
 	// ---- LOOKING SOMETHING OVER (HUInspect.cpp): a piece of evidence held up in front of you ----
 	//   E picks it up (AHUEvidence) and it's in your hands, close to your face. You stand still; the mouse turns it
 	//   over. It has a mark on its underside: turn that to face you and hold it there a moment, and you see what it
@@ -204,6 +209,7 @@ public:
 private:
 	UPROPERTY() class UInputComponent* Keys = nullptr;
 	UPROPERTY() class UHUPromptWidget* Widget = nullptr;
+	UPROPERTY() class UHUNotebookWidget* NotebookWidget = nullptr;
 	UPROPERTY() class USpotLightComponent* Beam = nullptr;
 	UPROPERTY() USceneComponent* Hand = nullptr;           // the first-person hand, on the camera
 	UPROPERTY() TArray<UStaticMeshComponent*> HandParts;

@@ -27,6 +27,7 @@
 #include "HUCaseDesk.h"
 #include "HUDeskRecords.h"
 #include "HUPlayerState.h"
+#include "HUNotebook.h"
 
 // the beam: how far it reaches and how wide (half-angle, degrees)
 static const float BeamRange = 1100.f, BeamCone = 22.f;
@@ -63,6 +64,7 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 	Keys->BindKey(EKeys::Five, IE_Pressed, this, &UHUInteractComponent::Slot5);
 	Keys->BindKey(EKeys::Six, IE_Pressed, this, &UHUInteractComponent::Slot6);
 	Keys->BindKey(EKeys::G, IE_Pressed, this, &UHUInteractComponent::Ping);
+	Keys->BindKey(EKeys::N, IE_Pressed, this, &UHUInteractComponent::ToggleNotebook); // the squad's notebook (HUNotebook.h)
 	Keys->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &UHUInteractComponent::WheelUp);
 	Keys->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &UHUInteractComponent::WheelDown);
 	Keys->RegisterComponent();
@@ -70,6 +72,8 @@ void UHUInteractComponent::Setup(APlayerController* PC)
 
 	Widget = CreateWidget<UHUPromptWidget>(PC, UHUPromptWidget::StaticClass());
 	if (Widget) { Widget->Owner = this; Widget->AddToViewport(10); }
+	NotebookWidget = CreateWidget<UHUNotebookWidget>(PC, UHUNotebookWidget::StaticClass());
+	if (NotebookWidget) { NotebookWidget->Owner = this; NotebookWidget->AddToViewport(11); }
 
 	// the light and the hand both ride on the camera
 	APawn* Pawn = Cast<APawn>(GetOwner());
@@ -130,8 +134,17 @@ void UHUInteractComponent::SelectSlot(int32 Slot)
 	UpdateBeam();
 }
 
-void UHUInteractComponent::WheelUp() { if (bBeltOpen) { SetBeltSel(BeltSel - 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + SlotCount - i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
-void UHUInteractComponent::WheelDown() { if (bBeltOpen) { SetBeltSel(BeltSel + 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
+void UHUInteractComponent::ToggleNotebook()
+{
+	// (not while a keyboard is wanted for something else: typing to a suspect, a desk computer, the menu)
+	const AHUSuspectActor* S = Interviewing.Get();
+	if (bMenuOpen || Reading.IsValid() || Watching.IsValid() || (S && S->bTyping)) return;
+	bNotebookOpen = !bNotebookOpen;
+	NotebookScroll = 0;
+}
+
+void UHUInteractComponent::WheelUp() { if (bNotebookOpen) { NotebookScroll = FMath::Max(0, NotebookScroll - 1); return; } if (bBeltOpen) { SetBeltSel(BeltSel - 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + SlotCount - i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
+void UHUInteractComponent::WheelDown() { if (bNotebookOpen) { const UHUNotebook* NB = UHUNotebook::Of(this); NotebookScroll = FMath::Min(NotebookScroll + 1, NB ? FMath::Max(0, NB->Entries.Num() - 1) : 0); return; } if (bBeltOpen) { SetBeltSel(BeltSel + 1, BeltYaw); return; } for (int32 i = 1; i < SlotCount; i++) { const int32 S = (Held + i) % SlotCount; if (SlotUsable(S)) { SelectSlot(S); return; } } }
 
 void UHUInteractComponent::UseHeld()
 {
@@ -303,6 +316,7 @@ void UHUInteractComponent::EndPlay(const EEndPlayReason::Type Reason)
 	SetHover(TArray<UPrimitiveComponent*>());
 	if (Keys) if (APlayerController* PC = Cast<APlayerController>(Keys->GetOuter())) PC->PopInputComponent(Keys);
 	if (Widget) Widget->RemoveFromParent();
+	if (NotebookWidget) NotebookWidget->RemoveFromParent();
 	Super::EndPlay(Reason);
 }
 
@@ -321,6 +335,8 @@ void UHUInteractComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		return;
 	}
 	TickMarkers();
+	// the squad's notebook: a clean page for a new case; open, what's in it has been read
+	if (UHUNotebook* NB = UHUNotebook::Of(this)) { NB->Sync(); if (bNotebookOpen) NB->Seen = NB->Entries.Num(); }
 	TickTalk(DeltaTime); // hold V near someone and talk: no menu (HUTalk.cpp)
 	if (UHUListenSubsystem* L = GetWorld()->GetGameInstance()->GetSubsystem<UHUListenSubsystem>())
 	{
@@ -980,6 +996,8 @@ void UHUInteractComponent::MulticastDeskRecord_Implementation(uint8 Job, const F
 	FString Line = UHUDeskRecords::Summary(C, J, Arg);
 	if (J == EHUDeskJob::ArrestWarrant || J == EHUDeskJob::SearchWarrant)
 		if (const UHUDeskRecords::FWarrant* W = R->WarrantFor(Arg, J == EHUDeskJob::ArrestWarrant)) Line = FString::Printf(TEXT("filed a%s warrant: %s"), J == EHUDeskJob::ArrestWarrant ? TEXT("n arrest") : TEXT(" search"), *W->Reason);
+	// in the squad's notebook (the card below tells the squad already)
+	if (UHUNotebook* NB = UHUNotebook::Of(this)) NB->Note(EHUNote::Lookup, User, Line.Left(1).ToUpper() + Line.Mid(1), Arg);
 	APlayerController* Local = GetWorld()->GetFirstPlayerController();
 	APawn* Me = Local ? Local->GetPawn() : nullptr;
 	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
@@ -1088,12 +1106,16 @@ void UHUInteractComponent::MulticastTapeNote_Implementation(const FString& Note,
 	APlayerController* Local = GetWorld()->GetFirstPlayerController();
 	APawn* Me = Local ? Local->GetPawn() : nullptr;
 	UHUInteractComponent* Mine = Me ? Me->FindComponentByClass<UHUInteractComponent>() : nullptr;
+	// in the squad's notebook, and the lie it catches (the cards below tell the squad already)
+	UHUNotebook* NB = UHUNotebook::Of(this);
+	if (NB) NB->Note(EHUNote::Tape, User, Note);
+	UHUCaseSubsystem* C = Cases();
+	const TSet<FString> Before = UHUNotebook::LiesNow(C);
+	const FString Res = bCatch && C ? C->CatchByTape() : FString();
+	if (NB && bCatch) NB->NoteNewLies(C, User, Before, false);
 	if (!Mine) return;
 	const FString Who = User == Me ? FString(TEXT("You")) : User && User->GetPlayerState() ? User->GetPlayerState()->GetPlayerName() : FString(TEXT("Your partner"));
 	Mine->Notify(TEXT("ON THE TAPE"), FString::Printf(TEXT("%s: %s"), *Who, *Note), FLinearColor(0.6f, 0.85f, 1.f));
-	if (!bCatch) return;
-	UHUCaseSubsystem* C = Cases();
-	const FString Res = C ? C->CatchByTape() : FString();
 	if (!Res.IsEmpty()) Mine->Notify(TEXT("THE TAPE CATCHES A LIE"), Res, FLinearColor(0.95f, 0.35f, 0.3f));
 }
 

@@ -83,7 +83,8 @@ void AHUSquadRoom::StationLightsUp()
 	HULamps::DeskLamp(this, R, Blocks, FVector(-2150, 532, 77), -90.f);   // the desk sergeant's
 	HULamps::DeskLamp(this, R, Blocks, FVector(2030, -1330, 76), 0.f);    // records
 	// windows on the outside walls: the bullpen and records (south), the Captain (north), the lobby (west)
-	for (float X : { -1300.f, -750.f, -200.f, 1300.f, 1900.f }) HULamps::Window(this, R, Blocks, FVector(X, -1600, 175), 90.f);
+	// (clear of the case board, X -1490..-810, and the upgrades board, -570..-270, on the bullpen's wall)
+	for (float X : { -690.f, -150.f, 1300.f, 1900.f }) HULamps::Window(this, R, Blocks, FVector(X, -1600, 175), 90.f);
 	HULamps::Window(this, R, Blocks, FVector(-690, 1600, 175), -90.f, 100.f);
 	HULamps::Window(this, R, Blocks, FVector(-2400, -420, 175), 0.f);
 }
