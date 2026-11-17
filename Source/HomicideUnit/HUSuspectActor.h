@@ -63,6 +63,10 @@ public:
 	int32 VoiceNum() const;
 	// a line of theirs is playing right now
 	bool IsVoicing() const { return VoiceAudio.IsValid(); }
+	// talking with their hands and head right now (they do, for as long as the words take, even when no voice comes)
+	bool IsGesturing() const;
+	// lines of theirs the voice said, and lines it couldn't on any try (caption only, but they still talked: Speak)
+	int32 VoicedLines = 0, UnvoicedLines = 0;
 	// the thinking brain's answer (computed on the asker's PC), performed on every machine
 	void ApplyAnswer(APawn* User, const FString& Question, const FString& Answer, uint8 InEmotion, uint8 InAction);
 	TArray<FString> BaggedIds() const;
@@ -104,6 +108,9 @@ private:
 	void CloseInterview();
 	void TypeKey(FKey Key);
 	void Speak(const FString& Said, uint8 InEmotion = 255);
+	int32 SpeechCount = 0; // lines given to their voice: one coming back after a newer one was given is too late to say
+	// their line on the screen of anyone else close enough to hear it (the one who asked has it already)
+	void ShowNearby(const APawn* User, const FString& Words);
 	TWeakObjectPtr<class UAudioComponent> VoiceAudio;
 	void AskTyped();
 	void MicDown(); void MicUp();

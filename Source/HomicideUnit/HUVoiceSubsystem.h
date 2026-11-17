@@ -10,7 +10,9 @@
 // Without the local voice, a key pasted on the desk computer (Settings) gets a paid voice instead:
 //   OpenAI      - gpt-4o-mini-tts, which takes an acting direction ("panicked, breathless...")
 //   ElevenLabs  - eleven_v3: emotion tags, a voice per speaker
-// With neither (or if a line fails) the line shows as a caption only - no robotic voice.
+// With neither the line shows as a caption only - no robotic voice. A line the local voice fails on is tried again,
+// the last time the quick way (fewer steps), before it is left as a caption; and lines that keep failing rest the
+// voice for a while, never for the rest of the session (HUVoiceLocal.cpp, "WHEN A LINE FAILS").
 //
 // Audio is raw 24 kHz PCM, played as a procedural sound. "Phone" lines (the 911 call) are a phone call on tape: the
 // line's narrow band, then the recorder's waver and hiss (PhoneOnTape).
@@ -48,8 +50,20 @@ public:
 	void Synthesize(const FString& Text, int32 Voice, const FString& Direction, bool bPhone, FHUVoiceReady Done, float Speed = 1.f, float Emotion = 0.5f, bool bBackground = false);
 	// gets the first line's one-off cost (Windows reading the voice off the disk) out of the way; done as the game starts
 	void WarmUp();
-	// the local voice is installed (AI\voice) - and, there being nothing to load, ready
+	// the local voice is installed (AI\voice) and not resting after lines kept failing - and, there being nothing to
+	// load, ready
 	UFUNCTION(BlueprintPure, Category = "Voice") bool HasLocalVoice() const;
+	// the local voice is installed, resting or not
+	bool IsLocalVoiceInstalled() const;
+	// resting after lines kept failing: lines are captions until it's tried again
+	bool IsResting() const;
+	// lines that failed and were said on another try, and how many of those on the quick last try
+	int32 RetriedLines() const { return Retried; }
+	int32 QuickLines() const { return SaidQuick; }
+	// for tests (-HUVoiceTest, -HUTalkTest): the next this-many tries at lines someone is waiting on fail as if the voice
+	// program had; and how long the first rest lasts (seconds; each rest in a row is twice as long, up to 5 minutes)
+	int32 TestFailTries = 0;
+	float RestSeconds = 20.f;
 	UFUNCTION(BlueprintPure, Category = "Voice") bool IsLocalVoiceReady() const { return HasLocalVoice(); }
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
@@ -79,14 +93,18 @@ private:
 	enum : uint8 { WantedNow, Premade, Ahead };
 	struct FAsk { uint8 Need = WantedNow; FHUVoiceReady Done; };
 	// one line to say; everyone who asked for the same words in the same voice shares the one saying of it
-	struct FLine { FString Text, Key; int32 Voice = 0; bool bPhone = false, bSpeaking = false; double AskedAt = 0.0; TArray<FAsk> Asks; bool Wanted() const; };
+	struct FLine { FString Text, Key; int32 Voice = 0; bool bPhone = false, bSpeaking = false; double AskedAt = 0.0; int32 Tries = 0; double RetryAt = 0.0; TArray<FAsk> Asks; bool Wanted() const; };
 	void SynthesizeLocal(const FString& Text, int32 Voice, bool bPhone, uint8 Need, FHUVoiceReady Done);
 	TArray<FLine> Queue;     // being spoken or waiting to be, in the order asked
 	int32 LineCount = 0;     // (names the sound files)
 	bool bWarm = false;
-	int32 Failures = 0;      // different lines in a row the voice program couldn't say
+	int32 Failures = 0;      // different lines in a row the voice program couldn't say, on any try
 	FString LastFailed;
-	bool bBroken = false;    // it doesn't run on this PC: no more tries this session, lines are captions
+	double RestUntil = 0.0;  // lines kept failing: captions only until then (FPlatformTime), then it's tried again
+	int32 Rests = 0;         // rests in a row (each twice as long as the last); a line said ends the run
+	int32 Retried = 0, SaidQuick = 0;
+	FTimerHandle RetryTimer;
+	void Rest();
 	void SpeakNext();
 	void Spoke(const FString& Key, TArray<uint8>& Pcm, int32 Code, float Took);
 	void VoiceTest();        // -HUVoiceTest

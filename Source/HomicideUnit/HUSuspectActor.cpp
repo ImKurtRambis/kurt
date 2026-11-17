@@ -537,7 +537,28 @@ void AHUSuspectActor::ApplyAnswer(APawn* User, const FString& Question, const FS
 		// spoken to with no menu: their line under their name (you know what you just asked); in the interview, both
 		I->Say(bWalkUp ? FString::Printf(TEXT("%s:  %s%s"), *S.Name.ToUpper(), *Answer, *Body) : FString::Printf(TEXT("\"%s\"   %s:  %s%s"), *Question, *S.Name.ToUpper(), *Answer, *Body));
 	}
+	// the words are on screen before the voice is asked for, so they show whatever the voice does
+	ShowNearby(User, FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Answer));
 	Speak(Answer, InEmotion);
+}
+
+// A squadmate asked; this player is standing near enough to hear the answer: it's on their screen too, as the voice is
+// in their ears. (Too far off to make the words out - under 4% loudness, about 10 m - and it isn't.)
+void AHUSuspectActor::ShowNearby(const APawn* User, const FString& Words)
+{
+	UWorld* W = GetWorld();
+	const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	APawn* Me = PC && PC->IsLocalController() ? PC->GetPawn() : nullptr;
+	if (!Me || Me == User) return;
+	UHUVoiceSpace* Space = W->GetSubsystem<UHUVoiceSpace>();
+	if (!Space || Space->LoudnessAt(FVector::Dist(Me->GetActorLocation(), GetActorLocation())) < 0.04f) return;
+	if (UHUInteractComponent* Mine = Me->FindComponentByClass<UHUInteractComponent>()) Mine->Say(Words);
+}
+
+bool AHUSuspectActor::IsGesturing() const
+{
+	const UHUPersonAnimation* A = HUPeople::AnimOf(Look);
+	return A && A->TalkLeft > 0.f;
 }
 
 void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statement, const FString& ClueId)
@@ -565,6 +586,7 @@ void AHUSuspectActor::ApplyInterrogation(APawn* User, uint8 Action, int32 Statem
 	{
 		if (User->IsLocallyControlled()) LastReply = Reply;
 		I->Say(FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Reply));
+		ShowNearby(User, FString::Printf(TEXT("%s:  %s"), *S.Name.ToUpper(), *Reply));
 		Speak(Reply);
 	}
 	// shown the proof: they flinch (every machine runs this, so the squad sees it too); a confession hits harder
@@ -678,9 +700,17 @@ void AHUSuspectActor::Speak(const FString& Said, uint8 InEmotion)
 	if (InEmotion < HUReact::EmotionCount) HUReact::Delivery(InEmotion, Excite, Speed);
 	// a voice per suspect (the 911 caller and the captain use others)
 	TWeakObjectPtr<AHUSuspectActor> Self(this);
-	V->Synthesize(Said, VoiceNum(), FString(), false, FHUVoiceReady::CreateLambda([Self](USoundWave* S, float)
+	const int32 Count = ++SpeechCount;
+	V->Synthesize(Said, VoiceNum(), FString(), false, FHUVoiceReady::CreateLambda([Self, Count, Said](USoundWave* S, float)
 	{
-		if (Self.IsValid() && S) Self->PlayVoice(S); // after any premade line that's still playing
+		AHUSuspectActor* Me = Self.Get();
+		// they've been given a newer line since (a voice tried again can come back late): that one is said, not this
+		if (!Me || Me->SpeechCount != Count) return;
+		if (S) { Me->VoicedLines++; Me->PlayVoice(S); return; } // after any premade line that's still playing
+		// The voice couldn't say it on any try. The words are on screen already (ApplyAnswer); they still say it with
+		// their hands and head for as long as it would take, so the answer is never a statue.
+		Me->UnvoicedLines++;
+		HUPeople::Talk(Me->Look, HUPeople::SpeakingTime(Said));
 	}), Speed, Excite);
 }
 // ---------- the microphone: hold V, talk, let go ----------

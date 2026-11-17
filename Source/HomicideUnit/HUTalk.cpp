@@ -228,7 +228,7 @@ void UHUInteractComponent::SayTo(const FString& Said)
 	S->HearFrom(Pawn, Line);
 }
 
-bool UHUInteractComponent::TalkBusy() const { return bMenuOpen || Interviewing.IsValid() || Watching.IsValid() || Reading.IsValid(); }
+bool UHUInteractComponent::TalkBusy() const { return bMenuOpen || Interviewing.IsValid() || Watching.IsValid() || Reading.IsValid() || Inspecting.IsValid(); }
 
 // V: held for a moment near someone = talk; let go at once = the UV light, as it always was
 void UHUInteractComponent::TalkDown()
@@ -333,7 +333,8 @@ void UHUInteractComponent::TalkTest(float) {}
 // It says three lines OUT LOUD - the small voice speaks them, the ears make them out - to check the whole way from
 // sound to who answers (skipped where the ears or the small voice aren't installed). Along the way it checks who
 // answered (by hand when there is no brain: HUCanned), and it ends, when the run has a voice, by checking that their
-// introduction was spoken ahead of time and that a stalling line can be said twice.
+// introduction was spoken ahead of time, that a stalling line can be said twice, and that an answer is never silent:
+// the voice failing once, then on every try, and a squadmate's answer reaching a player near enough to hear it.
 //   -HUTalkShots: also saves pictures of what's on screen (Saved\Screenshots\Talk_*.png; needs -RenderOffscreen or a window).
 void UHUInteractComponent::TalkTest(float Dt)
 {
@@ -722,9 +723,66 @@ void UHUInteractComponent::TalkTest(float Dt)
 		if (!One) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: their stalling lines weren't recorded in time: saying one twice not checked")); }
 		else Check(Two && One != Two && One->GetAvailableAudioByteCount() > 0 && Two->GetAvailableAudioByteCount() > 0 && S1 > 0.2f,
 			FString::Printf(TEXT("\"%s\" said twice is two sounds, each %.1f s long with its samples still to play"), *Stall, S1));
-		Finish();
+		TalkStep = 16; TalkClock = 0.f;
 		return;
 	}
+	case 16: // never a silent answer: the voice fails once (tried again, heard), then on every try (caption, and they still talk)
+	{
+		UHUVoiceSubsystem* V = W->GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
+		static int32 Phase = 0, Retried = 0, Voiced = 0, Unvoiced = 0;
+		static const TCHAR* Once = TEXT("I told you, I was home by nine. Ask my neighbour, she saw me come in.");
+		static const TCHAR* Never = TEXT("I don't have to sit here and listen to this, and you know it.");
+		if (!V || !V->HasLocalVoice()) { UE_LOG(LogTemp, Display, TEXT("HUTalkTest: this run has no local voice (-HUNoVoice): a failing voice not checked")); TalkStep = 17; TalkClock = 0.f; return; }
+		if (Phase == 0)
+		{
+			if (A->bThinking || A->IsVoicing()) { if (TalkClock < 30.f) return; }
+			StandBy(A, true);
+			Subtitle = FText::GetEmpty();
+			Retried = V->RetriedLines();
+			Voiced = A->VoicedLines;
+			V->TestFailTries = 1;
+			A->ApplyAnswer(Pawn, TEXT("Where were you at nine?"), Once, 255, 0);
+			Check(Subtitle.ToString().Contains(Once), TEXT("an answer is on screen the moment it's given, before any voice"));
+			Phase = 1; TalkClock = 0.f;
+			return;
+		}
+		if (Phase == 1)
+		{
+			// (their voice reaching them, not the sound playing: a run with -nosound has nothing to play it on)
+			if (A->VoicedLines == Voiced && TalkClock < 30.f) return;
+			Check(A->VoicedLines == Voiced + 1 && V->RetriedLines() == Retried + 1, FString::Printf(TEXT("its first try at the voice failed: tried again, and their voice had it %.1f s later"), TalkClock));
+			V->TestFailTries = 1000;
+			Unvoiced = A->UnvoicedLines;
+			Subtitle = FText::GetEmpty();
+			A->ApplyAnswer(Pawn, TEXT("Do you want to try that again?"), Never, 255, 0);
+			Phase = 2; TalkClock = 0.f;
+			return;
+		}
+		if (Phase == 2)
+		{
+			if (A->UnvoicedLines == Unvoiced && TalkClock < 30.f) return;
+			V->TestFailTries = 0;
+			Check(A->UnvoicedLines == Unvoiced + 1 && Subtitle.ToString().Contains(Never) && A->IsGesturing(),
+				FString::Printf(TEXT("the voice failed on every try: the answer stays on screen and they still say it with their hands (%.1f s)"), TalkClock));
+			Phase = 3; TalkClock = 0.f;
+			return;
+		}
+		// a squadmate asked (nobody on this PC): standing 1.5 m away you get the answer on screen; 30 m away you don't
+		static const TCHAR* Near = TEXT("You can ask me that as many times as you like."), *Far = TEXT("Nobody saw anything. It was dark.");
+		Subtitle = FText::GetEmpty();
+		A->ApplyAnswer(nullptr, TEXT("Answer the question."), Near, 255, 0);
+		Check(Subtitle.ToString().Contains(Near), TEXT("a squadmate's answer, 1.5 m from you: on your screen too"));
+		Pawn->SetActorLocation(A->GetActorLocation() + FVector(3000.f, 0.f, 95.f), false, nullptr, ETeleportType::TeleportPhysics);
+		Subtitle = FText::GetEmpty();
+		A->ApplyAnswer(nullptr, TEXT("Did anyone see you?"), Far, 255, 0);
+		Check(!Subtitle.ToString().Contains(Far), TEXT("and 30 m away, too far to hear it: not"));
+		StandBy(A, true);
+		TalkStep = 17; TalkClock = 0.f;
+		return;
+	}
+	case 17:
+		Finish();
+		return;
 	default:
 		Finish();
 		return;

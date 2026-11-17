@@ -4,8 +4,15 @@
 // it loads the voice, says the line into a .wav file and ends. The file is read, brought down from the 44.1 kHz the
 // voice speaks at to the 24 kHz the game plays, and the silence at its ends cut. All of that happens on a thread of
 // its own, so the game never waits on it: about a second a line on a fast processor, most of it the program starting.
-// No Python, no server, no port. Nothing is left running between lines, and a line that goes wrong is only a caption:
-// it can't take the game with it.
+// No Python, no server, no port. Nothing is left running between lines, and a line that goes wrong can't take the
+// game with it.
+//
+// WHEN A LINE FAILS (the program doesn't start, ends with an error, or takes too long). A line someone is waiting on
+// is tried three times - a moment apart, the last time the quick way (fewer steps: a little rougher, much faster) -
+// and only then left as a caption; a line for later is tried twice. Lines that fail on every try, three different
+// ones in a row, rest the voice: captions only for 20 s, then it's tried again (each rest in a row twice as long, up
+// to 5 minutes). One line said ends the run. It never gives up for the session: whatever made a burst of lines fail
+// at once - the processor swamped, a virus scanner holding the program - passes, and the suspects talk again.
 //
 // WHO GOES FIRST. Lines someone is waiting to hear (a suspect's answer, the 911 call) are said as they come, two at a
 // time at most. Lines for later - a suspect's stalling lines, answers said before the question - are said one at a
@@ -35,8 +42,14 @@ namespace HUVoiceLocal
 {
 	constexpr int32 VoiceCount = 10;     // 0-4 women, 5-9 men
 	constexpr int32 Steps = 8;           // how carefully a line is made: more is better and slower
+	constexpr int32 QuickSteps = 3;      // the last try at a line that keeps failing: quicker, a little rougher
+	constexpr int32 Tries = 3;           // tries at a line someone is waiting on (the last one quick)
+	constexpr int32 LaterTries = 2;      // tries at a line for later
 	constexpr int32 AtOnce = 2;          // voice programs running at the same time, at most
-	constexpr double GiveUpAfter = 45.0; // seconds: a line that has taken this long isn't coming
+	// seconds a try may take before it's given up on: a line usually takes about one (the first of a session, read off
+	// the disk, a few); for later, there's no hurry
+	constexpr double WantedGiveUp = 20.0, QuickGiveUp = 30.0, LaterGiveUp = 45.0;
+	constexpr float MaxRest = 300.f;     // the longest the voice rests after lines keep failing
 
 	static FString VoiceFile(const TCHAR* Rel) { return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("AI/voice") / Rel); }
 	static FString Program() { return VoiceFile(TEXT("bin/sherpa-onnx-offline-tts.exe")); }
@@ -132,8 +145,9 @@ namespace HUVoiceLocal
 	}
 
 	// Runs the voice program for one line and waits for it to end: game-rate 16-bit samples, or false and the code
-	// the program ended with (-1 it couldn't start, -2 it took too long). For any thread but the game's.
-	static bool Say(const FString& Args, const FString& WavFile, bool bForLater, TArray<uint8>& OutPcm, int32& OutCode)
+	// the program ended with (-1 it couldn't start, -2 it took longer than GiveUpAfter seconds). For any thread but the
+	// game's.
+	static bool Say(const FString& Args, const FString& WavFile, bool bForLater, double GiveUpAfter, TArray<uint8>& OutPcm, int32& OutCode)
 	{
 		const FString Exe = Program();
 		OutCode = -1;
@@ -165,13 +179,15 @@ namespace HL = HUVoiceLocal;
 
 bool UHUVoiceSubsystem::FLine::Wanted() const { return Asks.ContainsByPredicate([](const FAsk& A) { return A.Need == WantedNow; }); }
 
-bool UHUVoiceSubsystem::HasLocalVoice() const
+bool UHUVoiceSubsystem::IsLocalVoiceInstalled() const
 {
 	// looked for once: nothing installs a voice while the game runs. (-HUNoVoice: measuring the game without it.)
 	static const bool bInstalled = !FParse::Param(FCommandLine::Get(), TEXT("HUNoVoice"))
 		&& IFileManager::Get().FileExists(*HL::Program()) && IFileManager::Get().FileExists(*HL::VoiceFile(TEXT("supertonic/tts.json")));
-	return bInstalled && !bBroken;
+	return bInstalled;
 }
+bool UHUVoiceSubsystem::IsResting() const { return FPlatformTime::Seconds() < RestUntil; }
+bool UHUVoiceSubsystem::HasLocalVoice() const { return IsLocalVoiceInstalled() && !IsResting(); }
 
 void UHUVoiceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -321,36 +337,56 @@ void UHUVoiceSubsystem::SynthesizeLocal(const FString& Text, int32 Voice, bool b
 	SpeakNext();
 }
 
-// Start whatever can start now: lines someone is waiting on first, in the order asked, then lines for later.
+// Start whatever can start now: lines someone is waiting on first, in the order asked, then lines for later. A line
+// waiting to be tried again starts once its moment comes (a timer wakes this up).
 void UHUVoiceSubsystem::SpeakNext()
 {
 	for (;;)
 	{
+		const double Now = FPlatformTime::Seconds();
 		int32 Speaking = 0, Next = INDEX_NONE;
+		double SoonestRetry = 0.0;
 		for (int32 i = 0; i < Queue.Num(); i++)
 		{
 			if (Queue[i].bSpeaking) Speaking++;
+			else if (Queue[i].RetryAt > Now) SoonestRetry = SoonestRetry > 0.0 ? FMath::Min(SoonestRetry, Queue[i].RetryAt) : Queue[i].RetryAt;
 			else if (Next == INDEX_NONE || (Queue[i].Wanted() && !Queue[Next].Wanted())) Next = i;
+		}
+		if (SoonestRetry > 0.0 && GetGameInstance())
+		{
+			TWeakObjectPtr<UHUVoiceSubsystem> Me(this);
+			GetGameInstance()->GetTimerManager().SetTimer(RetryTimer, FTimerDelegate::CreateLambda([Me]() { if (Me.IsValid()) Me->SpeakNext(); }), FMath::Max(0.01f, (float)(SoonestRetry - Now)), false);
 		}
 		if (Next == INDEX_NONE || Speaking >= HL::AtOnce) return;
 		FLine& L = Queue[Next];
 		const bool bForLater = !L.Wanted();
 		if (bForLater && Speaking > 0) return; // lines for later: one at a time, and never beside a line someone is waiting on
 		L.bSpeaking = true;
+		L.Tries++;
+		// the last try at a line someone is waiting on is the quick one
+		const bool bQuick = !bForLater && L.Tries >= HL::Tries;
+		const double GiveUp = bForLater ? HL::LaterGiveUp : bQuick ? HL::QuickGiveUp : HL::WantedGiveUp;
+		TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
+		if (TestFailTries > 0 && !bForLater)
+		{
+			// (a test: this try fails as if the program had - told a moment later, as a real failure would be)
+			TestFailTries--;
+			AsyncTask(ENamedThreads::GameThread, [Self, Key = L.Key]() { TArray<uint8> None; if (UHUVoiceSubsystem* V = Self.Get()) V->Spoke(Key, None, -3, 0.f); });
+			continue;
+		}
 		IFileManager::Get().MakeDirectory(*HL::ScratchDir(), true);
 		const FString Wav = HL::ScratchDir() / FString::Printf(TEXT("line_%u_%d.wav"), FPlatformProcess::GetCurrentProcessId(), ++LineCount);
 		const FString M = HL::VoiceFile(TEXT("supertonic"));
 		const FString Args = FString::Printf(TEXT("--supertonic-duration-predictor=\"%s/duration_predictor.int8.onnx\" --supertonic-text-encoder=\"%s/text_encoder.int8.onnx\" ")
 			TEXT("--supertonic-vector-estimator=\"%s/vector_estimator.int8.onnx\" --supertonic-vocoder=\"%s/vocoder.int8.onnx\" --supertonic-tts-json=\"%s/tts.json\" ")
 			TEXT("--supertonic-unicode-indexer=\"%s/unicode_indexer.bin\" --supertonic-voice-style=\"%s/voice.bin\" --lang=en --num-steps=%d --num-threads=2 --sid=%d ")
-			TEXT("--output-filename=\"%s\" \"%s\""), *M, *M, *M, *M, *M, *M, *M, HL::Steps, L.Voice, *Wav, *L.Text);
-		TWeakObjectPtr<UHUVoiceSubsystem> Self(this);
-		Async(EAsyncExecution::Thread, [Self, Args, Wav, bForLater, Key = L.Key]()
+			TEXT("--output-filename=\"%s\" \"%s\""), *M, *M, *M, *M, *M, *M, *M, bQuick ? HL::QuickSteps : HL::Steps, L.Voice, *Wav, *L.Text);
+		Async(EAsyncExecution::Thread, [Self, Args, Wav, bForLater, GiveUp, Key = L.Key]()
 		{
 			const double Started = FPlatformTime::Seconds();
 			TArray<uint8> Pcm;
 			int32 Code = 0;
-			HL::Say(Args, Wav, bForLater, Pcm, Code);
+			HL::Say(Args, Wav, bForLater, GiveUp, Pcm, Code);
 			const float Took = (float)(FPlatformTime::Seconds() - Started);
 			AsyncTask(ENamedThreads::GameThread, [Self, Key, Code, Took, Pcm = MoveTemp(Pcm)]() mutable { if (UHUVoiceSubsystem* V = Self.Get()) V->Spoke(Key, Pcm, Code, Took); });
 		});
@@ -362,29 +398,45 @@ void UHUVoiceSubsystem::Spoke(const FString& Key, TArray<uint8>& Pcm, int32 Code
 {
 	const int32 At = Queue.IndexOfByPredicate([&Key](const FLine& L) { return L.bSpeaking && L.Key == Key; });
 	if (At == INDEX_NONE) return;
+	const FString Why = Code == -1 ? FString(TEXT("the voice program didn't start")) : Code == -2 ? FString(TEXT("it took too long"))
+		: Code == -3 ? FString(TEXT("made to fail by a test")) : FString::Printf(TEXT("the voice program ended with code %d"), Code);
+	// It failed and has tries left: again in a moment (the last try at a line someone is waiting on is the quick one).
+	if (Pcm.Num() == 0)
+	{
+		FLine& Again = Queue[At];
+		const int32 Allowed = Again.Wanted() ? HL::Tries : HL::LaterTries;
+		if (Again.Tries < Allowed)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: couldn't say a line (%s) - trying again (%d of %d%s): \"%s\""), *Why, Again.Tries + 1, Allowed,
+				Again.Wanted() && Again.Tries + 1 >= HL::Tries ? TEXT(", the quick way") : TEXT(""), *Again.Text.Left(60));
+			Again.bSpeaking = false;
+			Again.RetryAt = FPlatformTime::Seconds() + 0.3 * Again.Tries;
+			SpeakNext();
+			return;
+		}
+	}
 	// (out of the list before anyone is told: being told, they often ask for their next line)
 	const FLine Line = MoveTemp(Queue[At]);
 	Queue.RemoveAt(At);
 	const float Seconds = Pcm.Num() / 2.f / SampleRate;
 	if (Pcm.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: couldn't say a line (%s) - it shows as a caption: \"%s\""),
-			Code == -1 ? TEXT("the voice program didn't start") : Code == -2 ? TEXT("it took too long") : *FString::Printf(TEXT("the voice program ended with code %d"), Code), *Line.Text.Left(60));
-		// The same line failing again says little; three different ones in a row, with none said in between, and the
-		// voice doesn't run on this PC. Stop trying: every try is a program started for nothing.
+		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit voice: couldn't say a line in %d tries (%s) - it shows as a caption: \"%s\""), Line.Tries, *Why, *Line.Text.Left(60));
+		// The same line failing again says little; three different ones in a row, every try failed and none said in
+		// between, and something is wrong with the voice for now: rest it rather than start programs for nothing.
 		if (LastFailed != Line.Text) { LastFailed = Line.Text; Failures++; }
-		if (Failures >= 3 && !bBroken)
-		{
-			bBroken = true;
-			UE_LOG(LogTemp, Error, TEXT("HomicideUnit voice: the local voice doesn't run on this PC - lines show as captions for the rest of this session"));
-			TArray<FLine> Dropped;
-			for (int32 i = Queue.Num() - 1; i >= 0; i--) if (!Queue[i].bSpeaking) { Dropped.Add(MoveTemp(Queue[i])); Queue.RemoveAt(i); }
-			for (const FLine& D : Dropped) for (const FAsk& A : D.Asks) A.Done.ExecuteIfBound(nullptr, 0.f);
-		}
+		if (Failures >= 3) Rest();
 	}
 	else
 	{
-		Failures = 0; LastFailed.Reset();
+		if (Rests > 0) UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: the local voice is speaking again"));
+		Failures = 0; LastFailed.Reset(); Rests = 0;
+		if (Line.Tries > 1)
+		{
+			Retried++;
+			if (Line.Wanted() && Line.Tries >= HL::Tries) SaidQuick++;
+			UE_LOG(LogTemp, Log, TEXT("HomicideUnit voice: said on try %d%s"), Line.Tries, Line.Wanted() && Line.Tries >= HL::Tries ? TEXT(", the quick way") : TEXT(""));
+		}
 		// Every line is kept (up to the cap), not only the ones made ahead: written lines come round again - "I want my
 		// lawyer", an introduction - and the second time they cost nothing. (Before MakeSound: a phone line's samples
 		// get changed.)
@@ -409,6 +461,20 @@ void UHUVoiceSubsystem::Spoke(const FString& Key, TArray<uint8>& Pcm, int32 Code
 	SpeakNext();
 }
 
+// Lines keep failing: captions only for a while, then the voice is tried again. Lines waiting their turn are told
+// now (no sound) - their words are on screen already - rather than wait out the rest.
+void UHUVoiceSubsystem::Rest()
+{
+	const float For = FMath::Min(RestSeconds * FMath::Pow(2.f, (float)Rests), HL::MaxRest);
+	RestUntil = FPlatformTime::Seconds() + For;
+	Rests++;
+	Failures = 0; LastFailed.Reset();
+	UE_LOG(LogTemp, Error, TEXT("HomicideUnit voice: lines keep failing - they show as captions for %.0f s, then the voice is tried again"), For);
+	TArray<FLine> Dropped;
+	for (int32 i = Queue.Num() - 1; i >= 0; i--) if (!Queue[i].bSpeaking) { Dropped.Add(MoveTemp(Queue[i])); Queue.RemoveAt(i); }
+	for (const FLine& D : Dropped) for (const FAsk& A : D.Asks) A.Done.ExecuteIfBound(nullptr, 0.f);
+}
+
 // -HUVoiceTest: says lines the way the game does, checks what comes back and how long each took, and quits.
 //   1 six lines one after another (the 911 call's two voices on the phone, four suspects)
 //   2 the same six again: kept, so each must be back before the call returns
@@ -416,12 +482,15 @@ void UHUVoiceSubsystem::Spoke(const FString& Key, TArray<uint8>& Pcm, int32 Code
 //   4 an awkward line (curly quotes, a long dash, accents, a <tag>, stars) and one with nothing to say
 //   5 three made ahead, then one of them asked for: no wait
 //   6 a stalling line: kept on disk, and found there once it's forgotten from memory
+//   7 a line whose first try fails: tried again and said
+//   8 a line whose first two tries fail: said on the third, the quick way
+//   9 three lines that fail on every try: each comes back as a caption, the voice rests, and after the rest it speaks
 void UHUVoiceSubsystem::VoiceTest()
 {
 #if !UE_BUILD_SHIPPING
 	struct FTest
 	{
-		int32 Step = 0, Wrong = 0, Back = 0, Lines = 0;
+		int32 Step = 0, Wrong = 0, Back = 0, Lines = 0, Mark = 0, Mark2 = 0;
 		bool bAsked = false;
 		double Asked = 0.0, Work = 0.0, Speech = 0.0;
 		FTimerHandle Tick;
@@ -454,7 +523,7 @@ void UHUVoiceSubsystem::VoiceTest()
 			V->GetGameInstance()->GetTimerManager().ClearTimer(T->Tick);
 			FPlatformMisc::RequestExit(false);
 		};
-		if (!V->HasLocalVoice()) { T->Check(false, TEXT("the local voice is installed and runs (AI\\voice)")); Finish(); return; }
+		if (!V->IsLocalVoiceInstalled()) { T->Check(false, TEXT("the local voice is installed (AI\\voice)")); Finish(); return; }
 		const double Now = FPlatformTime::Seconds();
 		if (T->bAsked && Now - T->Asked > 120.0) { T->Check(false, FString::Printf(TEXT("step %d came back within two minutes"), T->Step)); Finish(); return; }
 		if (T->Step < 6) // 1: one after another
@@ -526,6 +595,55 @@ void UHUVoiceSubsystem::VoiceTest()
 			T->Back = 0;
 			V->Synthesize(Stall, 3, FString(), false, FHUVoiceReady::CreateLambda([T](USoundWave* S, float) { if (S) T->Back = 1; }), 1.f, 0.5f, true);
 			T->Check(T->Back == 1, TEXT("forgotten from memory, it comes back at once from the disk"));
+			T->Step++; T->bAsked = false;
+		}
+		else if (T->Step == 11 || T->Step == 12) // 7, 8: a line whose first try (7) or first two tries (8) fail
+		{
+			if (!T->bAsked)
+			{
+				T->bAsked = true; T->Asked = Now; T->Back = 0;
+				T->Mark = V->RetriedLines(); T->Mark2 = V->QuickLines();
+				V->TestFailTries = T->Step == 11 ? 1 : 2;
+				V->Synthesize(T->Step == 11 ? TEXT("Sorry, what was the question? I lost my train of thought.") : TEXT("I've been sitting here two hours. Is anyone going to tell me why?"),
+					T->Step == 11 ? 2 : 7, FString(), false, FHUVoiceReady::CreateLambda([T](USoundWave* S, float Seconds) { T->Back = S && Seconds > 1.f ? 1 : -1; }));
+				return;
+			}
+			if (T->Back == 0) return;
+			if (T->Step == 11) T->Check(T->Back == 1 && V->RetriedLines() == T->Mark + 1, FString::Printf(TEXT("a line whose first try fails is tried again and said, %.2f s after asking"), Now - T->Asked));
+			else T->Check(T->Back == 1 && V->RetriedLines() == T->Mark + 1 && V->QuickLines() == T->Mark2 + 1, FString::Printf(TEXT("a line whose first two tries fail is said on the third, the quick way, %.2f s after asking"), Now - T->Asked));
+			V->TestFailTries = 0;
+			T->Step++; T->bAsked = false;
+		}
+		else if (T->Step == 13) // 9: lines that fail on every try - a rest, then the voice again
+		{
+			static const TCHAR* Doomed[] = { TEXT("I want to speak to someone in charge."), TEXT("This is harassment, plain and simple."), TEXT("Write that down. Every word.") };
+			if (!T->bAsked)
+			{
+				T->bAsked = true; T->Asked = Now; T->Back = 0; T->Mark = 0; T->Mark2 = 0;
+				V->RestSeconds = 2.f;
+				V->TestFailTries = 1000;
+				for (const TCHAR* L : Doomed) V->Synthesize(L, 8, FString(), false, FHUVoiceReady::CreateLambda([T](USoundWave* S, float) { T->Back++; if (S) T->Mark++; }));
+				return;
+			}
+			if (T->Back < 3) return;
+			if (T->Mark2 == 0) // (all three are back)
+			{
+				T->Check(T->Mark == 0, TEXT("three lines that fail on every try each come back without a sound: their words stay as captions"));
+				T->Check(V->IsResting() && !V->HasLocalVoice(), TEXT("and the voice rests for a while instead of starting programs for nothing"));
+				V->TestFailTries = 0;
+				T->Mark2 = 1;
+				return;
+			}
+			if (V->IsResting()) return;
+			if (T->Mark2 == 1)
+			{
+				T->Mark2 = 2; T->Asked = Now; T->Back = 0;
+				V->Synthesize(TEXT("Fine. Ask your questions."), 8, FString(), false, FHUVoiceReady::CreateLambda([T](USoundWave* S, float Seconds) { T->Back = S && Seconds > 0.5f ? 4 : 5; }));
+				return;
+			}
+			if (T->Back < 4) return;
+			T->Check(T->Back == 4 && V->HasLocalVoice(), FString::Printf(TEXT("after the rest it is tried again, and speaks (%.2f s)"), Now - T->Asked));
+			V->RestSeconds = 20.f;
 			Finish();
 		}
 	}), 0.05f, true);
