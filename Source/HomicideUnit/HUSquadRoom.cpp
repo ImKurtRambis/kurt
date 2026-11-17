@@ -497,9 +497,7 @@ FText AHUSquadRoom::GetPrompt_Implementation(APawn* User) const
 				if (!C->IsBooked(Id))
 				{
 					FHUSuspect S; C->GetSuspect(Id, S);
-					const int32 Step = C->BookingStep.FindRef(Id);
-					const TCHAR* What[] = { TEXT("take the mugshot"), TEXT("roll the fingerprints"), TEXT("bag their property") };
-					return FText::FromString(FString::Printf(TEXT("[E] Book %s — %s (%d/3)"), *S.Name, What[FMath::Clamp(Step, 0, 2)], Step + 1));
+					return FText::FromString(FString::Printf(TEXT("[Hold E] Book %s — mugshot, prints, property"), *S.Name));
 				}
 			return FText::FromString(C->Arrested.Num() > 0 ? TEXT("Booking counter — everyone in holding is booked") : TEXT("Booking counter — nobody in holding"));
 		}
@@ -581,12 +579,12 @@ void AHUSquadRoom::Interact_Implementation(APawn* User, bool bSecondary)
 			for (const FString& Id : C->Arrested)
 				if (!C->IsBooked(Id))
 				{
+					// one hold books them start to finish (it was three presses, one per step)
 					FHUSuspect S; C->GetSuspect(Id, S);
-					int32& Step = C->BookingStep.FindOrAdd(Id);
-					const TCHAR* Done[] = { TEXT("*FLASH* Front, then profile, against the height chart."), TEXT("Ten fingers rolled in ink, one card for the file."), TEXT("Wallet, keys, belt and laces into a property bag, signed and sealed.") };
+					C->BookingStep.FindOrAdd(Id) = 3;
 					I->PlayReach();
-					I->Say(FString::Printf(TEXT("BOOKING %s:  %s"), *S.Name.ToUpper(), Done[FMath::Clamp(Step, 0, 2)]));
-					if (++Step >= 3) I->Notify(TEXT("BOOKED"), FString::Printf(TEXT("%s is in the system"), *S.Name), FLinearColor(0.36f, 0.76f, 1.f));
+					I->Say(FString::Printf(TEXT("BOOKING %s:  *FLASH* front, then profile, against the height chart. Ten fingers rolled in ink. Wallet, keys, belt and laces into a property bag, signed and sealed."), *S.Name.ToUpper()));
+					I->Notify(TEXT("BOOKED"), FString::Printf(TEXT("%s is in the system%s"), *S.Name, C->UnbookedCount() == 0 && C->bAwaitingCaptain ? TEXT(" - the case is ready for the Captain's in-tray") : TEXT("")), FLinearColor(0.36f, 0.76f, 1.f));
 					return;
 				}
 			return;
@@ -791,7 +789,7 @@ float AHUSquadRoom::UseTime(APawn* User, bool bSecondary) const
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
 	if (!I || bSecondary) return 0.f;
 	if (CoffeeParts.Contains(I->FocusPart)) return 1.f;
-	if (CounterParts.Contains(I->FocusPart) && C && C->UnbookedCount() > 0) return 1.5f;
+	if (CounterParts.Contains(I->FocusPart) && C && C->UnbookedCount() > 0) return 2.5f; // mugshot, prints and property in one hold
 	if (TrayParts.Contains(I->FocusPart) && C && C->bAwaitingCaptain && C->UnbookedCount() == 0) return 1.f;
 	return 0.f;
 }

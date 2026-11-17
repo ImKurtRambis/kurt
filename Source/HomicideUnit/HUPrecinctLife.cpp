@@ -123,7 +123,8 @@ void UHUPrecinctLife::Tick(float DeltaTime)
 {
 	if(!GetWorld() || !GetWorld()->HasBegunPlay()) return;
 	Clock+=DeltaTime;
-	if(!Decor) { if(Clock>1) Build(); return; }
+	// on the first frame, while you're still arriving behind black (HUFlow) - not a second later, in view, as a stall
+	if(!Decor) { Build(); return; }
 	FanAngle=FMath::Fmod(FanAngle+DeltaTime*110.f,360.f);
 	if(Rotor) Rotor->SetRelativeRotation(FRotator(0,FanAngle,0));
 #if HU_STAFF_CAST

@@ -22,7 +22,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") FName SceneLevel = TEXT("L_Scene");
 	// how close to the car each detective has to be before it can leave
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") float GatherRadius = 600.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") float DriveSeconds = 2.5f;
+	// from E to the trip: just the fade to black (UHUFlow::LeaveAfter) - no waiting on a dark screen. The new place
+	// comes up behind black and fades in once it runs smoothly (UHUFlow).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") float DriveSeconds = 0.6f;
 	// false for the patrol cars at a scene: they're not yours to drive
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cruiser") bool bPlayerCar = true;
 	// where it goes, for the prompt (empty: the case's location)

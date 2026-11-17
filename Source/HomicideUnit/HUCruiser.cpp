@@ -1,4 +1,5 @@
 #include "HUCruiser.h"
+#include "HUFlow.h"
 #include "HUSound.h"
 #include "HUMotorPoolDoor.h"
 #include "HUBuild.h"
@@ -134,16 +135,16 @@ void AHUCruiser::Depart()
 		if (!PC->IsLocalController())
 		{
 			// a partner's screen, from the host: fade it and hold them still (their own game didn't start this)
-			PC->ClientSetCameraFade(true, FColor::Black, FVector2D(0.f, 1.f), 1.2f, false, true);
+			PC->ClientSetCameraFade(true, FColor::Black, FVector2D(0.f, 1.f), UHUFlow::FadeOut, false, true);
 			PC->ClientIgnoreMoveInput(true);
 			continue;
 		}
-		if (PC->PlayerCameraManager) PC->PlayerCameraManager->StartCameraFade(0.f, 1.f, 1.2f, FLinearColor::Black, false, true);
+		if (PC->PlayerCameraManager) PC->PlayerCameraManager->StartCameraFade(0.f, 1.f, UHUFlow::FadeOut, FLinearColor::Black, false, true);
 		if (APawn* P = PC->GetPawn())
 			if (UHUInteractComponent* I = P->FindComponentByClass<UHUInteractComponent>()) I->Subtitle = FText::FromString(Line);
 		PC->SetIgnoreMoveInput(true);
 	}
-	GetWorldTimerManager().SetTimer(TravelTimer, this, &AHUCruiser::Travel, DriveSeconds, false);
+	GetWorldTimerManager().SetTimer(TravelTimer, this, &AHUCruiser::Travel, FMath::Max(DriveSeconds, UHUFlow::FadeOut), false);
 }
 
 void AHUCruiser::Travel()
