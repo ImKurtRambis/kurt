@@ -59,8 +59,8 @@ public:
 	// The player is walking up to them: their voice gets ready before a word is said - stalling lines, their
 	// introduction, and the answers to the questions everyone asks - so those are heard at once. Safe to call often.
 	void GetReady();
-	// their voice: the same number is the same voice every time (the voices are picked by it)
-	int32 VoiceNum() const { return 1 + (int32)(GetTypeHash(SuspectId) % 10); }
+	// their voice: a man's for a man, a woman's for a woman, their own among this case's people (HUPeople::SuspectVoice)
+	int32 VoiceNum() const;
 	// a line of theirs is playing right now
 	bool IsVoicing() const { return VoiceAudio.IsValid(); }
 	// the thinking brain's answer (computed on the asker's PC), performed on every machine

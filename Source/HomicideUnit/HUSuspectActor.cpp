@@ -656,6 +656,13 @@ void AHUSuspectActor::LoadIntoVan()
 	SetActorTickEnabled(false);
 }
 
+int32 AHUSuspectActor::VoiceNum() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	const UHUCaseSubsystem* C = GI ? GI->GetSubsystem<UHUCaseSubsystem>() : nullptr;
+	return C ? HUPeople::SuspectVoice(C->Current, SuspectId) : 5;
+}
+
 // say it out loud, here in the room: every player''s PC voices it locally (free). Nerves speed them up, breaking slows them.
 void AHUSuspectActor::Speak(const FString& Said, uint8 InEmotion)
 {

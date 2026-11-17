@@ -102,6 +102,12 @@ private:
 	TMap<FString, FPre> Pre;                 // "suspect|topic" -> a prewritten answer
 	TArray<TPair<FString, int32>> PreQueue;  // (suspect, topic) still to write
 	bool bPreBusy = false;
+	// The brain and the picture share one graphics card, and every frame drawn while it writes waits its turn: on an
+	// RTX 5070 Ti writing back to back took the crime scene from about 100 frames a second to 52-65. So between
+	// answers written ahead it rests as long as the last one took - writing at most half the time - and the picture
+	// keeps most of its frames. (Live answers never wait: somebody is listening for those.)
+	static constexpr double PreRest = 1.0;   // rest, as a share of the time the last answer took
+	double PreRestUntil = 0.0;
 	int32 LiveBusy = 0;                      // live answers in flight: they go first
 	FTimerHandle PumpTimer;
 	void Pump();

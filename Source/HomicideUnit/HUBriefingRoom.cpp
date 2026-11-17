@@ -441,8 +441,11 @@ void AHUBriefingRoom::AskFor911Line(int32 i)
 	UHUVoiceSubsystem* Voice = GetGameInstance()->GetSubsystem<UHUVoiceSubsystem>();
 	if (!Voice || !CallLines.IsValidIndex(i)) return;
 	const UHUCaseSubsystem* C = GetGameInstance()->GetSubsystem<UHUCaseSubsystem>();
-	const int32 CallerVoice = 1 + FMath::Abs(C ? C->Current.Number : 0) % 7;
 	const bool bDispatch = CallSpeakers[i] == TEXT("DISPATCH");
+	// The caller is one of the people held at the scene (UHUCaseSubsystem::Build911Call), and sounds on the tape as
+	// they do there: the same voice. The dispatcher is voice 0, which none of them has.
+	int32 CallerVoice = 5;
+	if (C && !bDispatch) for (const FHUSuspect& S : C->Current.Suspects) if (S.Name.ToUpper() == CallSpeakers[i]) { CallerVoice = HUPeople::SuspectVoice(C->Current, S.Id); break; }
 	const FString Direction = bDispatch
 		? TEXT("You are a 911 emergency dispatcher on a recorded call. Calm, steady, professional; warm but firm. Clear, measured pace.")
 		: TEXT("You are a terrified bystander on the phone to 911 moments after finding something horrible. Breathless and shaky, voice cracking, rushing the words, close to tears, small gasps between phrases.");

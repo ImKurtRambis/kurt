@@ -89,7 +89,7 @@ private:
 	TSharedPtr<IWebSocket> Socket;
 	bool bSocketOpen = false, bConnecting = false;
 	double ServerStartedAt = 0.0;
-	static constexpr int32 ServerPort = 8096; // the brain uses 8089, the voices 8005 and 8090
+	static constexpr int32 ServerPort = 8096; // the brain uses 8089
 	void Connect();
 	void DropSocket();
 	void OnReply(const FString& Msg);

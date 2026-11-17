@@ -316,10 +316,10 @@ void UHUBrainSubsystem::StopPrewrite()
 	if (UGameInstance* GI = GetGameInstance()) GI->GetTimerManager().ClearTimer(PumpTimer);
 }
 
-// one answer at a time, never while a detective is waiting on a live one
+// one answer at a time, never while a detective is waiting on a live one, with a rest after each (PreRest)
 void UHUBrainSubsystem::Pump()
 {
-	if (!bReady || bPreBusy || LiveBusy > 0) return;
+	if (!bReady || bPreBusy || LiveBusy > 0 || FPlatformTime::Seconds() < PreRestUntil) return;
 	while (PreQueue.Num())
 	{
 		const TPair<FString, int32> Job = PreQueue[0];
@@ -329,10 +329,13 @@ void UHUBrainSubsystem::Pump()
 		if (const FPre* Have = Pre.Find(Key); Have && Have->State == State) continue; // still good
 		bPreBusy = true;
 		TWeakObjectPtr<UHUBrainSubsystem> Self(this);
-		Send(Job.Key, Topics[Job.Value].Ask, FString(), false, FHUBrainReact::CreateLambda([Self, Key, State, Id = Job.Key](const FHUReaction& R)
+		const double Sent = FPlatformTime::Seconds();
+		Send(Job.Key, Topics[Job.Value].Ask, FString(), false, FHUBrainReact::CreateLambda([Self, Key, State, Id = Job.Key, Sent](const FHUReaction& R)
 		{
 			if (!Self.IsValid()) return;
 			Self->bPreBusy = false;
+			const double Now = FPlatformTime::Seconds();
+			Self->PreRestUntil = Now + FMath::Min(Now - Sent, 10.0) * PreRest;
 			if (!R.Say.IsEmpty())
 			{
 				Self->Pre.Add(Key, { R, State });

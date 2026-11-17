@@ -16,6 +16,10 @@ namespace HUPeople
 	constexpr int32 CastCount = 8;
 	HOMICIDEUNIT_API FString CastFace(int32 Index);
 	HOMICIDEUNIT_API FString SuspectFace(const FHUCase& Case, const FString& Id);
+	// Their voice (UHUVoiceSubsystem's numbers: 0-4 are women, 5-9 men). A man gets a man's voice and a woman a
+	// woman's, and the people of one case get different ones as far as there are voices to go round. Woman 0 is left
+	// to the 911 dispatcher, so the caller - who is one of these people - is never talking to their own voice.
+	HOMICIDEUNIT_API int32 SuspectVoice(const FHUCase& Case, const FString& Id);
 	// Prefer dedicated faces when installed; otherwise reuse the built cast for every role.
 	HOMICIDEUNIT_API FString OfficerFace(int32 Variant);
 	HOMICIDEUNIT_API FString CaptainFace();

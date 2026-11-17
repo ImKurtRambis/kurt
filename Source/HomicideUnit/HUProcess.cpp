@@ -22,7 +22,7 @@ static HANDLE GameJob()
 }
 #endif
 
-FProcHandle HUProcess::Launch(const FString& Exe, const FString& Args, const FString& WorkDir)
+FProcHandle HUProcess::Launch(const FString& Exe, const FString& Args, const FString& WorkDir, bool bGiveWay)
 {
 #if PLATFORM_WINDOWS
 	FString Cmd = FString::Printf(TEXT("\"%s\" %s"), *Exe, *Args);
@@ -32,7 +32,7 @@ FProcHandle HUProcess::Launch(const FString& Exe, const FString& Args, const FSt
 	Si.wShowWindow = SW_HIDE;
 	PROCESS_INFORMATION Pi = {};
 	// suspended: into the job first, then let it run
-	if (!::CreateProcessW(nullptr, Cmd.GetCharArray().GetData(), nullptr, nullptr, 0, CREATE_SUSPENDED | CREATE_NO_WINDOW,
+	if (!::CreateProcessW(nullptr, Cmd.GetCharArray().GetData(), nullptr, nullptr, 0, CREATE_SUSPENDED | CREATE_NO_WINDOW | (bGiveWay ? BELOW_NORMAL_PRIORITY_CLASS : 0),
 		nullptr, WorkDir.IsEmpty() ? nullptr : *WorkDir, &Si, &Pi))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HomicideUnit: couldn't start %s (error %u)"), *FPaths::GetCleanFilename(Exe), ::GetLastError());
@@ -45,6 +45,6 @@ FProcHandle HUProcess::Launch(const FString& Exe, const FString& Args, const FSt
 	::CloseHandle(Pi.hThread);
 	return FProcHandle(Pi.hProcess);
 #else
-	return FPlatformProcess::CreateProc(*Exe, *Args, false, true, true, nullptr, 0, WorkDir.IsEmpty() ? nullptr : *WorkDir, nullptr);
+	return FPlatformProcess::CreateProc(*Exe, *Args, false, true, true, nullptr, bGiveWay ? -1 : 0, WorkDir.IsEmpty() ? nullptr : *WorkDir, nullptr);
 #endif
 }

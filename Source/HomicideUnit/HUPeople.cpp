@@ -45,6 +45,21 @@ FString HUPeople::SuspectFace(const FHUCase& Case, const FString& Id)
 	return CastFace((IsWoman(Person->Name) ? 4 : 0) + ((Slot + Case.Number) % 4 + 4) % 4);
 }
 
+int32 HUPeople::SuspectVoice(const FHUCase& Case, const FString& Id)
+{
+	const FHUSuspect* Person = Case.Suspects.FindByPredicate([&](const FHUSuspect& S) { return S.Id == Id; });
+	if (!Person) return 5;
+	const bool bWoman = IsWoman(Person->Name);
+	int32 Slot = 0; // which of the case's men (or women) they are, as for their face
+	for (const FHUSuspect& S : Case.Suspects)
+	{
+		if (S.Id == Id) break;
+		if (IsWoman(S.Name) == bWoman) ++Slot;
+	}
+	const int32 Voices = bWoman ? 4 : 5; // women 1-4 (0 is the dispatcher's), men 5-9
+	return (bWoman ? 1 : 5) + ((Slot + Case.Number) % Voices + Voices) % Voices;
+}
+
 FString HUPeople::OfficerFace(int32 Variant)
 {
 	static const TCHAR* Preferred[] = { TEXT("Mateo"), TEXT("Zuri"), TEXT("Kelvin") };

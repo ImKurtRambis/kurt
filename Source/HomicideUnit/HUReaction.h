@@ -1,5 +1,5 @@
 // What a suspect does when you talk to them: the THINKING brain (the local language model) picks the words,
-// the emotion and a body action; the VOICE (Sesame CSM, local) speaks the words with that emotion, and the
+// the emotion and a body action; the VOICE (UHUVoiceSubsystem) speaks the words, and the
 // figure acts it out. Shared by HUBrainSubsystem (which asks for it) and HUSuspectActor (which performs it).
 #pragma once
 
@@ -30,7 +30,7 @@ namespace HUReact
 	}
 	inline uint8 EmotionFrom(const FString& S) { for (uint8 i = 0; i < EmotionCount; i++) if (S.TrimStartAndEnd().Equals(EmotionName(i), ESearchCase::IgnoreCase)) return i; return Calm; }
 	inline uint8 ActionFrom(const FString& S) { const FString T = S.TrimStartAndEnd().Replace(TEXT(" "), TEXT("_")); for (uint8 i = 0; i < ActionCount; i++) if (T.Equals(ActionName(i), ESearchCase::IgnoreCase)) return i; return None; }
-	// how the voice delivers it: Chatterbox's exaggeration (0.25..1) and the speaking speed
+	// how a paid voice delivers it: how much feeling (0.25..1) and the speaking speed (the local voice has one delivery)
 	inline void Delivery(uint8 E, float& Exaggeration, float& Speed)
 	{
 		static const float X[] = { 0.35f, 0.65f, 0.95f, 0.8f, 0.6f, 0.55f, 0.5f };
